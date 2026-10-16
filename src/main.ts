@@ -19,6 +19,7 @@ import { deleteSave, deserialize, loadGame, saveGame, serialize } from './game/s
 import { newGame, RESOURCES, type Cost, type GameState } from './game/state';
 import { formatDuration, formatNumber } from './game/format';
 import { createVillage } from './scene/village';
+import { Sound } from './audio/sound';
 
 const TICK_MS = 100;
 const AUTOSAVE_MS = 10_000;
@@ -35,6 +36,32 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 let state: GameState = loadGame() ?? newGame();
 const offlineSeconds = applyOfflineProgress(state, Date.now());
 const village = createVillage($('scene'));
+const sound = new Sound();
+
+// ---------- Sonido ----------
+// Los navegadores solo permiten audio tras un gesto del jugador.
+const unlockAudio = () => sound.unlock();
+window.addEventListener('pointerdown', unlockAudio);
+window.addEventListener('keydown', unlockAudio);
+const muteButton = $<HTMLButtonElement>('mute');
+const volumeSlider = $<HTMLInputElement>('volume');
+function renderSoundControls(): void {
+  muteButton.textContent = sound.muted ? '🔇' : '🔊';
+  const label = sound.muted ? 'Activar sonido' : 'Silenciar sonido';
+  muteButton.setAttribute('aria-label', label);
+  muteButton.title = label;
+  volumeSlider.value = String(sound.volume);
+}
+muteButton.addEventListener('click', () => {
+  sound.setMuted(!sound.muted);
+  renderSoundControls();
+});
+volumeSlider.addEventListener('input', () => {
+  sound.setVolume(Number(volumeSlider.value));
+  if (sound.muted) sound.setMuted(false);
+  renderSoundControls();
+});
+renderSoundControls();
 
 // ---------- Avisos ----------
 let toastTimer: number | undefined;
@@ -67,6 +94,10 @@ const chips = RESOURCE_DEFS.map((r) => {
   hud.append(chip);
   return { id: r.id, value: chip.querySelector('b')!, rate: chip.querySelector('small')! };
 });
+const populationChip = el('div', 'chip');
+populationChip.innerHTML = 'Población <b></b>';
+hud.append(populationChip);
+const populationValue = populationChip.querySelector('b')!;
 
 // ---------- Edificios ----------
 const buildingCards = BUILDING_DEFS.map((def) => {
@@ -74,6 +105,7 @@ const buildingCards = BUILDING_DEFS.map((def) => {
   card.innerHTML = `<span class="name"></span><span class="count"></span><span class="desc"></span><span class="meta"></span><span class="cost"></span>`;
   card.addEventListener('click', () => {
     if (buyBuilding(state, def.id)) {
+      sound.buy();
       village.update(state);
       render();
     }
@@ -89,6 +121,7 @@ const upgradeCards = UPGRADE_DEFS.map((def) => {
   card.innerHTML = `<span class="name">${def.name}</span><span class="desc">${def.description}</span><span class="cost"></span>`;
   card.addEventListener('click', () => {
     if (buyUpgrade(state, def.id)) {
+      sound.upgrade();
       showToast(`Mejora obtenida: ${def.name}`);
       village.update(state);
       render();
@@ -111,6 +144,7 @@ function renderGoal(): void {
     goalPanel.innerHTML = `<h2>Meta de la era: ${ERA1_GOAL.name}</h2><p>${ERA1_GOAL.description}</p><div class="rows"></div><button class="go">Descubrir la agricultura</button>`;
     goalPanel.querySelector('.go')!.addEventListener('click', () => {
       if (buyGoal(state)) {
+        sound.goal();
         showToast('¡Has descubierto la agricultura! Era 1 completada.');
         village.update(state);
         save();
@@ -135,6 +169,8 @@ function render(): void {
     c.value.textContent = formatNumber(Math.floor(state.resources[c.id]));
     c.rate.textContent = `+${formatNumber(rates[c.id])}/s`;
   }
+  // La tribu: el fundador más cada miembro que trabaja en un oficio.
+  populationValue.textContent = formatNumber(1 + Object.values(state.buildings).reduce((a, b) => a + b, 0));
   $('gather-amount').textContent = `+${formatNumber(clickAmount(state))}`;
 
   let shownLocked = false;
@@ -189,6 +225,7 @@ function save(): void {
 // ---------- Acciones ----------
 $('gather').addEventListener('click', (event) => {
   const amount = gather(state);
+  sound.gather();
   village.pulse();
   floatText(`+${formatNumber(amount)}`, event.clientX || window.innerWidth / 2, event.clientY || window.innerHeight / 2);
   render();
@@ -238,12 +275,14 @@ function announceUnlocks(): void {
     if (!seenUnlocks.has(b.id) && b.unlocked(state)) {
       seenUnlocks.add(b.id);
       showToast(`Nuevo en tu tribu: ${b.name}`);
+      sound.unlockSound();
     }
   }
   for (const u of UPGRADE_DEFS) {
     if (!seenUnlocks.has(u.id) && upgradeAvailable(state, u.id)) {
       seenUnlocks.add(u.id);
       showToast(`Nueva mejora disponible: ${u.name}`);
+      sound.unlockSound();
     }
   }
 }
@@ -261,6 +300,7 @@ window.setInterval(() => {
 window.setInterval(save, AUTOSAVE_MS);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') save();
+  sound.setActive(document.visibilityState === 'visible');
 });
 window.addEventListener('beforeunload', save);
 
