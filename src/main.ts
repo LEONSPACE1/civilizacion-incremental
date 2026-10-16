@@ -1,5 +1,5 @@
 import './style.css';
-import { BUILDING_DEFS, ERA1_GOAL, RESOURCE_DEFS, UPGRADE_DEFS } from './game/content';
+import { BUILDING_DEFS, ERA1_GOAL, RESOURCE_DEFS, UPGRADE_DEFS, type UpgradeDef } from './game/content';
 import {
   applyOfflineProgress,
   buildingCost,
@@ -9,16 +9,19 @@ import {
   canAfford,
   clickAmount,
   gather,
+  milestonesReached,
   nextMilestone,
   ratePerSecond,
   tick,
   unitRate,
   upgradeAvailable,
 } from './game/logic';
+import { MILESTONES } from './game/balance';
 import { deleteSave, deserialize, loadGame, saveGame, serialize } from './game/save';
 import { newGame, RESOURCES, type Cost, type GameState } from './game/state';
 import { formatDuration, formatNumber, getNumberFormat, NUMBER_FORMATS, setNumberFormat, type NumberFormat } from './game/format';
 import { BUILDING_ICONS, ICONS, RESOURCE_ICONS, UPGRADE_ICONS } from './ui/icons';
+import { createUpgradeTree } from './ui/tree';
 import { createVillage } from './scene/village';
 import { Sound } from './audio/sound';
 
@@ -167,36 +170,63 @@ const populationValue = populationChip.querySelector('b')!;
 // ---------- Edificios ----------
 const buildingCards = BUILDING_DEFS.map((def) => {
   const card = el('button', 'card');
-  card.innerHTML = `<span class="icon"></span><span class="name"></span><span class="count"></span><span class="desc"></span><span class="meta"></span><span class="cost"></span>`;
+  card.innerHTML =
+    `<span class="icon"></span><span class="name"></span><span class="count"></span><span class="desc"></span><span class="meta"></span>` +
+    `<span class="milestone"><span class="ms-text"></span><span class="ms-bar"><span></span></span></span><span class="cost"></span>`;
   card.addEventListener('click', () => {
+    const before = milestonesReached(state.buildings[def.id]);
     if (buyBuilding(state, def.id)) {
-      sound.buy();
       village.update(state);
       village.celebrate();
+      if (milestonesReached(state.buildings[def.id]) > before) {
+        // Hito alcanzado: la barra se llena y la producción de este oficio se duplica.
+        sound.upgrade();
+        showToast(`¡Hito! ${state.buildings[def.id]} ${def.plural}: su producción se duplica.`);
+        card.classList.remove('milestone-hit');
+        void card.offsetWidth;
+        card.classList.add('milestone-hit');
+      } else sound.buy();
       render();
     }
   });
   $('buildings').append(card);
   const q = (s: string) => card.querySelector(s) as HTMLElement;
-  return { def, card, icon: q('.icon'), name: q('.name'), count: q('.count'), desc: q('.desc'), meta: q('.meta'), cost: q('.cost') };
+  return {
+    def,
+    card,
+    icon: q('.icon'),
+    name: q('.name'),
+    count: q('.count'),
+    desc: q('.desc'),
+    meta: q('.meta'),
+    milestone: q('.milestone'),
+    msText: q('.ms-text'),
+    msFill: q('.ms-bar span'),
+    cost: q('.cost'),
+  };
 });
 
 // ---------- Mejoras ----------
+function purchaseUpgrade(def: UpgradeDef): void {
+  if (!buyUpgrade(state, def.id)) return;
+  sound.upgrade();
+  showToast(`Mejora obtenida: ${def.name}`);
+  village.update(state);
+  village.celebrate();
+  render();
+}
 const upgradeCards = UPGRADE_DEFS.map((def) => {
   const card = el('button', 'card upgrade');
   card.innerHTML = `<span class="icon">${ICONS[UPGRADE_ICONS[def.id] ?? 'fire']}</span><span class="name">${def.name}</span><span class="desc">${def.description}</span><span class="cost"></span>`;
-  card.addEventListener('click', () => {
-    if (buyUpgrade(state, def.id)) {
-      sound.upgrade();
-      showToast(`Mejora obtenida: ${def.name}`);
-      village.update(state);
-      village.celebrate();
-      render();
-    }
-  });
+  card.addEventListener('click', () => purchaseUpgrade(def));
   $('upgrades').append(card);
   return { def, card, cost: card.querySelector('.cost') as HTMLElement };
 });
+
+// ---------- Árbol de mejoras ----------
+const tree = createUpgradeTree({ getState: () => state, costHtml, buyUpgrade: purchaseUpgrade });
+(document.querySelector('#open-tree .mini-icon') as HTMLElement).innerHTML = ICONS.tree;
+$('open-tree').addEventListener('click', () => tree.open());
 
 // ---------- Meta de la era ----------
 const goalPanel = $('goal');
@@ -258,6 +288,7 @@ function render(): void {
       b.count.textContent = '';
       b.desc.textContent = `Se desbloquea: ${b.def.unlockHint.toLowerCase()}`;
       b.meta.textContent = '';
+      b.milestone.hidden = true;
       b.cost.textContent = '';
       continue;
     }
@@ -269,7 +300,20 @@ function render(): void {
     b.name.textContent = b.def.name;
     b.count.textContent = String(n);
     b.desc.textContent = b.def.description;
-    b.meta.textContent = `+${formatNumber(unitRate(state, b.def.id))} ${RESOURCE_NAME[b.def.produces]}/s cada uno${next ? ` · con ${next} produce el doble` : ''}`;
+    b.meta.textContent = `+${formatNumber(unitRate(state, b.def.id))} ${RESOURCE_NAME[b.def.produces]}/s cada uno`;
+    // Barra de hito: avance desde el hito anterior hasta el siguiente.
+    b.milestone.hidden = false;
+    const reached = milestonesReached(n);
+    if (next) {
+      const prev = reached ? MILESTONES[reached - 1] : 0;
+      b.msText.innerHTML = `Hito <b>${n}/${next}</b> · al llegar, producción ×2`;
+      b.msFill.style.width = `${((n - prev) / (next - prev)) * 100}%`;
+      b.milestone.classList.remove('complete');
+    } else {
+      b.msText.innerHTML = `<b>Todos los hitos</b> · producción ×${2 ** reached}`;
+      b.msFill.style.width = '100%';
+      b.milestone.classList.add('complete');
+    }
     b.cost.innerHTML = `Coste: ${costHtml(cost)}`;
   }
 
@@ -287,6 +331,7 @@ function render(): void {
   $('owned-upgrades').textContent = owned.length ? `Obtenidas: ${owned.join(', ')}` : '';
 
   renderGoal();
+  tree.update();
 }
 
 function save(): void {

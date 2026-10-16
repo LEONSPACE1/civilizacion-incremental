@@ -2,7 +2,7 @@
 export const RESOURCES = ['food', 'wood'] as const;
 export type ResourceId = (typeof RESOURCES)[number];
 
-export const BUILDINGS = ['gatherer', 'woodcutter', 'hunter', 'fisher'] as const;
+export const BUILDINGS = ['gatherer', 'woodcutter', 'hunter', 'feller', 'fisher', 'rafter'] as const;
 export type BuildingId = (typeof BUILDINGS)[number];
 
 export type Amounts = Record<ResourceId, number>;
@@ -27,7 +27,7 @@ export function newGame(now = Date.now()): GameState {
     version: SAVE_VERSION,
     resources: zeroAmounts(),
     totals: zeroAmounts(),
-    buildings: { gatherer: 0, woodcutter: 0, hunter: 0, fisher: 0 },
+    buildings: { gatherer: 0, woodcutter: 0, hunter: 0, feller: 0, fisher: 0, rafter: 0 },
     upgrades: [],
     goalReached: false,
     lastSaved: now,

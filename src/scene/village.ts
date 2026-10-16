@@ -7,7 +7,7 @@ import type { BuildingId, GameState } from '../game/state';
 
 const POND = new THREE.Vector2(11, -7);
 const POND_R = 5.2;
-const MAX_SHOWN: Record<BuildingId, number> = { gatherer: 10, woodcutter: 10, hunter: 8, fisher: 6 };
+const MAX_SHOWN: Record<BuildingId, number> = { gatherer: 10, woodcutter: 10, hunter: 8, feller: 8, fisher: 6, rafter: 4 };
 // Pasillos de trabajo: hacia los arbustos y hacia la arboleda. Ahí no se levantan tiendas.
 const GATHER_ANGLE = -2.3;
 const WOOD_ANGLE = 0.9;
@@ -76,6 +76,8 @@ const TENT_SLOTS = (() => {
 })();
 const BUSHES = Array.from({ length: 8 }, (_, k) => polar(GATHER_ANGLE + (k - 3.5) * 0.15, 11 + (k % 2) * 1.4));
 const GROVE = Array.from({ length: MAX_SHOWN.woodcutter }, (_, k) => polar(WOOD_ANGLE + (k - 4.5) * 0.12, 11 + (k % 2) * 1.7));
+// Los taladores trabajan árboles más grandes, detrás de la arboleda y en sus huecos.
+const BIG_GROVE = Array.from({ length: MAX_SHOWN.feller }, (_, k) => polar(WOOD_ANGLE + (k - 3.5) * 0.12 + 0.06, 14.6 + (k % 2) * 1.3));
 const FOOD_PILE = polar(GATHER_ANGLE, PILE_R);
 const WOOD_PILE = polar(WOOD_ANGLE, PILE_R);
 
@@ -128,6 +130,7 @@ interface Person {
   phase: number;
   line?: THREE.Line;
   bobber?: THREE.Mesh;
+  raft?: THREE.Group;
   bobberPos?: THREE.Vector3;
 }
 
@@ -299,14 +302,17 @@ export function createVillage(container: HTMLElement): Village {
   }
 
   // Arboleda de los leñadores: cada árbol se tala, cae y vuelve a crecer
-  const trees: Tree[] = GROVE.map(({ x, z }) => {
-    const pivot = new THREE.Group();
-    const inner = makePine(1 + rng() * 0.3);
-    pivot.add(inner);
-    add(pivot, x, heightAt(x, z) - 0.05, z);
-    pivot.rotation.y = Math.atan2(x, z); // cae hacia fuera, lejos del leñador
-    return { pivot, inner, state: 'standing', theta: 0, omega: 0, timer: 0, shake: 0 };
-  });
+  const makeGrove = (spots: { x: number; z: number }[], size: number): Tree[] =>
+    spots.map(({ x, z }) => {
+      const pivot = new THREE.Group();
+      const inner = makePine(size + rng() * 0.3);
+      pivot.add(inner);
+      add(pivot, x, heightAt(x, z) - 0.05, z);
+      pivot.rotation.y = Math.atan2(x, z); // cae hacia fuera, lejos del leñador
+      return { pivot, inner, state: 'standing', theta: 0, omega: 0, timer: 0, shake: 0 } as Tree;
+    });
+  const trees = makeGrove(GROVE, 1);
+  const bigTrees = makeGrove(BIG_GROVE, 1.4);
 
   // Hoguera, humo y chispas
   for (let i = 0; i < 11; i++) {
@@ -483,7 +489,7 @@ export function createVillage(container: HTMLElement): Village {
   const deerSpot = (fromAngle: number) => {
     for (let n = 0; n < 30; n++) {
       const a = fromAngle + (fx() - 0.5) * 1.2, d = 14.5 + fx() * 3;
-      if (angDist(a, Math.atan2(POND.y, POND.x)) < 0.55) continue;
+      if (angDist(a, Math.atan2(POND.y, POND.x)) < 0.55 || angDist(a, WOOD_ANGLE) < 0.75) continue;
       return polar(a, d);
     }
     return polar(fromAngle, 15);
@@ -551,7 +557,7 @@ export function createVillage(container: HTMLElement): Village {
   }
 
   const skins = [0xe0b48a, 0xc99068, 0xb07850, 0xe8c29a], hairs = [0x2a1a12, 0x5a3418, 0x1a120c];
-  const clothes: Record<BuildingId, number> = { gatherer: 0x9a7048, woodcutter: 0x6b4a2c, hunter: 0x8b5a3c, fisher: 0x56606d };
+  const clothes: Record<BuildingId, number> = { gatherer: 0x9a7048, woodcutter: 0x6b4a2c, hunter: 0x8b5a3c, feller: 0x5a3a26, fisher: 0x56606d, rafter: 0x4a6a62 };
   const wrapMat = mat(0x3d2a1c), stoneMat = mat(0x9a9aa8), berryMat = mat(0xc23a3a);
   function makePerson(kind: BuildingId, i: number): Rig {
     const root = new THREE.Group();
@@ -606,7 +612,7 @@ export function createVillage(container: HTMLElement): Village {
       basket.add(load);
       torso.add(basket);
       rig.carry = load;
-    } else if (kind === 'woodcutter') {
+    } else if (kind === 'woodcutter' || kind === 'feller') {
       const axe = new THREE.Group();
       axe.position.set(0, -0.48, 0.02);
       const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.75, 4), pole);
@@ -621,6 +627,16 @@ export function createVillage(container: HTMLElement): Village {
       log.rotation.z = Math.PI / 2;
       torso.add(log);
       rig.carry = log;
+      if (kind === 'feller') log.scale.set(1.35, 1.25, 1.35);
+    } else if (kind === 'rafter') {
+      // Pértiga larga para empujar la balsa
+      const pole2 = new THREE.Group();
+      pole2.position.set(0, -0.48, 0.02);
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.6, 4), pole);
+      stick.position.y = 0.1;
+      pole2.add(stick);
+      armR.add(pole2);
+      rig.tool = pole2;
     } else {
       const rod = new THREE.Group();
       rod.position.set(0, -0.48, 0.02);
@@ -636,10 +652,13 @@ export function createVillage(container: HTMLElement): Village {
     return rig;
   }
 
-  const people: Record<BuildingId, Person[]> = { gatherer: [], woodcutter: [], hunter: [], fisher: [] };
-  const homeOf = (p: Person) => polar((p.kind === 'gatherer' ? GATHER_ANGLE : WOOD_ANGLE) + (p.i - 4.5) * 0.08, HOME_R + (p.i % 2) * 0.4);
+  const people: Record<BuildingId, Person[]> = { gatherer: [], woodcutter: [], hunter: [], feller: [], fisher: [], rafter: [] };
+  const homeOf = (p: Person) =>
+    p.kind === 'feller'
+      ? polar(WOOD_ANGLE + (p.i - 3.5) * 0.09 + 0.04, HOME_R + 0.9 + (p.i % 2) * 0.4)
+      : polar((p.kind === 'gatherer' ? GATHER_ANGLE : WOOD_ANGLE) + (p.i - 4.5) * 0.08, HOME_R + (p.i % 2) * 0.4);
   const workOf = (p: Person) => {
-    const spot = p.kind === 'gatherer' ? BUSHES[p.i % BUSHES.length] : GROVE[p.i];
+    const spot = p.kind === 'gatherer' ? BUSHES[p.i % BUSHES.length] : p.kind === 'feller' ? BIG_GROVE[p.i] : GROVE[p.i];
     const d = Math.hypot(spot.x, spot.z), back = p.kind === 'gatherer' ? 1 : 1.05;
     const side = p.kind === 'gatherer' && p.i >= BUSHES.length ? 0.75 : 0;
     return { x: (spot.x / d) * (d - back) - (spot.z / d) * side, z: (spot.z / d) * (d - back) + (spot.x / d) * side, face: spot };
@@ -653,7 +672,7 @@ export function createVillage(container: HTMLElement): Village {
   function createPerson(kind: BuildingId, i: number): Person {
     const rig = makePerson(kind, i);
     const p: Person = { kind, i, rig, x: 0, z: 0, heading: 0, walk: 0, bob: 0, state: 'idle', timer: fx() * 3, cheer: 0, phase: fx() * 6 };
-    if (kind === 'gatherer' || kind === 'woodcutter') {
+    if (kind === 'gatherer' || kind === 'woodcutter' || kind === 'feller') {
       // Cada uno empieza en un punto distinto de su ruta para que no vayan sincronizados.
       const home = homeOf(p), work = workOf(p), k = fx();
       p.x = home.x + (work.x - home.x) * k;
@@ -667,6 +686,13 @@ export function createVillage(container: HTMLElement): Village {
       p.heading = Math.atan2(-seat.x, -seat.z);
       p.state = i % 3 === 2 ? 'patrol' : 'idle';
       p.timer = Math.atan2(seat.z, seat.x);
+    } else if (kind === 'rafter') {
+      // Cada balsero navega en círculo por el lago con su carga de troncos.
+      p.timer = (i / MAX_SHOWN.rafter) * Math.PI * 2;
+      p.raft = makeRaft();
+      p.x = POND.x + Math.cos(p.timer) * raftRadius(i);
+      p.z = POND.y + Math.sin(p.timer) * raftRadius(i);
+      p.raft.position.set(p.x, -0.2, p.z);
     } else {
       const spot = fisherSpot(i);
       p.x = spot.x;
@@ -686,13 +712,55 @@ export function createVillage(container: HTMLElement): Village {
     if (rig.carry) rig.carry.visible = false;
     rig.root.position.set(p.x, heightAt(p.x, p.z), p.z);
     rig.root.rotation.y = p.heading;
-    add(rig.root, p.x, heightAt(p.x, p.z), p.z);
+    add(rig.root, p.x, p.raft ? -0.08 : heightAt(p.x, p.z), p.z);
     return p;
   }
   function removePerson(p: Person): void {
     scene.remove(p.rig.root);
     if (p.line) scene.remove(p.line);
     if (p.bobber) scene.remove(p.bobber);
+    if (p.raft) scene.remove(p.raft);
+  }
+
+  const raftRadius = (i: number) => 1.5 + (i % 2) * 0.8;
+  function makeRaft(): THREE.Group {
+    const g = new THREE.Group();
+    for (let k = 0; k < 5; k++) {
+      const l = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 1.7, 6), logMat);
+      l.rotation.x = Math.PI / 2;
+      l.position.x = (k - 2) * 0.26;
+      g.add(l);
+    }
+    // Troncos de carga apilados en la popa
+    for (let k = 0; k < 3; k++) {
+      const l = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.1, 6), logMat);
+      l.rotation.z = Math.PI / 2;
+      l.position.set(0, 0.2 + (k === 2 ? 0.18 : 0), -0.55 + (k % 2) * 0.22 - (k === 2 ? 0.11 : 0));
+      g.add(l);
+    }
+    g.traverse((c) => { c.castShadow = true; c.receiveShadow = true; });
+    scene.add(g);
+    return g;
+  }
+
+  function updateRafter(p: Person, dt: number, t: number): void {
+    const r = p.rig, rad = raftRadius(p.i), dir = p.i % 2 ? -1 : 1;
+    p.timer += (dt * 0.55 * dir) / rad;
+    const nx = POND.x + Math.cos(p.timer) * rad, nz = POND.y + Math.sin(p.timer) * rad;
+    p.heading = Math.atan2(nx - p.x, nz - p.z) || p.heading;
+    p.x = nx;
+    p.z = nz;
+    // Empuja con la pértiga: brazos adelante y atrás
+    const push = Math.sin(t * 1.8 + p.phase);
+    r.armR.rotation.x = -0.6 + push * 0.5;
+    r.armL.rotation.x = -0.9 + push * 0.4;
+    r.torso.rotation.x = 0.15 + push * 0.12;
+    standPose(p, dt);
+    const raft = p.raft!;
+    const wave = Math.sin(t * 1.6 + p.phase) * 0.04;
+    raft.position.set(p.x, -0.2 + wave, p.z);
+    raft.rotation.set(Math.sin(t * 1.3 + p.phase) * 0.05, p.heading, Math.cos(t * 1.1 + p.phase) * 0.05);
+    if (fx() < dt * 0.8) ripple(p.x - Math.sin(p.heading) * 0.9, p.z - Math.cos(p.heading) * 0.9, 0.6);
   }
 
   /** Avanza hacia un punto con paso animado; devuelve true al llegar. */
@@ -759,7 +827,7 @@ export function createVillage(container: HTMLElement): Village {
   }
 
   function updateWoodcutter(p: Person, dt: number, t: number): void {
-    const r = p.rig, home = homeOf(p), work = workOf(p), tree = trees[p.i];
+    const r = p.rig, home = homeOf(p), work = workOf(p), tree = (p.kind === 'feller' ? bigTrees : trees)[p.i];
     if (p.state === 'toWork' || p.state === 'toHome') {
       const target = p.state === 'toWork' ? work : home;
       const swing = Math.sin(p.walk) * 0.5;
@@ -1364,11 +1432,12 @@ export function createVillage(container: HTMLElement): Village {
       for (const kind of Object.keys(people) as BuildingId[]) {
         for (const p of people[kind]) {
           if (kind === 'gatherer') updateGatherer(p, dt, t);
-          else if (kind === 'woodcutter') updateWoodcutter(p, dt, t);
+          else if (kind === 'woodcutter' || kind === 'feller') updateWoodcutter(p, dt, t);
           else if (kind === 'hunter') updateHunter(p, dt, t);
+          else if (kind === 'rafter') updateRafter(p, dt, t);
           else updateFisher(p, dt, t, jumpers[p.i % jumpers.length]);
           if (p.rig.tool) p.rig.tool.rotation.x = -p.rig.armR.rotation.x;
-          p.rig.root.position.set(p.x, heightAt(p.x, p.z) + p.bob, p.z);
+          p.rig.root.position.set(p.x, p.raft ? p.raft.position.y + 0.12 : heightAt(p.x, p.z) + p.bob, p.z);
           p.rig.root.rotation.y = p.heading;
         }
       }

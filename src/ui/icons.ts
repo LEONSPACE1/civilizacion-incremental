@@ -17,6 +17,9 @@ export const ICONS = {
   hand: svg('<path d="M17 45c-5-6-8-13-8-19 0-3 4-4 5-1l3 6V11c0-3 4-3 4 0v13V7c0-3 4-3 4 0v17V9c0-3 4-3 4 0v17V15c0-3 4-3 4 0v15c0 8-3 12-7 15z" stroke="none"/>'),
   net: svg(line('M8 8h32v32H8zM8 19h32M8 30h32M19 8v32M30 8v32', 2.8)),
   sprout: svg(line('M24 45V22', 4) + '<path d="M23 27c-10 0-15-6-15-13 9 0 15 4 15 13zM25 22c0-9 6-15 15-15 0 9-6 15-15 15z" stroke="none"/>'),
+  tree: svg('<path d="M24 3l11 15h-6l9 12h-7l8 10H9l8-10h-7l9-12h-6z" stroke="none"/>' + line('M24 40v6', 4)),
+  raft: svg('<path d="M4 30h40l-4 8H8z" stroke="none"/>' + line('M10 30v-4M18 30v-4M26 30v-4M34 30v-4', 3) + line('M30 26L38 4', 3) + '<path d="M6 42c4-2 8 2 12 0s8 2 12 0 8 2 12 0" fill="none" stroke-width="2.5"/>'),
+  sledge: svg(line('M6 34h30c5 0 8-3 8-7', 3.5) + '<path d="M10 20h24a6 6 0 0 1 0 12H10a6 6 0 0 1 0-12z" stroke="none"/>' + line('M12 34l-2 6M30 34l-2 6', 3)),
   gear: svg('<circle cx="24" cy="24" r="14" fill="none" stroke-width="7" stroke-dasharray="5.5 5.5" stroke-linecap="butt"/><circle cx="24" cy="24" r="10" fill="none" stroke-width="4"/>'),
   soundOn: svg('<path d="M7 18h8l11-9v30l-11-9H7z" stroke="none"/>' + line('M32 17c4 4 4 10 0 14M37 11c7 7 7 19 0 26', 3.5)),
   soundOff: svg('<path d="M7 18h8l11-9v30l-11-9H7z" stroke="none"/>' + line('M33 18l10 12M43 18L33 30', 3.5)),
@@ -26,6 +29,15 @@ export const ICONS = {
 
 export type IconId = keyof typeof ICONS;
 
-export const BUILDING_ICONS: Record<string, IconId> = { gatherer: 'berry', woodcutter: 'axe', hunter: 'spear', fisher: 'fish' };
-export const UPGRADE_ICONS: Record<string, IconId> = { fire: 'fire', baskets: 'basket', axes: 'axe', spears: 'spear', 'cave-paintings': 'hand', nets: 'net' };
+export const BUILDING_ICONS: Record<string, IconId> = { gatherer: 'berry', woodcutter: 'axe', hunter: 'spear', feller: 'tree', fisher: 'fish', rafter: 'raft' };
+export const UPGRADE_ICONS: Record<string, IconId> = {
+  fire: 'fire',
+  baskets: 'basket',
+  axes: 'axe',
+  spears: 'spear',
+  sledges: 'sledge',
+  'cave-paintings': 'hand',
+  nets: 'net',
+  rafts: 'raft',
+};
 export const RESOURCE_ICONS: Record<string, IconId> = { food: 'berry', wood: 'log' };

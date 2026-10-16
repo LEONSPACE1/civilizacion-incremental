@@ -44,7 +44,10 @@
           <div id="buildings" class="list"></div>
         </section>
         <section class="panel">
-          <h2>Mejoras</h2>
+          <div class="panel-head">
+            <h2>Mejoras</h2>
+            <button id="open-tree" class="mini-btn" title="Ver todas las mejoras en forma de árbol"><span class="mini-icon" aria-hidden="true"></span>Ver árbol</button>
+          </div>
           <div id="upgrades" class="list"></div>
           <p id="no-upgrades" class="empty">Sigue haciendo crecer tu tribu para descubrir mejoras.</p>
           <p id="owned-upgrades" class="owned"></p>
@@ -85,6 +88,21 @@
           <p class="hint">Exportar copia tu partida como texto para guardarla o pasarla a otro dispositivo.</p>
         </section>
       </form>
+    </dialog>
+    <dialog id="tree-dialog" class="tree-dialog" aria-labelledby="tree-title">
+      <div class="tree-inner">
+        <header class="tree-head">
+          <h2 id="tree-title">Árbol de mejoras</h2>
+          <button type="button" class="icon-btn close" aria-label="Cerrar el árbol" title="Cerrar"></button>
+        </header>
+        <ul class="legend">
+          <li><span class="dot owned"></span>Obtenida</li>
+          <li><span class="dot available"></span>Disponible</li>
+          <li><span class="dot locked">?</span>Por descubrir</li>
+        </ul>
+        <div class="tree-scroll"><div id="tree-grid" class="tree"></div></div>
+        <div id="tree-detail" class="tree-detail" aria-live="polite"></div>
+      </div>
     </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
