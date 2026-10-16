@@ -1,41 +1,124 @@
-import type { GameState } from './state';
-import {
-  FOOD_PER_CLICK,
-  FOOD_PER_GATHERER_PER_SECOND,
-  GATHERER_BASE_COST,
-  GATHERER_COST_GROWTH,
-  MAX_OFFLINE_SECONDS,
-} from './balance';
+import { BASE_CLICK, MAX_OFFLINE_SECONDS, MILESTONES } from './balance';
+import { BUILDING_BY_ID, BUILDING_DEFS, COST_GROWTH, ERA1_GOAL, UPGRADE_BY_ID, UPGRADE_DEFS } from './content';
+import { RESOURCES, type Amounts, type BuildingId, type Cost, type GameState, type ResourceId } from './state';
 
-export function foodPerSecond(state: GameState): number {
-  return state.gatherers * FOOD_PER_GATHERER_PER_SECOND;
+function upgradeMultiplier(state: GameState, match: (e: (typeof UPGRADE_DEFS)[number]['effect']) => boolean): number {
+  let m = 1;
+  for (const id of state.upgrades) {
+    const u = UPGRADE_BY_ID[id];
+    if (u && match(u.effect)) m *= u.effect.multiplier;
+  }
+  return m;
 }
 
-export function gainFood(state: GameState, amount: number): void {
-  state.food += amount;
-  state.totalFood += amount;
+/** Cuántos hitos (10, 25, 50, 100) ha alcanzado un edificio. */
+export function milestonesReached(count: number): number {
+  return MILESTONES.filter((m) => count >= m).length;
 }
 
-export function gather(state: GameState): void {
-  gainFood(state, FOOD_PER_CLICK);
+export function nextMilestone(count: number): number | undefined {
+  return MILESTONES.find((m) => count < m);
+}
+
+/** Producción por segundo de una sola unidad del edificio, con todas las bonificaciones. */
+export function unitRate(state: GameState, id: BuildingId): number {
+  const def = BUILDING_BY_ID[id];
+  const fromUpgrades = upgradeMultiplier(state, (e) => e.kind === 'building' && e.building === id);
+  const global = upgradeMultiplier(state, (e) => e.kind === 'global');
+  return def.rate * fromUpgrades * global * 2 ** milestonesReached(state.buildings[id]);
+}
+
+export function buildingRate(state: GameState, id: BuildingId): number {
+  return unitRate(state, id) * state.buildings[id];
+}
+
+export function ratePerSecond(state: GameState): Amounts {
+  const rates: Amounts = { food: 0, wood: 0 };
+  for (const def of BUILDING_DEFS) rates[def.produces] += buildingRate(state, def.id);
+  return rates;
+}
+
+export function clickAmount(state: GameState): number {
+  return BASE_CLICK * upgradeMultiplier(state, (e) => e.kind === 'click');
+}
+
+export function gain(state: GameState, resource: ResourceId, amount: number): void {
+  state.resources[resource] += amount;
+  state.totals[resource] += amount;
+}
+
+export function gather(state: GameState): number {
+  const amount = clickAmount(state);
+  gain(state, 'food', amount);
+  return amount;
 }
 
 /** Avanza la simulación `seconds` segundos. */
 export function tick(state: GameState, seconds: number): void {
   if (seconds <= 0) return;
-  gainFood(state, foodPerSecond(state) * seconds);
+  const rates = ratePerSecond(state);
+  for (const r of RESOURCES) if (rates[r] > 0) gain(state, r, rates[r] * seconds);
 }
 
-export function gathererCost(state: GameState): number {
-  return Math.ceil(GATHERER_BASE_COST * GATHERER_COST_GROWTH ** state.gatherers);
+export function buildingCost(state: GameState, id: BuildingId): Cost {
+  const def = BUILDING_BY_ID[id];
+  const factor = COST_GROWTH ** state.buildings[id];
+  const cost: Cost = {};
+  for (const r of RESOURCES) {
+    const base = def.baseCost[r];
+    if (base) cost[r] = Math.ceil(base * factor);
+  }
+  return cost;
 }
 
-export function buyGatherer(state: GameState): boolean {
-  const cost = gathererCost(state);
-  if (state.food < cost) return false;
-  state.food -= cost;
-  state.gatherers += 1;
+export function canAfford(state: GameState, cost: Cost): boolean {
+  return RESOURCES.every((r) => state.resources[r] >= (cost[r] ?? 0));
+}
+
+function pay(state: GameState, cost: Cost): void {
+  for (const r of RESOURCES) state.resources[r] -= cost[r] ?? 0;
+}
+
+export function buyBuilding(state: GameState, id: BuildingId): boolean {
+  const def = BUILDING_BY_ID[id];
+  const cost = buildingCost(state, id);
+  if (!def.unlocked(state) || !canAfford(state, cost)) return false;
+  pay(state, cost);
+  state.buildings[id] += 1;
   return true;
+}
+
+export function upgradeAvailable(state: GameState, id: string): boolean {
+  const def = UPGRADE_BY_ID[id];
+  return !!def && !state.upgrades.includes(id) && def.unlocked(state);
+}
+
+export function buyUpgrade(state: GameState, id: string): boolean {
+  const def = UPGRADE_BY_ID[id];
+  if (!upgradeAvailable(state, id) || !canAfford(state, def.cost)) return false;
+  pay(state, def.cost);
+  state.upgrades.push(id);
+  return true;
+}
+
+export function buyGoal(state: GameState): boolean {
+  if (state.goalReached || !canAfford(state, ERA1_GOAL.cost)) return false;
+  pay(state, ERA1_GOAL.cost);
+  state.goalReached = true;
+  return true;
+}
+
+/** Segundos hasta poder pagar un coste con la producción actual (Infinity si nunca). */
+export function secondsUntil(state: GameState, cost: Cost): number {
+  const rates = ratePerSecond(state);
+  let worst = 0;
+  for (const r of RESOURCES) {
+    const missing = (cost[r] ?? 0) - state.resources[r];
+    if (missing <= 0) continue;
+    if (rates[r] <= 0) return Infinity;
+    worst = Math.max(worst, missing / rates[r]);
+  }
+  return worst;
 }
 
 /** Aplica el tiempo que el jugador estuvo fuera y devuelve los segundos aplicados. */

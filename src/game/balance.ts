@@ -1,7 +1,6 @@
-// Números de balance de la era 1. Se moverán a archivos de datos por era en la fase 2.
-export const FOOD_PER_CLICK = 1;
-export const GATHERER_BASE_COST = 10;
-export const GATHERER_COST_GROWTH = 1.15;
-export const FOOD_PER_GATHERER_PER_SECOND = 0.5;
+// Reglas globales de balance. Los números de cada edificio y mejora viven en content.ts.
+export const BASE_CLICK = 1;
+// Cada vez que un edificio llega a uno de estos números, su producción se duplica.
+export const MILESTONES = [10, 25, 50, 100];
 // El progreso fuera de línea se limita para que una ausencia larga no rompa el balance.
 export const MAX_OFFLINE_SECONDS = 8 * 60 * 60;
