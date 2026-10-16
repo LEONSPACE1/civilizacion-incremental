@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>De la Chispa a las Estrellas</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="header">
+        <h1>De la Chispa a las Estrellas</h1>
+        <p class="era">Era 1 · Paleolítico</p>
+      </header>
+
+      <section class="scene" aria-hidden="true">
+        <svg viewBox="0 0 400 160" class="scene-art">
+          <rect width="400" height="160" fill="var(--sky)" />
+          <circle cx="330" cy="40" r="18" fill="var(--moon)" />
+          <path d="M0 120 Q100 95 200 115 T400 110 V160 H0 Z" fill="var(--ground)" />
+          <g transform="translate(200 120)">
+            <rect x="-22" y="-4" width="44" height="8" rx="3" fill="var(--wood)" transform="rotate(12)" />
+            <rect x="-22" y="-4" width="44" height="8" rx="3" fill="var(--wood)" transform="rotate(-12)" />
+            <path class="flame" d="M0 -48 C14 -30 16 -16 0 -4 C-16 -16 -14 -30 0 -48 Z" fill="var(--fire)" />
+            <path class="flame inner" d="M0 -30 C7 -20 8 -12 0 -5 C-8 -12 -7 -20 0 -30 Z" fill="var(--fire-core)" />
+          </g>
+          <g id="gatherers-layer"></g>
+        </svg>
+      </section>
+
+      <section class="resources">
+        <div class="resource">
+          <span class="resource-name">Comida</span>
+          <span class="resource-value" id="food">0</span>
+          <span class="resource-rate" id="food-rate">+0/s</span>
+        </div>
+      </section>
+
+      <section class="actions">
+        <button id="gather" class="btn btn-primary">Recolectar bayas (+1)</button>
+        <button id="buy-gatherer" class="btn">
+          <span>Recolector <small id="gatherer-count">(0)</small></span>
+          <small>Coste: <span id="gatherer-cost">10</span> comida · +0,5/s</small>
+        </button>
+      </section>
+
+      <footer class="footer">
+        <button id="export" class="link">Exportar partida</button>
+        <button id="import" class="link">Importar partida</button>
+        <button id="reset" class="link danger">Reiniciar</button>
+        <span id="save-status" class="save-status"></span>
+      </footer>
+      <p id="toast" class="toast" role="status"></p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
