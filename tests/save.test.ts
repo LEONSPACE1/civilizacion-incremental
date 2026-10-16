@@ -25,10 +25,27 @@ describe('guardado', () => {
   it('migra partidas de la fase 1', () => {
     const v1 = btoa(JSON.stringify({ version: 1, food: 55, totalFood: 300, gatherers: 4, lastSaved: 5 }));
     const s = deserialize(v1)!;
-    expect(s.version).toBe(2);
+    expect(s.version).toBe(3);
     expect(s.resources.food).toBe(55);
     expect(s.totals.food).toBe(300);
     expect(s.buildings.gatherer).toBe(4);
+  });
+
+  it('las partidas de la versión 2 siguen en el Paleolítico', () => {
+    const v2 = btoa(JSON.stringify({ version: 2, resources: { food: 9, wood: 4 }, buildings: { gatherer: 3 }, goalReached: true }));
+    const s = deserialize(v2)!;
+    expect(s.era).toBe(1);
+    expect(s.goalReached).toBe(true);
+    expect(s.resources.stone).toBe(0);
+    expect(s.buildings.farmer).toBe(0);
+  });
+
+  it('guarda la era y la piedra', () => {
+    const s = newGame(0);
+    s.era = 2;
+    s.resources.stone = 120;
+    s.buildings.quarrier = 4;
+    expect(deserialize(serialize(s))).toEqual(s);
   });
 
   it('rechaza texto inválido', () => {

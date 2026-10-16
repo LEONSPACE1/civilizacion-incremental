@@ -1,8 +1,8 @@
-import { BUILDING_BY_ID, BUILDING_DEFS, ERA1_GOAL, RESOURCE_DEFS, UPGRADE_DEFS, requirementProgress, type UpgradeDef } from '../game/content';
+import { BUILDING_BY_ID, BUILDING_DEFS, ERA_BY_N, ERA_DEFS, GOALS, RESOURCE_DEFS, UPGRADE_DEFS, requirementProgress, type UpgradeDef } from '../game/content';
 import { canAfford, upgradeAvailable } from '../game/logic';
 import { formatNumber } from '../game/format';
 import { RESOURCES, type BuildingId, type Cost, type GameState } from '../game/state';
-import { BUILDING_ICONS, ICONS, UPGRADE_ICONS, type IconId } from './icons';
+import { BUILDING_ICONS, ERA_ICONS, ICONS, UPGRADE_ICONS, type IconId } from './icons';
 
 // Vista ampliada de las mejoras: un árbol pintado en la pared de la cueva. Cada rama es un
 // oficio con sus mejoras debajo; lo que aún no se ha descubierto aparece en sombra con "?".
@@ -48,8 +48,10 @@ export function createUpgradeTree(options: TreeOptions) {
     if (e.target === dialog) dialog.close();
   });
 
+  const tabsEl = document.getElementById('tree-tabs')!;
   const nodes: TreeNode[] = [];
   let selected: TreeNode | null = null;
+  let era = 1;
 
   function makeNode(ref: NodeRef, extraClass = ''): TreeNode {
     const el = document.createElement('button');
@@ -65,36 +67,58 @@ export function createUpgradeTree(options: TreeOptions) {
     return node;
   }
 
-  // Raíz, ramas por oficio (más una para toda la tribu) y la meta de la era al final.
-  const columns = BUILDING_DEFS.length + 1;
-  grid.style.setProperty('--cols', String(columns));
-  const root = makeNode({ kind: 'root' }, 'header root');
-  const top = document.createElement('div');
-  top.className = 'tree-cap';
-  top.append(root.el);
-  grid.append(top, Object.assign(document.createElement('div'), { className: 'tree-rail' }));
-  const branchKeys: (BuildingId | 'tribe')[] = ['tribe', ...BUILDING_DEFS.map((b) => b.id)];
-  for (const key of branchKeys) {
-    const branch = document.createElement('div');
-    branch.className = 'branch';
-    branch.append(makeNode(key === 'tribe' ? { kind: 'tribe' } : { kind: 'building', id: key }, 'header').el);
-    const ups = UPGRADE_DEFS.filter((u) => (u.effect.kind === 'building' ? u.effect.building === key : key === 'tribe'));
-    for (const def of ups) branch.append(makeNode({ kind: 'upgrade', def }).el);
-    grid.append(branch);
+  // Una pestaña por era. Dentro: raíz, ramas por oficio (más una para toda la tribu) y la meta al final.
+  const tabs = ERA_DEFS.map((e) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'tree-tab';
+    tab.setAttribute('role', 'tab');
+    tab.addEventListener('click', () => {
+      if (e.n > options.getState().era) return;
+      build(e.n);
+      update();
+    });
+    tabsEl.append(tab);
+    return { n: e.n, tab };
+  });
+
+  function build(n: number): void {
+    era = n;
+    nodes.length = 0;
+    grid.replaceChildren();
+    const eraBuildings = BUILDING_DEFS.filter((b) => b.era === n);
+    grid.style.setProperty('--cols', String(eraBuildings.length + 1));
+    const root = makeNode({ kind: 'root' }, 'header root');
+    const top = document.createElement('div');
+    top.className = 'tree-cap';
+    top.append(root.el);
+    grid.append(top, Object.assign(document.createElement('div'), { className: 'tree-rail' }));
+    const branchKeys: (BuildingId | 'tribe')[] = ['tribe', ...eraBuildings.map((b) => b.id)];
+    for (const key of branchKeys) {
+      const branch = document.createElement('div');
+      branch.className = 'branch';
+      branch.append(makeNode(key === 'tribe' ? { kind: 'tribe' } : { kind: 'building', id: key }, 'header').el);
+      const ups = UPGRADE_DEFS.filter((u) => u.era === n && (u.effect.kind === 'building' ? u.effect.building === key : key === 'tribe'));
+      for (const def of ups) branch.append(makeNode({ kind: 'upgrade', def }).el);
+      // En el móvil la línea de la rama llega hasta el último nodo de la primera fila.
+      branch.style.setProperty('--n', String(ups.length + 1));
+      grid.append(branch);
+    }
+    grid.append(Object.assign(document.createElement('div'), { className: 'tree-rail' }));
+    const goal = makeNode({ kind: 'goal' }, 'header goal-node');
+    const bottom = document.createElement('div');
+    bottom.className = 'tree-cap bottom';
+    bottom.append(goal.el);
+    grid.append(bottom);
+    selected = root;
+    delete detail.dataset.html;
   }
-  grid.append(Object.assign(document.createElement('div'), { className: 'tree-rail' }));
-  const goal = makeNode({ kind: 'goal' }, 'header goal-node');
-  const bottom = document.createElement('div');
-  bottom.className = 'tree-cap bottom';
-  bottom.append(goal.el);
-  grid.append(bottom);
-  selected = root;
 
   function describe(n: TreeNode, s: GameState): { state: NodeState; icon: IconId; label: string; sub: string } {
     const ref = n.ref;
     switch (ref.kind) {
       case 'root':
-        return { state: 'owned', icon: 'fire', label: 'Era 1 · Paleolítico', sub: 'El origen de tu tribu' };
+        return { state: 'owned', icon: ERA_ICONS[era].root, label: `Era ${era} · ${ERA_BY_N[era].name}`, sub: era === 1 ? 'El origen de tu tribu' : 'Tu tribu se asienta' };
       case 'tribe':
         return { state: 'owned', icon: 'person', label: 'Toda la tribu', sub: 'Mejoras generales' };
       case 'building': {
@@ -109,9 +133,10 @@ export function createUpgradeTree(options: TreeOptions) {
         return { state: 'locked', icon, label: '???', sub: '' };
       }
       case 'goal': {
-        if (s.goalReached) return { state: 'owned', icon: 'sprout', label: ERA1_GOAL.name, sub: 'Era completada' };
-        const pct = Math.min(...RESOURCES.filter((r) => ERA1_GOAL.cost[r]).map((r) => s.resources[r] / ERA1_GOAL.cost[r]!));
-        return { state: 'available', icon: 'sprout', label: ERA1_GOAL.name, sub: `Meta de la era · ${Math.floor(Math.min(1, pct) * 100)} %` };
+        const goal = GOALS[era], icon = ERA_ICONS[era].goal;
+        if (s.era > era || s.goalReached) return { state: 'owned', icon, label: goal.name, sub: 'Era completada' };
+        const pct = Math.min(...RESOURCES.filter((r) => goal.cost[r]).map((r) => s.resources[r] / goal.cost[r]!));
+        return { state: 'available', icon, label: goal.name, sub: `Meta de la era · ${Math.floor(Math.min(1, pct) * 100)} %` };
       }
     }
   }
@@ -120,7 +145,11 @@ export function createUpgradeTree(options: TreeOptions) {
     const d = describe(n, s);
     const ref = n.ref;
     let title = d.label, text = '', extra = '', button = '';
-    if (ref.kind === 'root') text = 'Desde este fuego crece todo lo demás. Cada rama es un oficio y debajo están sus mejoras.';
+    if (ref.kind === 'root') {
+      text = era === 1
+        ? 'Desde este fuego crece todo lo demás. Cada rama es un oficio y debajo están sus mejoras.'
+        : 'La aldea del Neolítico: campos, rebaños y casas de barro. Cada rama es un oficio y debajo están sus mejoras.';
+    }
     else if (ref.kind === 'tribe') text = 'Mejoras que ayudan a toda la tribu a la vez, no a un solo oficio.';
     else if (ref.kind === 'building') {
       const def = BUILDING_BY_ID[ref.id];
@@ -140,8 +169,8 @@ export function createUpgradeTree(options: TreeOptions) {
         }
       }
     } else {
-      text = ERA1_GOAL.description;
-      if (!s.goalReached) extra = `<p class="detail-cost">Coste: ${options.costHtml(ERA1_GOAL.cost)}</p>`;
+      text = GOALS[era].description;
+      if (d.state !== 'owned') extra = `<p class="detail-cost">Coste: ${options.costHtml(GOALS[era].cost)}</p>`;
     }
     const html = `<span class="disc ${d.state}">${ICONS[d.icon]}${d.state === 'locked' ? '<span class="q">?</span>' : ''}</span>` +
       `<div class="detail-text"><h3>${title}</h3><p>${text}</p>${extra}</div>${button}`;
@@ -157,6 +186,13 @@ export function createUpgradeTree(options: TreeOptions) {
   function update(): void {
     if (!dialog.open) return;
     const s = options.getState();
+    for (const t of tabs) {
+      const open = t.n <= s.era;
+      const label = open ? `Era ${t.n} · ${ERA_BY_N[t.n].name}` : `Era ${t.n} · ???`;
+      if (t.tab.textContent !== label) t.tab.textContent = label;
+      t.tab.disabled = !open;
+      t.tab.setAttribute('aria-selected', String(t.n === era));
+    }
     for (const n of nodes) {
       const d = describe(n, s);
       const affordable = n.ref.kind === 'upgrade' && d.state === 'available' && canAfford(s, n.ref.def.cost);
@@ -180,6 +216,7 @@ export function createUpgradeTree(options: TreeOptions) {
 
   return {
     open(): void {
+      build(options.getState().era);
       dialog.showModal();
       update();
     },

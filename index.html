@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Caveat+Brush&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&family=Caveat+Brush&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet" />
   </head>
   <body>
     <!-- Filtro que da a los iconos bordes de pigmento soplado, como en las cuevas -->
@@ -33,7 +33,7 @@
 
         <section class="scene" id="scene">
           <div class="hud" id="hud"></div>
-          <button id="gather" class="gather"><span class="gather-icon" aria-hidden="true"></span>Recolectar bayas <span id="gather-amount">+1</span></button>
+          <button id="gather" class="gather"><span class="gather-icon" aria-hidden="true"></span><span id="gather-label">Recolectar bayas</span> <span id="gather-amount">+1</span></button>
           <p class="no-3d-msg">Tu navegador no puede mostrar la aldea en 3D, pero el juego funciona igual.</p>
         </section>
       </div>
@@ -58,6 +58,15 @@
       <p id="toast" class="toast" role="status"></p>
     </main>
 
+    <!-- Al pasar de era, esta cortina cubre la pantalla mientras cambia el estilo -->
+    <div id="era-curtain" class="era-curtain" hidden>
+      <div class="era-card">
+        <p class="era-kicker"></p>
+        <h2></h2>
+        <p class="era-intro"></p>
+      </div>
+    </div>
+
     <dialog id="settings" class="settings" aria-labelledby="settings-title">
       <form method="dialog" class="settings-inner">
         <header class="settings-head">
@@ -70,7 +79,7 @@
           <label class="check"><input id="set-muted" type="checkbox" /> Silenciar todo</label>
           <label class="slider">Volumen general <input id="set-volume" type="range" min="0" max="1" step="0.05" /><output id="out-volume"></output></label>
           <label class="slider">Efectos <input id="set-effects" type="range" min="0" max="1" step="0.05" /><output id="out-effects"></output></label>
-          <label class="slider">Ambiente nocturno <input id="set-ambience" type="range" min="0" max="1" step="0.05" /><output id="out-ambience"></output></label>
+          <label class="slider">Ambiente <input id="set-ambience" type="range" min="0" max="1" step="0.05" /><output id="out-ambience"></output></label>
         </section>
 
         <section class="settings-section">
@@ -100,6 +109,7 @@
           <li><span class="dot available"></span>Disponible</li>
           <li><span class="dot locked">?</span>Por descubrir</li>
         </ul>
+        <div id="tree-tabs" class="tree-tabs" role="tablist" aria-label="Eras"></div>
         <div class="tree-scroll"><div id="tree-grid" class="tree"></div></div>
         <div id="tree-detail" class="tree-detail" aria-live="polite"></div>
       </div>
