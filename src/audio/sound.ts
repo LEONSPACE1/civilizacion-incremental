@@ -4,17 +4,30 @@
 
 const SETTINGS_KEY = 'civilizacion-incremental:sound';
 
-interface SoundSettings {
+export interface SoundSettings {
   muted: boolean;
+  /** Volumen general. */
   volume: number;
+  /** Efectos al recolectar, comprar y desbloquear. */
+  effects: number;
+  /** Fogata y grillos de fondo. */
+  ambience: number;
 }
+
+const DEFAULTS: SoundSettings = { muted: false, volume: 0.7, effects: 0.9, ambience: 0.6 };
+const clamp01 = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);
 
 function loadSettings(): SoundSettings {
   try {
     const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
-    return { muted: s.muted === true, volume: typeof s.volume === 'number' ? Math.min(1, Math.max(0, s.volume)) : 0.7 };
+    return {
+      muted: s.muted === true,
+      volume: clamp01(s.volume, DEFAULTS.volume),
+      effects: clamp01(s.effects, DEFAULTS.effects),
+      ambience: clamp01(s.ambience, DEFAULTS.ambience),
+    };
   } catch {
-    return { muted: false, volume: 0.7 };
+    return { ...DEFAULTS };
   }
 }
 
@@ -44,6 +57,14 @@ export class Sound {
     return this.settings.volume;
   }
 
+  get effects(): number {
+    return this.settings.effects;
+  }
+
+  get ambienceVolume(): number {
+    return this.settings.ambience;
+  }
+
   /** Llamar desde un gesto del jugador (clic o tecla). */
   unlock(): void {
     if (!this.ctx) {
@@ -53,10 +74,8 @@ export class Sound {
       this.master = this.ctx.createGain();
       this.master.connect(this.ctx.destination);
       this.sfx = this.ctx.createGain();
-      this.sfx.gain.value = 0.9;
       this.sfx.connect(this.master);
       this.ambience = this.ctx.createGain();
-      this.ambience.gain.value = 0.35;
       this.ambience.connect(this.master);
       this.noise = this.makeNoise(2);
       this.applyVolume();
@@ -72,7 +91,19 @@ export class Sound {
   }
 
   setVolume(volume: number): void {
-    this.settings.volume = volume;
+    this.set({ volume });
+  }
+
+  setEffects(effects: number): void {
+    this.set({ effects });
+  }
+
+  setAmbience(ambience: number): void {
+    this.set({ ambience });
+  }
+
+  private set(change: Partial<SoundSettings>): void {
+    Object.assign(this.settings, change);
     saveSettings(this.settings);
     this.applyVolume();
   }
@@ -119,8 +150,11 @@ export class Sound {
 
   private applyVolume(): void {
     if (!this.ctx) return;
-    const target = this.settings.muted ? 0 : this.settings.volume;
-    this.master.gain.setTargetAtTime(target, this.ctx.currentTime, 0.05);
+    const now = this.ctx.currentTime;
+    this.master.gain.setTargetAtTime(this.settings.muted ? 0 : this.settings.volume, now, 0.05);
+    this.sfx.gain.setTargetAtTime(this.settings.effects, now, 0.05);
+    // El ambiente se mezcla bajo para no tapar los efectos.
+    this.ambience.gain.setTargetAtTime(this.settings.ambience * 0.55, now, 0.05);
   }
 
   private makeNoise(seconds: number): AudioBuffer {

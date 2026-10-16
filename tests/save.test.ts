@@ -51,4 +51,14 @@ describe('formato de números', () => {
     expect(formatNumber(1234)).toBe('1,23K');
     expect(formatNumber(2_500_000)).toBe('2,50M');
   });
+
+  it('respeta el formato elegido en ajustes', () => {
+    expect(formatNumber(1500, 'words')).toBe('1,50 mil');
+    expect(formatNumber(1_000_000, 'words')).toBe('1,00 millón');
+    expect(formatNumber(2_300_000, 'words')).toBe('2,30 millones');
+    expect(formatNumber(4e12, 'words')).toBe('4,00 billones');
+    expect(formatNumber(1_500_000, 'scientific')).toBe('1,50e6');
+    expect(formatNumber(1_500_000.7, 'full')).toBe('1.500.000');
+    expect(formatNumber(42.5, 'full')).toBe('42,5');
+  });
 });
