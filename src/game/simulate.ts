@@ -1,10 +1,12 @@
-import { BUILDING_DEFS, ERA1_GOAL, UPGRADE_DEFS } from './content';
+import { BUILDING_DEFS, UPGRADE_DEFS } from './content';
 import {
+  advanceEra,
   buildingCost,
   buyBuilding,
   buyGoal,
   buyUpgrade,
   canAfford,
+  currentGoal,
   gather,
   ratePerSecond,
   secondsUntil,
@@ -29,6 +31,8 @@ export interface SimResult {
   blockedBy: Record<ResourceId, number>;
   /** Producción por segundo al terminar. */
   finalRates: Record<ResourceId, number>;
+  /** La partida al terminar, para seguir simulando la era siguiente. */
+  state: GameState;
 }
 
 export interface SimOptions {
@@ -38,15 +42,18 @@ export interface SimOptions {
   maxSeconds?: number;
   /** Cuánto valora el jugador cada recurso; por defecto los dos igual. */
   bias?: Partial<Record<ResourceId, number>>;
+  /** Se llama cada segundo simulado (para estudiar la curva de progreso). */
+  onSecond?: (t: number, s: GameState) => void;
 }
 
-let bias: Record<ResourceId, number> = { food: 1, wood: 1 };
+let bias: Record<ResourceId, number> = { food: 1, wood: 1, stone: 1 };
 const value = (c: Cost) => RESOURCES.reduce((sum, r) => sum + (c[r] ?? 0) * bias[r], 0);
 
 /** Un jugador razonable: compra mejoras en cuanto puede y, si no, el edificio más rentable. */
 function nextTarget(s: GameState): { cost: Cost; buy: () => boolean; name: string } {
-  if (secondsUntil(s, ERA1_GOAL.cost) < 120) {
-    return { cost: ERA1_GOAL.cost, buy: () => buyGoal(s), name: ERA1_GOAL.name };
+  const goal = currentGoal(s);
+  if (secondsUntil(s, goal.cost) < 120) {
+    return { cost: goal.cost, buy: () => buyGoal(s), name: goal.name };
   }
   const buildings = BUILDING_DEFS.filter((b) => b.unlocked(s)).map((b) => {
     const cost = buildingCost(s, b.id);
@@ -62,9 +69,8 @@ function nextTarget(s: GameState): { cost: Cost; buy: () => boolean; name: strin
     if (wait > 45) {
       // Mientras espera una mejora cara, refuerza el recurso que le falta, como haría una persona.
       const rates = ratePerSecond(s);
-      const short = RESOURCES.reduce((a, r) =>
-        ((u.cost[r] ?? 0) - s.resources[r]) / rates[r] > ((u.cost[a] ?? 0) - s.resources[a]) / rates[a] ? r : a,
-      );
+      const missing = (r: ResourceId) => Math.max(0, (u.cost[r] ?? 0) - s.resources[r]) / Math.max(rates[r], 1e-9);
+      const short = RESOURCES.reduce((a, r) => (missing(r) > missing(a) ? r : a));
       const helpers = buildings.filter((o) => o.b.produces === short && secondsUntil(s, o.cost) < wait / 3);
       if (helpers.length) return asTarget(helpers.reduce((a, c) => (c.score < a.score ? c : a)));
     }
@@ -74,15 +80,26 @@ function nextTarget(s: GameState): { cost: Cost; buy: () => boolean; name: strin
 }
 
 export function simulateEra1(options: SimOptions = {}): SimResult {
+  return simulateEra(newGame(0), options);
+}
+
+/** La era 2 empieza donde termina una era 1 jugada por el mismo jugador. */
+export function simulateEra2(options: SimOptions = {}): SimResult {
+  const s = simulateEra1(options).state;
+  advanceEra(s);
+  return simulateEra(s, { earlyClickSeconds: 0, ...options });
+}
+
+/** Juega la era en la que está la partida hasta pagar su meta. */
+export function simulateEra(s: GameState, options: SimOptions = {}): SimResult {
   const { earlyClicksPerSecond = 3, earlyClickSeconds = 180, maxSeconds = 4 * 3600 } = options;
-  bias = { food: 1, wood: 1, ...options.bias };
-  const s = newGame(0);
+  bias = { food: 1, wood: 1, stone: 1, ...options.bias };
   const events: SimEvent[] = [];
   let lastBuy = 0;
   let longestWait = 0;
   let longestWaitBefore = '';
   let pendingClicks = 0;
-  const blockedBy: Record<ResourceId, number> = { food: 0, wood: 0 };
+  const blockedBy: Record<ResourceId, number> = { food: 0, wood: 0, stone: 0 };
   for (let t = 0; t < maxSeconds; t++) {
     pendingClicks += t < earlyClickSeconds ? earlyClicksPerSecond : 0.2;
     for (; pendingClicks >= 1; pendingClicks--) gather(s);
@@ -98,6 +115,7 @@ export function simulateEra1(options: SimOptions = {}): SimResult {
       blockedBy[worst]++;
     }
     tick(s, 1);
+    options.onSecond?.(t, s);
     for (let guard = 0; guard < 20; guard++) {
       const target = nextTarget(s);
       if (!canAfford(s, target.cost) || !target.buy()) break;
@@ -107,8 +125,8 @@ export function simulateEra1(options: SimOptions = {}): SimResult {
       }
       lastBuy = t;
       events.push({ time: t, what: target.name });
-      if (s.goalReached) return { finished: true, seconds: t, longestWait, longestWaitBefore, events, blockedBy, finalRates: ratePerSecond(s) };
+      if (s.goalReached) return { finished: true, seconds: t, longestWait, longestWaitBefore, events, blockedBy, finalRates: ratePerSecond(s), state: s };
     }
   }
-  return { finished: false, seconds: maxSeconds, longestWait, longestWaitBefore, events, blockedBy, finalRates: ratePerSecond(s) };
+  return { finished: false, seconds: maxSeconds, longestWait, longestWaitBefore, events, blockedBy, finalRates: ratePerSecond(s), state: s };
 }

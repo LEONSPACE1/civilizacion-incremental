@@ -1,13 +1,16 @@
 import './style.css';
-import { BUILDING_DEFS, ERA1_GOAL, RESOURCE_DEFS, UPGRADE_DEFS, type UpgradeDef } from './game/content';
+import { BUILDING_DEFS, ERA_BY_N, RESOURCE_DEFS, UPGRADE_DEFS, type UpgradeDef } from './game/content';
 import {
+  advanceEra,
   applyOfflineProgress,
   buildingCost,
   buyBuilding,
   buyGoal,
   buyUpgrade,
+  canAdvanceEra,
   canAfford,
   clickAmount,
+  currentGoal,
   gather,
   milestonesReached,
   nextMilestone,
@@ -20,7 +23,7 @@ import { MILESTONES } from './game/balance';
 import { deleteSave, deserialize, loadGame, saveGame, serialize } from './game/save';
 import { newGame, RESOURCES, type Cost, type GameState } from './game/state';
 import { formatDuration, formatNumber, getNumberFormat, NUMBER_FORMATS, setNumberFormat, type NumberFormat } from './game/format';
-import { BUILDING_ICONS, ICONS, RESOURCE_ICONS, UPGRADE_ICONS } from './ui/icons';
+import { BUILDING_ICONS, ERA_ICONS, ICONS, RESOURCE_ICONS, UPGRADE_ICONS } from './ui/icons';
 import { createUpgradeTree } from './ui/tree';
 import { createVillage } from './scene/village';
 import { Sound } from './audio/sound';
@@ -127,7 +130,47 @@ function renderSettings(): void {
 }
 renderSettings();
 
-(document.querySelector('.gather-icon') as HTMLElement).innerHTML = ICONS.berry;
+// ---------- Era: estilo de los paneles, fondo, botón de recolectar y cabecera ----------
+// Cada era tiene su propio estilo (data-era en <body>); al cambiar de era cambia todo a la vez.
+function applyEra(): void {
+  const era = ERA_BY_N[state.era];
+  if (document.body.dataset.era === String(era.n)) return;
+  document.body.dataset.era = String(era.n);
+  (document.querySelector('.header .era') as HTMLElement).textContent = `Era ${era.n} · ${era.name}`;
+  (document.querySelector('.gather-icon') as HTMLElement).innerHTML = ICONS[ERA_ICONS[era.n].gather];
+  $('gather-label').textContent = era.gatherLabel;
+  sound.setEra(era.n);
+}
+
+/** Cortina con el nombre de la nueva era: el estilo cambia mientras cubre la pantalla. */
+function playEraTransition(): void {
+  const era = ERA_BY_N[state.era];
+  const curtain = $('era-curtain');
+  curtain.querySelector('.era-kicker')!.textContent = `Era ${era.n}`;
+  curtain.querySelector('h2')!.textContent = era.name;
+  curtain.querySelector('.era-intro')!.textContent = era.intro;
+  curtain.hidden = false;
+  void curtain.offsetWidth;
+  curtain.classList.add('show');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.setTimeout(() => {
+    applyEra();
+    village.update(state);
+    render();
+    // Los oficios nuevos aparecen arriba de la lista: se muestra desde el principio.
+    document.querySelector('.sidebar')!.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }, reduce ? 0 : 750);
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    curtain.classList.remove('show');
+    window.setTimeout(() => (curtain.hidden = true), reduce ? 0 : 900);
+  };
+  window.setTimeout(close, reduce ? 2500 : 3600);
+  curtain.addEventListener('click', close, { once: true });
+}
 
 // ---------- Avisos ----------
 let toastTimer: number | undefined;
@@ -159,7 +202,7 @@ const chips = RESOURCE_DEFS.map((r) => {
   chip.title = r.name;
   chip.innerHTML = `<span class="chip-icon">${ICONS[RESOURCE_ICONS[r.id]]}</span><span class="chip-name">${r.name}</span> <b></b> <small></small>`;
   hud.append(chip);
-  return { id: r.id, value: chip.querySelector('b')!, rate: chip.querySelector('small')! };
+  return { id: r.id, chip, value: chip.querySelector('b')!, rate: chip.querySelector('small')! };
 });
 const populationChip = el('div', 'chip');
 populationChip.title = 'Población';
@@ -168,6 +211,16 @@ hud.append(populationChip);
 const populationValue = populationChip.querySelector('b')!;
 
 // ---------- Edificios ----------
+// Un grupo por era; los oficios de la era actual van arriba.
+const buildingGroups = Object.fromEntries(
+  [...new Set(BUILDING_DEFS.map((b) => b.era))].map((n) => {
+    const group = el('div', 'job-group');
+    group.innerHTML = `<h3 class="group-title">${ERA_BY_N[n].name}</h3>`;
+    group.dataset.era = String(n);
+    $('buildings').append(group);
+    return [n, group];
+  }),
+) as Record<number, HTMLElement>;
 const buildingCards = BUILDING_DEFS.map((def) => {
   const card = el('button', 'card');
   card.innerHTML =
@@ -189,7 +242,7 @@ const buildingCards = BUILDING_DEFS.map((def) => {
       render();
     }
   });
-  $('buildings').append(card);
+  buildingGroups[def.era].append(card);
   const q = (s: string) => card.querySelector(s) as HTMLElement;
   return {
     def,
@@ -231,38 +284,59 @@ $('open-tree').addEventListener('click', () => tree.open());
 // ---------- Meta de la era ----------
 const goalPanel = $('goal');
 function renderGoal(): void {
+  const goal = currentGoal(state);
+  const era = ERA_BY_N[state.era];
   if (state.goalReached) {
+    const key = `done-${state.era}`;
+    if (goalPanel.dataset.built === key) return;
+    goalPanel.dataset.built = key;
     goalPanel.classList.add('done');
-    goalPanel.innerHTML = `<h2>¡Era 1 completada!</h2><p>Tu tribu ha descubierto la agricultura. El Neolítico llegará en la próxima actualización del juego; mientras tanto puedes seguir haciendo crecer tu aldea.</p>`;
+    const next = ERA_BY_N[state.era + 1];
+    if (canAdvanceEra(state) && next) {
+      goalPanel.innerHTML = `<h2>¡Era ${era.n} completada!</h2><p>${goal.description}</p><button class="go">Entrar en el ${next.name}</button>`;
+      goalPanel.querySelector('.go')!.addEventListener('click', () => {
+        if (!advanceEra(state)) return;
+        sound.goal();
+        save();
+        playEraTransition();
+      });
+    } else {
+      goalPanel.innerHTML = `<h2>¡Era ${era.n} completada!</h2><p>Has llegado al final de lo que existe por ahora. La siguiente era llegará en una próxima actualización; mientras tanto puedes seguir haciendo crecer tu aldea.</p>`;
+    }
     return;
   }
-  if (!goalPanel.dataset.built) {
-    goalPanel.dataset.built = '1';
-    goalPanel.innerHTML = `<h2>Meta de la era: ${ERA1_GOAL.name}</h2><p>${ERA1_GOAL.description}</p><div class="rows"></div><button class="go">Descubrir la agricultura</button>`;
+  if (goalPanel.dataset.built !== String(state.era)) {
+    goalPanel.dataset.built = String(state.era);
+    goalPanel.classList.remove('done');
+    goalPanel.innerHTML = `<h2>Meta de la era: ${goal.name}</h2><p>${goal.description}</p><div class="rows"></div><button class="go">${goal.action}</button>`;
     goalPanel.querySelector('.go')!.addEventListener('click', () => {
       if (buyGoal(state)) {
         sound.goal();
-        showToast('¡Has descubierto la agricultura! Era 1 completada.');
+        showToast(`¡${currentGoal(state).name}! Era ${state.era} completada.`);
         village.update(state);
+        village.celebrate();
         save();
         render();
       }
     });
   }
   const rows = goalPanel.querySelector('.rows')!;
-  rows.innerHTML = RESOURCES.filter((r) => ERA1_GOAL.cost[r])
+  rows.innerHTML = RESOURCES.filter((r) => goal.cost[r])
     .map((r) => {
-      const need = ERA1_GOAL.cost[r]!, have = Math.min(state.resources[r], need);
+      const need = goal.cost[r]!, have = Math.min(state.resources[r], need);
       return `<div class="row"><div><span>${RESOURCE_DEFS.find((d) => d.id === r)!.name}</span><span>${formatNumber(Math.floor(have))} / ${formatNumber(need)}</span></div><div class="bar"><span style="width:${(have / need) * 100}%"></span></div></div>`;
     })
     .join('');
-  (goalPanel.querySelector('.go') as HTMLButtonElement).disabled = !canAfford(state, ERA1_GOAL.cost);
+  (goalPanel.querySelector('.go') as HTMLButtonElement).disabled = !canAfford(state, goal.cost);
 }
 
 // ---------- Dibujo ----------
 function render(): void {
+  applyEra();
   const rates = ratePerSecond(state);
+  const eraResources = ERA_BY_N[state.era].resources;
   for (const c of chips) {
+    c.chip.hidden = !eraResources.includes(c.id);
     c.value.textContent = formatNumber(Math.floor(state.resources[c.id]));
     c.rate.textContent = `+${formatNumber(rates[c.id])}/s`;
   }
@@ -270,18 +344,24 @@ function render(): void {
   populationValue.textContent = formatNumber(1 + Object.values(state.buildings).reduce((a, b) => a + b, 0));
   $('gather-amount').textContent = `+${formatNumber(clickAmount(state))}`;
 
-  let shownLocked = false;
+  // Los oficios de la era actual arriba; los de eras futuras no se muestran.
+  for (const [n, group] of Object.entries(buildingGroups)) {
+    group.hidden = Number(n) > state.era;
+    group.style.order = String(state.era - Number(n));
+  }
+  $('buildings').classList.toggle('grouped', state.era > 1);
+  const shownLocked = new Set<number>();
   for (const b of buildingCards) {
     const unlocked = b.def.unlocked(state);
-    // Solo se anticipa el siguiente edificio bloqueado, para no saturar la lista.
-    b.card.hidden = !unlocked && shownLocked;
+    // Solo se anticipa el siguiente edificio bloqueado de cada era, para no saturar la lista.
+    b.card.hidden = !unlocked && shownLocked.has(b.def.era);
     const icon = unlocked ? BUILDING_ICONS[b.def.id] ?? 'person' : 'locked';
     if (b.icon.dataset.icon !== icon) {
       b.icon.dataset.icon = icon;
       b.icon.innerHTML = ICONS[icon];
     }
     if (!unlocked) {
-      shownLocked = true;
+      shownLocked.add(b.def.era);
       b.card.classList.add('locked');
       b.card.disabled = true;
       b.name.textContent = '???';

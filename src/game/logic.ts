@@ -1,6 +1,6 @@
 import { BASE_CLICK, MAX_OFFLINE_SECONDS, MILESTONES } from './balance';
-import { BUILDING_BY_ID, BUILDING_DEFS, COST_GROWTH, ERA1_GOAL, UPGRADE_BY_ID, UPGRADE_DEFS } from './content';
-import { RESOURCES, type Amounts, type BuildingId, type Cost, type GameState, type ResourceId } from './state';
+import { BUILDING_BY_ID, BUILDING_DEFS, COST_GROWTH, GOALS, UPGRADE_BY_ID, UPGRADE_DEFS, type GoalDef } from './content';
+import { LAST_ERA, RESOURCES, type Amounts, type BuildingId, type Cost, type GameState, type ResourceId } from './state';
 
 function upgradeMultiplier(state: GameState, match: (e: (typeof UPGRADE_DEFS)[number]['effect']) => boolean): number {
   let m = 1;
@@ -33,13 +33,19 @@ export function buildingRate(state: GameState, id: BuildingId): number {
 }
 
 export function ratePerSecond(state: GameState): Amounts {
-  const rates: Amounts = { food: 0, wood: 0 };
+  const rates = Object.fromEntries(RESOURCES.map((r) => [r, 0])) as Amounts;
   for (const def of BUILDING_DEFS) rates[def.produces] += buildingRate(state, def.id);
   return rates;
 }
 
 export function clickAmount(state: GameState): number {
-  return BASE_CLICK * upgradeMultiplier(state, (e) => e.kind === 'click');
+  let share = 0;
+  for (const id of state.upgrades) {
+    const e = UPGRADE_BY_ID[id]?.effect;
+    if (e?.kind === 'clickRate') share += e.share;
+  }
+  const base = BASE_CLICK * upgradeMultiplier(state, (e) => e.kind === 'click');
+  return share ? base + ratePerSecond(state).food * share : base;
 }
 
 export function gain(state: GameState, resource: ResourceId, amount: number): void {
@@ -101,10 +107,28 @@ export function buyUpgrade(state: GameState, id: string): boolean {
   return true;
 }
 
+/** La meta de la era en la que está la tribu. */
+export function currentGoal(state: GameState): GoalDef {
+  return GOALS[state.era] ?? GOALS[LAST_ERA];
+}
+
 export function buyGoal(state: GameState): boolean {
-  if (state.goalReached || !canAfford(state, ERA1_GOAL.cost)) return false;
-  pay(state, ERA1_GOAL.cost);
+  const goal = currentGoal(state);
+  if (state.goalReached || !canAfford(state, goal.cost)) return false;
+  pay(state, goal.cost);
   state.goalReached = true;
+  return true;
+}
+
+/** Tras cumplir la meta, la tribu entra en la era siguiente (si ya existe en el juego). */
+export function canAdvanceEra(state: GameState): boolean {
+  return state.goalReached && state.era < LAST_ERA;
+}
+
+export function advanceEra(state: GameState): boolean {
+  if (!canAdvanceEra(state)) return false;
+  state.era += 1;
+  state.goalReached = false;
   return true;
 }
 

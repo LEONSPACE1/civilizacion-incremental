@@ -10,7 +10,7 @@ export interface SoundSettings {
   volume: number;
   /** Efectos al recolectar, comprar y desbloquear. */
   effects: number;
-  /** Fogata y grillos de fondo. */
+  /** Sonido de fondo de la era: fogata y grillos de noche, pájaros de día. */
   ambience: number;
 }
 
@@ -48,6 +48,8 @@ export class Sound {
   private noise!: AudioBuffer;
   private crackleTimer: number | undefined;
   private cricketTimer: number | undefined;
+  private birdTimer: number | undefined;
+  private era = 1;
 
   get muted(): boolean {
     return this.settings.muted;
@@ -106,6 +108,11 @@ export class Sound {
     Object.assign(this.settings, change);
     saveSettings(this.settings);
     this.applyVolume();
+  }
+
+  /** El ambiente cambia con la era: noche en el Paleolítico, día en el Neolítico. */
+  setEra(era: number): void {
+    this.era = era;
   }
 
   /** Pausa el ambiente cuando la pestaña no se ve. */
@@ -224,16 +231,32 @@ export class Sound {
     crackle();
 
     const cricket = () => {
-      const f = 4200 + Math.random() * 500;
-      for (let i = 0; i < 3; i++) this.tone({ type: 'sine', freq: f, decay: 0.04, gain: 0.03, delay: i * 0.07, out: this.ambience });
+      if (this.era === 1) {
+        const f = 4200 + Math.random() * 500;
+        for (let i = 0; i < 3; i++) this.tone({ type: 'sine', freq: f, decay: 0.04, gain: 0.03, delay: i * 0.07, out: this.ambience });
+      }
       this.cricketTimer = window.setTimeout(cricket, 1500 + Math.random() * 4000);
     };
     this.cricketTimer = window.setTimeout(cricket, 2000);
+
+    // De día cantan los pájaros: trinos cortos que suben y bajan.
+    const bird = () => {
+      if (this.era >= 2) {
+        const base = 2200 + Math.random() * 1400, notes = 2 + Math.floor(Math.random() * 4);
+        for (let i = 0; i < notes; i++) {
+          const up = i % 2 === 0;
+          this.tone({ type: 'sine', freq: up ? base : base * 1.35, to: up ? base * 1.4 : base * 0.95, decay: 0.07 + Math.random() * 0.05, gain: 0.05, delay: i * 0.11, out: this.ambience });
+        }
+      }
+      this.birdTimer = window.setTimeout(bird, 1800 + Math.random() * 5000);
+    };
+    this.birdTimer = window.setTimeout(bird, 1200);
   }
 
   dispose(): void {
     window.clearTimeout(this.crackleTimer);
     window.clearTimeout(this.cricketTimer);
+    window.clearTimeout(this.birdTimer);
     void this.ctx?.close();
   }
 }
