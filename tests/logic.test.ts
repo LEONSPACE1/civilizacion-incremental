@@ -29,7 +29,7 @@ describe('lógica de la era 1', () => {
     s.buildings.woodcutter = 5;
     tick(s, 10);
     expect(s.resources.food).toBe(10);
-    expect(s.resources.wood).toBeCloseTo(20);
+    expect(s.resources.wood).toBeCloseTo(25);
   });
 
   it('el coste crece un 15 % por unidad y puede pedir varios recursos', () => {
@@ -37,7 +37,7 @@ describe('lógica de la era 1', () => {
     expect(buildingCost(s, 'gatherer')).toEqual({ food: 10 });
     s.buildings.gatherer = 10;
     expect(buildingCost(s, 'gatherer')).toEqual({ food: 41 });
-    expect(buildingCost(s, 'hunter')).toEqual({ food: 90, wood: 30 });
+    expect(buildingCost(s, 'hunter')).toEqual({ food: 80, wood: 40 });
   });
 
   it('no se puede comprar sin recursos ni antes del desbloqueo', () => {

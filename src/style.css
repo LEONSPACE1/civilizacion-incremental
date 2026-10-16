@@ -173,6 +173,119 @@ body {
 .card.locked { opacity: 0.6; border-style: dashed; cursor: default; }
 .card.locked .name { color: var(--muted); }
 .card.upgrade { grid-template-columns: 46px minmax(0, 1fr); }
+
+/* Barra de hito: se llena hasta el siguiente 10, 25, 50, 100 */
+.card .milestone { grid-column: 2 / -1; display: grid; gap: 3px; margin-top: 5px; font-size: 0.76rem; color: var(--muted); }
+.card .milestone b { color: var(--text); font-variant-numeric: tabular-nums; }
+.ms-bar { height: 7px; border-radius: 99px; overflow: hidden; background: #1a110d; border: 1px solid #4a3426; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6); }
+.ms-bar span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #8e4a1e, var(--ochre)); transition: width 0.3s ease-out; }
+.milestone.complete .ms-bar span { background: linear-gradient(90deg, #6aa544, #b4e283); }
+.card.milestone-hit { animation: hit 1s ease-out; }
+.card.milestone-hit .ms-bar span { animation: hit-bar 1s ease-out; }
+@keyframes hit { 0% { box-shadow: 0 3px 0 #1a110d, 0 0 0 2px #ffd27a, 0 0 30px rgba(255, 190, 90, 0.7); } 100% { box-shadow: 0 3px 0 #1a110d; } }
+@keyframes hit-bar { 0%, 30% { background: #ffe0a0; } }
+
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mini-btn {
+  display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 12px 6px 9px;
+  font-weight: 800; font-size: 0.85rem; color: var(--ochre);
+  border: 1px solid #6a4c38; border-radius: 12px 9px 13px 8px;
+  background: var(--grain), linear-gradient(170deg, #3d2b22, #2a1d18); box-shadow: 0 2px 0 #170f0c;
+}
+.mini-btn:hover { color: #ffd08a; border-color: var(--ochre); }
+.mini-btn:focus-visible { outline: 3px solid #ffd27a; outline-offset: 2px; }
+.mini-icon svg { width: 18px; height: 18px; filter: url(#pintura); }
+
+/* Árbol de mejoras: pintado sobre la pared de la cueva */
+.tree-dialog {
+  border: 0; padding: 0; background: transparent; color: var(--text);
+  width: min(1040px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 24px); overflow: visible;
+}
+.tree-dialog::backdrop { background: rgba(10, 6, 8, 0.7); backdrop-filter: blur(3px); }
+.tree-dialog[open] .tree-inner { animation: unroll 0.25s ease-out; }
+.tree-inner {
+  display: grid; gap: 12px; padding: 22px 24px; max-height: calc(100dvh - 24px); overflow-y: auto;
+  border-radius: 34px 22px 38px 26px / 26px 36px 22px 32px; border: 2px solid #5a4030;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 140, 60, 0.18), transparent 60%),
+    url('./assets/cave-art.svg'), var(--grain),
+    radial-gradient(ellipse at 50% 40%, #4a3a32, #2b201b 65%, #1b1310);
+  background-size: auto, 600px 600px, 220px 220px, auto;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), inset 0 0 70px rgba(0, 0, 0, 0.55);
+}
+.tree-head { display: flex; align-items: center; justify-content: space-between; }
+.tree-head h2 { margin: 0; font-family: var(--brush); font-weight: 400; font-size: 2.3rem; color: var(--ochre); line-height: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; list-style: none; font-size: 0.85rem; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.legend .dot { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; font-size: 0.7rem; font-weight: 800; }
+.legend .dot.owned { background: radial-gradient(#f0a050, #a0521e); border: 1px solid #ffcf8a; }
+.legend .dot.available { background: #3a2a22; border: 2px solid var(--ochre); box-shadow: 0 0 8px rgba(255, 160, 80, 0.6); }
+.legend .dot.locked { background: #1e1613; border: 1px dashed #6a5444; color: var(--muted); }
+
+.tree-scroll { overflow-x: auto; padding: 6px 4px 4px; scrollbar-color: #5a4030 transparent; }
+.tree { --cols: 7; --paint: rgba(214, 138, 68, 0.75); display: grid; grid-template-columns: repeat(var(--cols), minmax(104px, 1fr)); min-width: calc(var(--cols) * 108px); }
+.tree-cap { grid-column: 1 / -1; display: flex; justify-content: center; position: relative; padding-bottom: 18px; }
+.tree-cap::after { content: ''; position: absolute; left: calc(50% - 1.5px); bottom: 0; width: 3px; height: 18px; background: var(--paint); }
+.tree-cap.bottom { padding: 18px 0 0; }
+.tree-cap.bottom::after { top: 0; bottom: auto; }
+.tree-cap .node { width: auto; margin: 0; }
+.tree-rail { grid-column: 1 / -1; height: 3px; margin: 0 calc(100% / var(--cols) / 2); background: var(--paint); border-radius: 3px; }
+.branch { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 2px 18px; }
+.branch::before { content: ''; position: absolute; left: calc(50% - 1.5px); top: 0; bottom: 0; width: 3px; background: var(--paint); }
+
+.node {
+  position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 100%; padding: 0; border: 0; background: none; color: var(--text); cursor: pointer; text-align: center;
+}
+.node .disc {
+  position: relative; width: 60px; height: 60px; display: grid; place-items: center;
+  border-radius: 50% 46% 52% 47%; color: var(--ochre);
+  background: radial-gradient(circle at 40% 35%, #5a4334, #2c1f18); border: 2px solid #7a5a40;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45); transition: transform 0.12s;
+}
+.node .disc svg { width: 34px; height: 34px; filter: url(#pintura); }
+.node.header .disc { width: 66px; height: 66px; border-radius: 18px 13px 20px 12px; }
+.node .label { font-size: 0.78rem; font-weight: 800; line-height: 1.15; max-width: 112px; padding: 1px 6px; border-radius: 6px; background: rgba(27, 19, 16, 0.75); }
+.node .sub { font-size: 0.7rem; color: var(--muted); max-width: 112px; line-height: 1.15; background: rgba(27, 19, 16, 0.6); border-radius: 6px; padding: 0 4px; }
+.node .sub:empty { display: none; }
+.node:hover .disc { transform: scale(1.06); }
+.node.selected .disc { outline: 3px solid #ffd27a; outline-offset: 3px; }
+.node:focus-visible { outline: none; }
+.node:focus-visible .disc { outline: 3px solid #ffd27a; outline-offset: 3px; }
+.node.owned .disc { color: #2a1206; background: radial-gradient(circle at 40% 35%, #f0a050, #9a4e1c); border-color: #ffcf8a; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45), 0 0 16px rgba(255, 150, 60, 0.35); }
+.node.header.owned .disc, .node.root .disc { color: var(--ochre); background: radial-gradient(circle at 40% 35%, #6a4c3a, #33241c); border-color: #b0804e; }
+.node.available .disc { border-color: var(--ochre); animation: beckon 1.8s ease-in-out infinite; }
+.node.affordable .disc { color: #ffd08a; border-color: #ffd08a; }
+.node.goal-node.available .disc { color: #b4e283; border-color: #8fcf62; animation: none; }
+.node.goal-node.owned .disc { color: #13240a; background: radial-gradient(circle at 40% 35%, #b4e283, #5a9a3a); border-color: #d8f5b0; }
+.node.locked .disc { color: #6a5444; background: #1e1613; border: 2px dashed #4a3a30; box-shadow: none; }
+.node.locked .disc svg { opacity: 0.22; }
+.node.locked .label { color: var(--muted); }
+.q { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--brush); font-size: 2rem; color: #d8c2a4; text-shadow: 0 2px 0 #000; }
+.badge {
+  position: absolute; right: -4px; bottom: -4px; width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 50%; font-size: 0.75rem; font-weight: 800; color: #13240a; background: #9fd873; border: 2px solid #1b1310;
+}
+@keyframes beckon { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 160, 80, 0.5); } 50% { box-shadow: 0 0 0 7px rgba(255, 160, 80, 0); } }
+
+.tree-detail {
+  position: sticky; bottom: -22px; z-index: 3; box-shadow: 0 -10px 24px rgba(20, 12, 10, 0.7);
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; min-height: 92px;
+  padding: 12px 16px; border-radius: 18px 13px 20px 12px; border: 1px solid #6a4c38;
+  background: var(--grain), linear-gradient(165deg, #3a291f, #281b16);
+}
+.tree-detail .disc {
+  position: relative; width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50% 46% 52% 47%;
+  color: var(--ochre); background: radial-gradient(circle at 40% 35%, #5a4334, #2c1f18); border: 2px solid #7a5a40;
+}
+.tree-detail .disc svg { width: 32px; height: 32px; filter: url(#pintura); }
+.tree-detail .disc.owned { color: #2a1206; background: radial-gradient(circle at 40% 35%, #f0a050, #9a4e1c); border-color: #ffcf8a; }
+.tree-detail .disc.locked { color: #6a5444; background: #1e1613; border-style: dashed; }
+.tree-detail .disc.locked svg { opacity: 0.22; }
+.tree-detail h3 { margin: 0; font-family: var(--brush); font-weight: 400; font-size: 1.5rem; color: var(--ochre); line-height: 1.05; }
+.tree-detail p { margin: 2px 0 0; color: var(--muted); font-size: 0.9rem; }
+.tree-detail .detail-cost { color: var(--text); }
+.tree-detail .buy:disabled { opacity: 0.5; cursor: default; }
 .card.upgrade .desc, .card.upgrade .cost { grid-column: 2; }
 
 /* Meta de la era: piedra sagrada con surcos que se llenan de ocre */
@@ -291,8 +404,29 @@ body {
   .slider { grid-template-columns: 1fr 48px; }
   .slider input { grid-column: 1 / -1; grid-row: 2; }
   .settings-inner { padding: 20px 20px; }
+  .tree-inner { padding: 16px 14px; }
+  .tree-head h2 { font-size: 1.8rem; }
+  .tree-detail { grid-template-columns: auto 1fr; bottom: -16px; }
+  .tree-detail .buy { grid-column: 1 / -1; }
+  /* En el móvil el árbol crece hacia abajo: un tronco a la izquierda y cada oficio como una rama horizontal */
+  .tree-scroll { overflow: visible; padding: 0; }
+  .tree { grid-template-columns: 1fr; min-width: 0; position: relative; row-gap: 4px; }
+  .tree::before { content: ''; position: absolute; left: 31.5px; top: 40px; bottom: 60px; width: 3px; background: var(--paint); }
+  .tree-rail, .tree-cap::after { display: none; }
+  .tree-cap, .tree-cap.bottom { justify-content: flex-start; padding: 0; }
+  .tree-cap .node { flex-direction: row; gap: 10px; text-align: left; align-items: center; }
+  .tree-cap .node .label, .tree-cap .node .sub { max-width: none; }
+  .tree-cap .node .label { font-size: 0.85rem; }
+  .branch { flex-direction: row; align-items: flex-start; gap: 6px; padding: 8px 0 8px 44px; width: max-content; max-width: 100%; }
+  .branch::before { left: 33px; top: 39px; bottom: auto; height: 3px; width: calc(100% - 80px); }
+  .branch .node { width: 84px; flex: none; }
+  .node .disc { width: 54px; height: 54px; }
+  .node.header .disc { width: 60px; height: 60px; }
+  .node .disc svg { width: 30px; height: 30px; }
+  .node .label, .node .sub { max-width: 84px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .float { animation: none; opacity: 0; }
-  .settings[open] .settings-inner { animation: none; }
+  .settings[open] .settings-inner, .tree-dialog[open] .tree-inner { animation: none; }
+  .node.available .disc { animation: none; }
 }
