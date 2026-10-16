@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <!-- Motivos rupestres muy tenues: bisonte, ciervo, cazadores, manos, puntos y espirales -->
+  <g opacity=".075" fill="#d07a3c" stroke="#d07a3c" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="none" d="M70 150c10-30 42-46 78-43 20-15 56-12 72 6 18 2 31 15 33 33 4 12 0 25-8 30l-4 30h-10l-2-24c-12 4-31 6-49 4l-6 22h-10l-2-24c-15-2-25-8-31-16l-8 28h-10l2-34c-13-4-26-2-31 6-6-8-13-19-14-18z"/>
+    <path fill="none" stroke-width="5" d="M232 116c8-10 14-12 22-10M66 160c-10 2-16-4-18-12"/>
+    <g transform="translate(380 330)">
+      <ellipse cx="0" cy="0" rx="46" ry="20" stroke="none"/>
+      <path fill="none" stroke-width="7" d="M-30 14l-6 42M-16 16l2 40M22 16l-4 40M36 12l8 42M40-6l18-30"/>
+      <circle cx="62" cy="-40" r="11" stroke="none"/>
+      <path fill="none" stroke-width="4" d="M60-50l-10-26M50-70l-12-6M64-50l12-24M72-66l12-4M-46-4l-12 6"/>
+    </g>
+    <g fill="none" stroke-width="5" transform="translate(140 420)">
+      <circle cx="0" cy="-48" r="8" fill="#d07a3c"/>
+      <path d="M0-40v34M0-6l-12 30M0-6l12 30M0-30l-16 10M0-30l18-14M18-44l30-34"/>
+      <circle cx="70" cy="-40" r="8" fill="#d07a3c"/>
+      <path d="M70-32v30M70-2l-14 28M70-2l10 28M70-24l-18-8M70-24l22 6M92-18l38-18"/>
+    </g>
+    <path stroke="none" d="M470 140c-5-7-8-14-8-21 0-3 4-4 5-1l3 6v-22c0-3 4-3 4 0v14-17c0-3 4-3 4 0v17-15c0-3 4-3 4 0v17-11c0-3 4-3 4 0v15c0 8-3 13-7 18z" transform="scale(1.8) translate(-210 -60)"/>
+    <path stroke="none" d="M470 140c-5-7-8-14-8-21 0-3 4-4 5-1l3 6v-22c0-3 4-3 4 0v14-17c0-3 4-3 4 0v17-15c0-3 4-3 4 0v17-11c0-3 4-3 4 0v15c0 8-3 13-7 18z" transform="translate(-380 330) rotate(-12 470 120)"/>
+    <g stroke="none">
+      <circle cx="300" cy="60" r="5"/><circle cx="318" cy="64" r="5"/><circle cx="336" cy="60" r="5"/><circle cx="354" cy="64" r="5"/><circle cx="372" cy="60" r="5"/>
+      <circle cx="500" cy="520" r="5"/><circle cx="516" cy="532" r="5"/><circle cx="532" cy="520" r="5"/><circle cx="548" cy="532" r="5"/>
+    </g>
+    <path fill="none" stroke-width="5" d="M560 260c0-8 12-8 12 0s-20 14-22 0 26-26 34-2-18 40-40 22"/>
+    <path fill="none" stroke-width="5" d="M260 540c0-8 12-8 12 0s-20 14-22 0 26-26 34-2-18 40-40 22"/>
+  </g>
+</svg>

@@ -17,12 +17,14 @@ import {
 } from './game/logic';
 import { deleteSave, deserialize, loadGame, saveGame, serialize } from './game/save';
 import { newGame, RESOURCES, type Cost, type GameState } from './game/state';
-import { formatDuration, formatNumber } from './game/format';
+import { formatDuration, formatNumber, getNumberFormat, NUMBER_FORMATS, setNumberFormat, type NumberFormat } from './game/format';
+import { BUILDING_ICONS, ICONS, RESOURCE_ICONS, UPGRADE_ICONS } from './ui/icons';
 import { createVillage } from './scene/village';
 import { Sound } from './audio/sound';
 
 const TICK_MS = 100;
 const AUTOSAVE_MS = 10_000;
+const SETTINGS_KEY = 'civilizacion-incremental:settings';
 const RESOURCE_NAME = Object.fromEntries(RESOURCE_DEFS.map((r) => [r.id, r.name.toLowerCase()])) as Record<string, string>;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -44,24 +46,85 @@ const unlockAudio = () => sound.unlock();
 window.addEventListener('pointerdown', unlockAudio);
 window.addEventListener('keydown', unlockAudio);
 const muteButton = $<HTMLButtonElement>('mute');
-const volumeSlider = $<HTMLInputElement>('volume');
-function renderSoundControls(): void {
-  muteButton.textContent = sound.muted ? '🔇' : '🔊';
+muteButton.addEventListener('click', () => {
+  sound.setMuted(!sound.muted);
+  renderSettings();
+});
+
+// ---------- Ajustes ----------
+try {
+  const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
+  if (NUMBER_FORMATS.some((f) => f.id === saved.numberFormat)) setNumberFormat(saved.numberFormat);
+} catch {
+  // Ajustes ilegibles: se usan los de siempre.
+}
+const settingsDialog = $<HTMLDialogElement>('settings');
+$('open-settings').innerHTML = ICONS.gear;
+settingsDialog.querySelector('.close')!.innerHTML = ICONS.close;
+$('open-settings').addEventListener('click', () => {
+  renderSettings();
+  settingsDialog.showModal();
+});
+// Clic fuera de la ventana la cierra.
+settingsDialog.addEventListener('click', (e) => {
+  if (e.target === settingsDialog) settingsDialog.close();
+});
+
+const sliders = [
+  { id: 'volume', get: () => sound.volume, set: (v: number) => sound.setVolume(v) },
+  { id: 'effects', get: () => sound.effects, set: (v: number) => sound.setEffects(v) },
+  { id: 'ambience', get: () => sound.ambienceVolume, set: (v: number) => sound.setAmbience(v) },
+].map((s) => {
+  const input = $<HTMLInputElement>(`set-${s.id}`);
+  const out = $<HTMLOutputElement>(`out-${s.id}`);
+  input.addEventListener('input', () => {
+    s.set(Number(input.value));
+    if (sound.muted) sound.setMuted(false);
+    renderSettings();
+  });
+  return { ...s, input, out };
+});
+const mutedBox = $<HTMLInputElement>('set-muted');
+mutedBox.addEventListener('change', () => {
+  sound.setMuted(mutedBox.checked);
+  renderSettings();
+});
+
+const formatButtons = NUMBER_FORMATS.map((f) => {
+  const b = el('button', 'choice');
+  b.type = 'button';
+  b.setAttribute('role', 'radio');
+  b.innerHTML = `<span class="choice-name">${f.name}</span><span class="choice-example">${formatNumber(1_234_567, f.id)}</span>`;
+  b.addEventListener('click', () => {
+    setNumberFormat(f.id);
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ numberFormat: f.id }));
+    } catch {
+      // Sin almacenamiento: el formato dura solo esta sesión.
+    }
+    renderSettings();
+    render();
+  });
+  $('number-formats').append(b);
+  return { id: f.id as NumberFormat, b };
+});
+
+function renderSettings(): void {
+  muteButton.innerHTML = sound.muted ? ICONS.soundOff : ICONS.soundOn;
   const label = sound.muted ? 'Activar sonido' : 'Silenciar sonido';
   muteButton.setAttribute('aria-label', label);
   muteButton.title = label;
-  volumeSlider.value = String(sound.volume);
+  muteButton.classList.toggle('off', sound.muted);
+  mutedBox.checked = sound.muted;
+  for (const s of sliders) {
+    s.input.value = String(s.get());
+    s.out.textContent = `${Math.round(s.get() * 100)} %`;
+  }
+  for (const f of formatButtons) f.b.setAttribute('aria-checked', String(f.id === getNumberFormat()));
 }
-muteButton.addEventListener('click', () => {
-  sound.setMuted(!sound.muted);
-  renderSoundControls();
-});
-volumeSlider.addEventListener('input', () => {
-  sound.setVolume(Number(volumeSlider.value));
-  if (sound.muted) sound.setMuted(false);
-  renderSoundControls();
-});
-renderSoundControls();
+renderSettings();
+
+(document.querySelector('.gather-icon') as HTMLElement).innerHTML = ICONS.berry;
 
 // ---------- Avisos ----------
 let toastTimer: number | undefined;
@@ -90,40 +153,44 @@ function costHtml(cost: Cost): string {
 const hud = $('hud');
 const chips = RESOURCE_DEFS.map((r) => {
   const chip = el('div', 'chip');
-  chip.innerHTML = `${r.name} <b></b> <small></small>`;
+  chip.title = r.name;
+  chip.innerHTML = `<span class="chip-icon">${ICONS[RESOURCE_ICONS[r.id]]}</span><span class="chip-name">${r.name}</span> <b></b> <small></small>`;
   hud.append(chip);
   return { id: r.id, value: chip.querySelector('b')!, rate: chip.querySelector('small')! };
 });
 const populationChip = el('div', 'chip');
-populationChip.innerHTML = 'Población <b></b>';
+populationChip.title = 'Población';
+populationChip.innerHTML = `<span class="chip-icon">${ICONS.person}</span><span class="chip-name">Población</span> <b></b>`;
 hud.append(populationChip);
 const populationValue = populationChip.querySelector('b')!;
 
 // ---------- Edificios ----------
 const buildingCards = BUILDING_DEFS.map((def) => {
   const card = el('button', 'card');
-  card.innerHTML = `<span class="name"></span><span class="count"></span><span class="desc"></span><span class="meta"></span><span class="cost"></span>`;
+  card.innerHTML = `<span class="icon"></span><span class="name"></span><span class="count"></span><span class="desc"></span><span class="meta"></span><span class="cost"></span>`;
   card.addEventListener('click', () => {
     if (buyBuilding(state, def.id)) {
       sound.buy();
       village.update(state);
+      village.celebrate();
       render();
     }
   });
   $('buildings').append(card);
   const q = (s: string) => card.querySelector(s) as HTMLElement;
-  return { def, card, name: q('.name'), count: q('.count'), desc: q('.desc'), meta: q('.meta'), cost: q('.cost') };
+  return { def, card, icon: q('.icon'), name: q('.name'), count: q('.count'), desc: q('.desc'), meta: q('.meta'), cost: q('.cost') };
 });
 
 // ---------- Mejoras ----------
 const upgradeCards = UPGRADE_DEFS.map((def) => {
   const card = el('button', 'card upgrade');
-  card.innerHTML = `<span class="name">${def.name}</span><span class="desc">${def.description}</span><span class="cost"></span>`;
+  card.innerHTML = `<span class="icon">${ICONS[UPGRADE_ICONS[def.id] ?? 'fire']}</span><span class="name">${def.name}</span><span class="desc">${def.description}</span><span class="cost"></span>`;
   card.addEventListener('click', () => {
     if (buyUpgrade(state, def.id)) {
       sound.upgrade();
       showToast(`Mejora obtenida: ${def.name}`);
       village.update(state);
+      village.celebrate();
       render();
     }
   });
@@ -178,6 +245,11 @@ function render(): void {
     const unlocked = b.def.unlocked(state);
     // Solo se anticipa el siguiente edificio bloqueado, para no saturar la lista.
     b.card.hidden = !unlocked && shownLocked;
+    const icon = unlocked ? BUILDING_ICONS[b.def.id] ?? 'person' : 'locked';
+    if (b.icon.dataset.icon !== icon) {
+      b.icon.dataset.icon = icon;
+      b.icon.innerHTML = ICONS[icon];
+    }
     if (!unlocked) {
       shownLocked = true;
       b.card.classList.add('locked');
@@ -254,6 +326,7 @@ $('import').addEventListener('click', () => {
   village.update(state);
   save();
   render();
+  settingsDialog.close();
   showToast('Partida importada.');
 });
 
@@ -263,6 +336,8 @@ $('reset').addEventListener('click', () => {
   state = newGame();
   village.update(state);
   render();
+  settingsDialog.close();
+  showToast('Partida reiniciada. ¡Empieza de nuevo la aventura!');
 });
 
 // Avisa cuando algo nuevo se desbloquea, para que el jugador siempre sepa qué hacer.
@@ -294,6 +369,7 @@ window.setInterval(() => {
   tick(state, (now - last) / 1000);
   last = now;
   announceUnlocks();
+  village.update(state);
   render();
 }, TICK_MS);
 

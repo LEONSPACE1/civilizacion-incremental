@@ -5,24 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>De la Chispa a las Estrellas</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Caveat+Brush&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <!-- Filtro que da a los iconos bordes de pigmento soplado, como en las cuevas -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <filter id="pintura">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="ruido" />
+        <feDisplacementMap in="SourceGraphic" in2="ruido" scale="2.2" />
+      </filter>
+    </svg>
+
     <main class="app">
       <div class="stage">
         <header class="header">
-          <div>
+          <div class="title">
             <h1>De la Chispa a las Estrellas</h1>
             <p class="era">Era 1 · Paleolítico</p>
           </div>
-          <div class="sound-controls">
-            <button id="mute" class="icon-btn" aria-label="Silenciar sonido" title="Silenciar sonido">🔊</button>
-            <input id="volume" type="range" min="0" max="1" step="0.05" aria-label="Volumen" />
+          <div class="header-actions">
+            <button id="mute" class="icon-btn" aria-label="Silenciar sonido" title="Silenciar sonido"></button>
+            <button id="open-settings" class="icon-btn" aria-label="Ajustes" title="Ajustes"></button>
           </div>
         </header>
 
         <section class="scene" id="scene">
           <div class="hud" id="hud"></div>
-          <button id="gather" class="gather">Recolectar bayas <span id="gather-amount">+1</span></button>
+          <button id="gather" class="gather"><span class="gather-icon" aria-hidden="true"></span>Recolectar bayas <span id="gather-amount">+1</span></button>
           <p class="no-3d-msg">Tu navegador no puede mostrar la aldea en 3D, pero el juego funciona igual.</p>
         </section>
       </div>
@@ -38,18 +49,43 @@
           <p id="no-upgrades" class="empty">Sigue haciendo crecer tu tribu para descubrir mejoras.</p>
           <p id="owned-upgrades" class="owned"></p>
         </section>
-
         <section class="panel goal" id="goal"></section>
-
-        <footer class="footer">
-          <button id="export" class="link">Exportar partida</button>
-          <button id="import" class="link">Importar partida</button>
-          <button id="reset" class="link danger">Reiniciar</button>
-          <span id="save-status" class="save-status"></span>
-        </footer>
+        <p id="save-status" class="save-status"></p>
       </aside>
       <p id="toast" class="toast" role="status"></p>
     </main>
+
+    <dialog id="settings" class="settings" aria-labelledby="settings-title">
+      <form method="dialog" class="settings-inner">
+        <header class="settings-head">
+          <h2 id="settings-title">Ajustes</h2>
+          <button class="icon-btn close" value="close" aria-label="Cerrar ajustes" title="Cerrar"></button>
+        </header>
+
+        <section class="settings-section">
+          <h3>Sonido</h3>
+          <label class="check"><input id="set-muted" type="checkbox" /> Silenciar todo</label>
+          <label class="slider">Volumen general <input id="set-volume" type="range" min="0" max="1" step="0.05" /><output id="out-volume"></output></label>
+          <label class="slider">Efectos <input id="set-effects" type="range" min="0" max="1" step="0.05" /><output id="out-effects"></output></label>
+          <label class="slider">Ambiente nocturno <input id="set-ambience" type="range" min="0" max="1" step="0.05" /><output id="out-ambience"></output></label>
+        </section>
+
+        <section class="settings-section">
+          <h3>Cantidades grandes</h3>
+          <div id="number-formats" class="choices" role="radiogroup" aria-label="Formato de números"></div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Partida</h3>
+          <div class="save-actions">
+            <button type="button" id="export" class="stone-btn">Exportar partida</button>
+            <button type="button" id="import" class="stone-btn">Importar partida</button>
+            <button type="button" id="reset" class="stone-btn danger">Reiniciar</button>
+          </div>
+          <p class="hint">Exportar copia tu partida como texto para guardarla o pasarla a otro dispositivo.</p>
+        </section>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
