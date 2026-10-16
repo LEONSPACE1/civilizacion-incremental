@@ -13,36 +13,27 @@
         <p class="era">Era 1 · Paleolítico</p>
       </header>
 
-      <section class="scene" aria-hidden="true">
-        <svg viewBox="0 0 400 160" class="scene-art">
-          <rect width="400" height="160" fill="var(--sky)" />
-          <circle cx="330" cy="40" r="18" fill="var(--moon)" />
-          <path d="M0 120 Q100 95 200 115 T400 110 V160 H0 Z" fill="var(--ground)" />
-          <g transform="translate(200 120)">
-            <rect x="-22" y="-4" width="44" height="8" rx="3" fill="var(--wood)" transform="rotate(12)" />
-            <rect x="-22" y="-4" width="44" height="8" rx="3" fill="var(--wood)" transform="rotate(-12)" />
-            <path class="flame" d="M0 -48 C14 -30 16 -16 0 -4 C-16 -16 -14 -30 0 -48 Z" fill="var(--fire)" />
-            <path class="flame inner" d="M0 -30 C7 -20 8 -12 0 -5 C-8 -12 -7 -20 0 -30 Z" fill="var(--fire-core)" />
-          </g>
-          <g id="gatherers-layer"></g>
-        </svg>
+      <section class="scene" id="scene">
+        <div class="hud" id="hud"></div>
+        <button id="gather" class="gather">Recolectar bayas <span id="gather-amount">+1</span></button>
+        <p class="no-3d-msg">Tu navegador no puede mostrar la aldea en 3D, pero el juego funciona igual.</p>
       </section>
 
-      <section class="resources">
-        <div class="resource">
-          <span class="resource-name">Comida</span>
-          <span class="resource-value" id="food">0</span>
-          <span class="resource-rate" id="food-rate">+0/s</span>
+      <div class="columns">
+        <section class="panel">
+          <h2>Tu tribu</h2>
+          <div id="buildings" class="list"></div>
+        </section>
+        <div class="side">
+          <section class="panel">
+            <h2>Mejoras</h2>
+            <div id="upgrades" class="list"></div>
+            <p id="no-upgrades" class="empty">Sigue haciendo crecer tu tribu para descubrir mejoras.</p>
+            <p id="owned-upgrades" class="owned"></p>
+          </section>
+          <section class="panel goal" id="goal"></section>
         </div>
-      </section>
-
-      <section class="actions">
-        <button id="gather" class="btn btn-primary">Recolectar bayas (+1)</button>
-        <button id="buy-gatherer" class="btn">
-          <span>Recolector <small id="gatherer-count">(0)</small></span>
-          <small>Coste: <span id="gatherer-cost">10</span> comida · +0,5/s</small>
-        </button>
-      </section>
+      </div>
 
       <footer class="footer">
         <button id="export" class="link">Exportar partida</button>

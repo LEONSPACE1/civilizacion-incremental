@@ -1,4 +1,5 @@
-import { newGame, SAVE_VERSION, type GameState } from './state';
+import { BUILDINGS, newGame, RESOURCES, SAVE_VERSION, type GameState } from './state';
+import { UPGRADE_BY_ID } from './content';
 
 const STORAGE_KEY = 'civilizacion-incremental:save';
 
@@ -6,22 +7,39 @@ export function serialize(state: GameState): string {
   return btoa(JSON.stringify(state));
 }
 
-/** Convierte un texto exportado en partida. Devuelve null si no es válido. */
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined);
+
+/** Convierte un texto exportado en partida, migrando versiones antiguas. Devuelve null si no es válido. */
 export function deserialize(text: string): GameState | null {
+  let data: Record<string, unknown>;
   try {
-    const data = JSON.parse(atob(text.trim()));
-    if (typeof data !== 'object' || data === null) return null;
-    const base = newGame(0);
-    const state: GameState = { ...base };
-    for (const key of Object.keys(base) as (keyof GameState)[]) {
-      const value = data[key];
-      if (typeof value === 'number' && Number.isFinite(value)) state[key] = value;
-    }
-    state.version = SAVE_VERSION;
-    return state;
+    data = JSON.parse(atob(text.trim()));
   } catch {
     return null;
   }
+  if (typeof data !== 'object' || data === null) return null;
+  const state = newGame(num(data.lastSaved) ?? Date.now());
+
+  if ((num(data.version) ?? 1) < 2) {
+    // Versión 1 (fase 1): solo comida y recolectores.
+    state.resources.food = num(data.food) ?? 0;
+    state.totals.food = num(data.totalFood) ?? state.resources.food;
+    state.buildings.gatherer = Math.floor(num(data.gatherers) ?? 0);
+    return state;
+  }
+
+  const resources = (data.resources ?? {}) as Record<string, unknown>;
+  const totals = (data.totals ?? {}) as Record<string, unknown>;
+  const buildings = (data.buildings ?? {}) as Record<string, unknown>;
+  for (const r of RESOURCES) {
+    state.resources[r] = num(resources[r]) ?? 0;
+    state.totals[r] = num(totals[r]) ?? state.resources[r];
+  }
+  for (const b of BUILDINGS) state.buildings[b] = Math.floor(num(buildings[b]) ?? 0);
+  if (Array.isArray(data.upgrades)) state.upgrades = data.upgrades.filter((u): u is string => typeof u === 'string' && u in UPGRADE_BY_ID);
+  state.goalReached = data.goalReached === true;
+  state.version = SAVE_VERSION;
+  return state;
 }
 
 export function saveGame(state: GameState, now = Date.now()): void {
