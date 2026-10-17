@@ -40,6 +40,29 @@ for (const type of ['gesturestart', 'gesturechange', 'dblclick']) {
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+// La interfaz se redibuja 10 veces por segundo, pero casi nada cambia entre una vez y la
+// siguiente. Escribir en la página aunque sea el mismo texto obliga al navegador a recalcular
+// estilos y a repintar, y eso gasta batería. Estas funciones solo tocan la página si hay cambios.
+const lastWrite = new WeakMap<Element, string>();
+function setText(e: HTMLElement, text: string): void {
+  if (lastWrite.get(e) === text) return;
+  lastWrite.set(e, text);
+  e.textContent = text;
+}
+function setHtml(e: Element, html: string): void {
+  if (lastWrite.get(e) === html) return;
+  lastWrite.set(e, html);
+  e.innerHTML = html;
+}
+function setWidth(e: HTMLElement, width: string): void {
+  if (e.style.width !== width) e.style.width = width;
+}
+function setHidden(e: HTMLElement, hidden: boolean): void {
+  if (e.hidden !== hidden) e.hidden = hidden;
+}
+function setDisabled(e: HTMLButtonElement, disabled: boolean): void {
+  if (e.disabled !== disabled) e.disabled = disabled;
+}
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') => {
   const e = document.createElement(tag);
   if (className) e.className = className;
@@ -336,40 +359,41 @@ function renderGoal(): void {
     });
   }
   const rows = goalPanel.querySelector('.rows')!;
-  rows.innerHTML = RESOURCES.filter((r) => goal.cost[r])
+  setHtml(rows, RESOURCES.filter((r) => goal.cost[r])
     .map((r) => {
       const need = goal.cost[r]!, have = Math.min(state.resources[r], need);
       return `<div class="row"><div><span>${RESOURCE_DEFS.find((d) => d.id === r)!.name}</span><span>${formatNumber(Math.floor(have))} / ${formatNumber(need)}</span></div><div class="bar"><span style="width:${(have / need) * 100}%"></span></div></div>`;
     })
-    .join('');
-  (goalPanel.querySelector('.go') as HTMLButtonElement).disabled = !canAfford(state, goal.cost);
+    .join(''));
+  setDisabled(goalPanel.querySelector('.go') as HTMLButtonElement, !canAfford(state, goal.cost));
 }
 
 // ---------- Dibujo ----------
+const gatherAmount = $('gather-amount'), buildingsList = $('buildings'), noUpgrades = $('no-upgrades'), ownedUpgrades = $('owned-upgrades');
 function render(): void {
   applyEra();
   const rates = ratePerSecond(state);
   const eraResources = ERA_BY_N[state.era].resources;
   for (const c of chips) {
-    c.chip.hidden = !eraResources.includes(c.id);
-    c.value.textContent = formatNumber(Math.floor(state.resources[c.id]));
-    c.rate.textContent = `+${formatNumber(rates[c.id])}/s`;
+    setHidden(c.chip, !eraResources.includes(c.id));
+    setText(c.value, formatNumber(Math.floor(state.resources[c.id])));
+    setText(c.rate, `+${formatNumber(rates[c.id])}/s`);
   }
   // La tribu: el fundador más cada miembro que trabaja en un oficio.
-  populationValue.textContent = formatNumber(1 + Object.values(state.buildings).reduce((a, b) => a + b, 0));
-  $('gather-amount').textContent = `+${formatNumber(clickAmount(state))}`;
+  setText(populationValue, formatNumber(1 + Object.values(state.buildings).reduce((a, b) => a + b, 0)));
+  setText(gatherAmount, `+${formatNumber(clickAmount(state))}`);
 
   // Los oficios de la era actual arriba; los de eras futuras no se muestran.
   for (const [n, group] of Object.entries(buildingGroups)) {
-    group.hidden = Number(n) > state.era;
-    group.style.order = String(state.era - Number(n));
+    setHidden(group, Number(n) > state.era);
+    if (group.style.order !== String(state.era - Number(n))) group.style.order = String(state.era - Number(n));
   }
-  $('buildings').classList.toggle('grouped', state.era > 1);
+  buildingsList.classList.toggle('grouped', state.era > 1);
   const shownLocked = new Set<number>();
   for (const b of buildingCards) {
     const unlocked = b.def.unlocked(state);
     // Solo se anticipa el siguiente edificio bloqueado de cada era, para no saturar la lista.
-    b.card.hidden = !unlocked && shownLocked.has(b.def.era);
+    setHidden(b.card, !unlocked && shownLocked.has(b.def.era));
     const icon = unlocked ? BUILDING_ICONS[b.def.id] ?? 'person' : 'locked';
     if (b.icon.dataset.icon !== icon) {
       b.icon.dataset.icon = icon;
@@ -378,13 +402,13 @@ function render(): void {
     if (!unlocked) {
       shownLocked.add(b.def.era);
       b.card.classList.add('locked');
-      b.card.disabled = true;
-      b.name.textContent = '???';
-      b.count.textContent = '';
-      b.desc.textContent = `Se desbloquea: ${b.def.unlockHint.toLowerCase()}`;
-      b.meta.textContent = '';
-      b.milestone.hidden = true;
-      b.cost.textContent = '';
+      setDisabled(b.card, true);
+      setText(b.name, '???');
+      setText(b.count, '');
+      setText(b.desc, `Se desbloquea: ${b.def.unlockHint.toLowerCase()}`);
+      setText(b.meta, '');
+      setHidden(b.milestone, true);
+      setHtml(b.cost, '');
       continue;
     }
     b.card.classList.remove('locked');
@@ -393,39 +417,39 @@ function render(): void {
     const next = nextMilestone(n);
     const full = atCap(state, b.def.id);
     b.card.classList.toggle('capped', full);
-    b.card.disabled = full || !canAfford(state, cost);
-    b.name.textContent = b.def.name;
-    b.count.textContent = String(n);
-    b.desc.textContent = b.def.description;
-    b.meta.textContent = `+${formatNumber(unitRate(state, b.def.id))} ${RESOURCE_NAME[b.def.produces]}/s cada uno`;
+    setDisabled(b.card, full || !canAfford(state, cost));
+    setText(b.name, b.def.name);
+    setText(b.count, String(n));
+    setText(b.desc, b.def.description);
+    setText(b.meta, `+${formatNumber(unitRate(state, b.def.id))} ${RESOURCE_NAME[b.def.produces]}/s cada uno`);
     // Barra de hito: avance desde el hito anterior hasta el siguiente.
-    b.milestone.hidden = false;
+    setHidden(b.milestone, false);
     const reached = milestonesReached(n);
     if (next) {
       const prev = reached ? MILESTONES[reached - 1] : 0;
-      b.msText.innerHTML = `Hito <b>${n}/${next}</b> · al llegar, producción ×2`;
-      b.msFill.style.width = `${((n - prev) / (next - prev)) * 100}%`;
+      setHtml(b.msText, `Hito <b>${n}/${next}</b> · al llegar, producción ×2`);
+      setWidth(b.msFill, `${((n - prev) / (next - prev)) * 100}%`);
       b.milestone.classList.remove('complete');
     } else {
-      b.msText.innerHTML = `<b>Tope ${n}/${BUILDING_CAP}</b> · producción ×${2 ** reached}`;
-      b.msFill.style.width = '100%';
+      setHtml(b.msText, `<b>Tope ${n}/${BUILDING_CAP}</b> · producción ×${2 ** reached}`);
+      setWidth(b.msFill, '100%');
       b.milestone.classList.add('complete');
     }
-    b.cost.innerHTML = full ? 'Oficio completo: no caben más personas' : `Coste: ${costHtml(cost)}`;
+    setHtml(b.cost, full ? 'Oficio completo: no caben más personas' : `Coste: ${costHtml(cost)}`);
   }
 
   let available = 0;
   for (const u of upgradeCards) {
     const show = upgradeAvailable(state, u.def.id);
-    u.card.hidden = !show;
+    setHidden(u.card, !show);
     if (!show) continue;
     available++;
-    u.card.disabled = !canAfford(state, u.def.cost);
-    u.cost.innerHTML = `Coste: ${costHtml(u.def.cost)}`;
+    setDisabled(u.card, !canAfford(state, u.def.cost));
+    setHtml(u.cost, `Coste: ${costHtml(u.def.cost)}`);
   }
-  $('no-upgrades').hidden = available > 0;
+  setHidden(noUpgrades, available > 0);
   const owned = UPGRADE_DEFS.filter((u) => state.upgrades.includes(u.id)).map((u) => u.name);
-  $('owned-upgrades').textContent = owned.length ? `Obtenidas: ${owned.join(', ')}` : '';
+  setText(ownedUpgrades, owned.length ? `Obtenidas: ${owned.join(', ')}` : '');
 
   renderGoal();
   tree.update();
@@ -521,6 +545,14 @@ document.addEventListener('visibilitychange', () => {
   sound.setActive(document.visibilityState === 'visible');
 });
 window.addEventListener('beforeunload', save);
+
+// Mientras el árbol de mejoras o los ajustes tapan la escena, la aldea deja de dibujarse.
+const dialogs = [...document.querySelectorAll('dialog')];
+new MutationObserver(() => village.setPaused(dialogs.some((d) => d.open))).observe(document.body, {
+  subtree: true,
+  attributes: true,
+  attributeFilter: ['open'],
+});
 
 village.update(state);
 render();

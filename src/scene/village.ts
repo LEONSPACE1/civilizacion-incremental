@@ -222,6 +222,8 @@ export interface Village {
   pulse(): void;
   /** Al comprar: la tribu lo celebra. */
   celebrate(): void;
+  /** Detiene el dibujo mientras una ventana tapa la escena. */
+  setPaused(paused: boolean): void;
   dispose(): void;
 }
 
@@ -237,7 +239,7 @@ export function createVillage(container: HTMLElement): Village {
   } catch {
     canvas.remove();
     container.classList.add('no-3d');
-    return { update() {}, pulse() {}, celebrate() {}, dispose() {} };
+    return { update() {}, pulse() {}, celebrate() {}, setPaused() {}, dispose() {} };
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
@@ -247,6 +249,9 @@ export function createVillage(container: HTMLElement): Village {
   const rng = mulberry32(7);
   const fx = Math.random; // efectos que no necesitan ser deterministas
   const scene = new THREE.Scene();
+  // Lo que se añade a la escena se revisa en el siguiente fotograma (ver trimShadows()).
+  const newObjects: THREE.Object3D[] = [];
+  scene.addEventListener('childadded', (e) => newObjects.push(e.child));
   scene.fog = new THREE.Fog(0x3a2a52, 28, 85);
   const camera = new THREE.PerspectiveCamera(38, 16 / 9, 0.1, 400);
   let shownEra = 0;
@@ -313,11 +318,14 @@ export function createVillage(container: HTMLElement): Village {
   moonLight.castShadow = true;
   Object.assign(moonLight.shadow.camera, { left: -46, right: 46, top: 46, bottom: -46, near: 1, far: 130 });
   moonLight.shadow.mapSize.set(2048, 2048);
+  // Las sombras se recalculan a mano, una luz por fotograma (ver frame()).
+  moonLight.shadow.autoUpdate = false;
   scene.add(moonLight);
   const fireLight = new THREE.PointLight(0xff8a3a, 60, 26, 2);
   fireLight.position.set(0, 1.4, 0);
   fireLight.castShadow = true;
   fireLight.shadow.mapSize.set(512, 512);
+  fireLight.shadow.autoUpdate = false;
   scene.add(fireLight);
 
   // Terreno
@@ -369,17 +377,26 @@ export function createVillage(container: HTMLElement): Village {
   // Bosque que se mece con el viento
   const pineMats = [mat(0x2a5034), mat(0x2f5a3a), mat(0x356640)], trunkMat = mat(0x5a3a22);
   const swaying: { obj: THREE.Object3D; phase: number; amp: number }[] = [];
+  // La copa de cada pino son tres conos unidos en una sola pieza, cada uno con su tono de verde
+  // (colores por vértice): se ve igual que tres piezas sueltas y se dibuja de una vez.
+  const pineCrownMat = mat(0xffffff, { vertexColors: true });
+  const pineColors = pineMats.map((m) => m.color);
   const makePine = (s: number) => {
     const g = new THREE.Group();
     const t = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * s, 0.18 * s, 0.9 * s, 5), trunkMat);
     t.position.y = 0.45 * s;
     g.add(t);
-    for (let k = 0; k < 3; k++) {
-      const c = new THREE.Mesh(new THREE.ConeGeometry((1.15 - k * 0.28) * s, 1.4 * s, 7), pineMats[(k + Math.floor(rng() * 3)) % 3]);
-      c.position.y = (1.2 + k * 0.75) * s;
-      c.rotation.y = rng() * 3;
-      g.add(c);
-    }
+    const cones = [0, 1, 2].map((k) => {
+      const c = new THREE.ConeGeometry((1.15 - k * 0.28) * s, 1.4 * s, 7);
+      const col = pineColors[(k + Math.floor(rng() * 3)) % 3];
+      c.rotateY(rng() * 3);
+      c.translate(0, k * 0.75 * s, 0);
+      c.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: c.attributes.position.count }, () => [col.r, col.g, col.b]).flat(), 3));
+      return c;
+    });
+    const crown = new THREE.Mesh(mergeGeometries(cones)!, pineCrownMat);
+    crown.position.y = 1.2 * s;
+    g.add(crown);
     return g;
   };
   // Bosque: un anillo cerca del fuego (solo en el Paleolítico) y uno ancho alrededor del claro.
@@ -414,11 +431,9 @@ export function createVillage(container: HTMLElement): Village {
   }
   function setPine(p: Pine, k: number): void {
     p.k = k;
-    const [trunk, ...cones] = p.obj.children;
-    for (const c of cones) {
-      c.visible = k > 0.02;
-      c.scale.setScalar(Math.max(0.02, k));
-    }
+    const [trunk, crown] = p.obj.children;
+    crown.visible = k > 0.02;
+    crown.scale.setScalar(Math.max(0.02, k));
     // Al talarlo queda un tocón claro
     trunk.userData.y0 ??= trunk.position.y;
     trunk.scale.y = 0.3 + 0.7 * k;
@@ -2800,7 +2815,10 @@ export function createVillage(container: HTMLElement): Village {
   resize();
 
   let visible = true;
-  const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting));
+  const io = new IntersectionObserver(([e]) => {
+    visible = e.isIntersecting;
+    if (visible) wake();
+  });
   io.observe(container);
 
   const tmp = new THREE.Vector3();
@@ -3131,10 +3149,27 @@ export function createVillage(container: HTMLElement): Village {
     }
   }
 
+  // Las piezas diminutas (dedos, bayas, guijarros, astillas) no proyectan sombra: en el mapa de
+  // sombras ocupan uno o dos píxeles que el suavizado borra, pero costaban cientos de dibujos más
+  // por fotograma. Siguen recibiendo la sombra de lo demás.
+  const SHADOW_MIN_R = 0.05;
+  function trimShadows(): void {
+    for (const obj of newObjects) {
+      obj.updateMatrixWorld(true);
+      obj.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || !m.castShadow || (m as unknown as THREE.InstancedMesh).isInstancedMesh) return;
+        if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+        if (m.geometry.boundingSphere!.radius * m.matrixWorld.getMaxScaleOnAxis() < SHADOW_MIN_R) m.castShadow = false;
+      });
+    }
+    newObjects.length = 0;
+  }
+
   const clock = new THREE.Clock();
+  let shadowTurn = 0;
   function frame() {
     const dt = Math.min(0.05, clock.getDelta());
-    if (!visible || document.hidden) return;
     const t = clock.getElapsedTime();
     if (!reduceMotion && dragX === null) angle += 0.09 * dt;
     // Con cada era la aldea ocupa más: la cámara se aleja y la niebla se va más lejos.
@@ -3216,9 +3251,51 @@ export function createVillage(container: HTMLElement): Village {
         drops.splice(i, 1);
       }
     }
+    // Cada sombra se recalcula en fotogramas alternos: la luz de la luna en uno y la del fuego en
+    // el siguiente. Lo que se mueve es lento, así que no se nota y se ahorra casi la mitad del trabajo.
+    if (shadowTurn++ % 2 === 0) moonLight.shadow.needsUpdate = true;
+    else fireLight.shadow.needsUpdate = true;
+    if (newObjects.length) trimShadows();
     renderer.render(scene, camera);
   }
-  renderer.setAnimationLoop(frame);
+
+  // Bucle de dibujo con ritmo propio para ahorrar batería: 30 fotogramas por segundo en pantallas
+  // táctiles (60 mientras se arrastra la cámara) y como mucho 60 en el resto, aunque la pantalla
+  // vaya a 90, 120 o 144 Hz. Entre fotograma y fotograma se espera con un temporizador, así el
+  // navegador no despierta al juego en cada refresco de pantalla para nada. Si la escena no se ve
+  // (pestaña oculta, escena fuera de la pantalla o una ventana encima), el bucle se para del todo.
+  const touch = window.matchMedia('(pointer: coarse)').matches;
+  const IDLE_MS = 1000 / (touch ? 30 : 60), DRAG_MS = 1000 / 60;
+  let paused = false, running = false, raf = 0, timer = 0;
+  const shouldRun = () => visible && !paused && !document.hidden;
+  function step(now: number) {
+    raf = 0;
+    if (!shouldRun()) {
+      running = false;
+      return;
+    }
+    frame();
+    const wait = (dragX === null ? IDLE_MS : DRAG_MS) - (performance.now() - now) - 4;
+    if (wait > 1) timer = window.setTimeout(() => ((timer = 0), (raf = requestAnimationFrame(step))), wait);
+    else raf = requestAnimationFrame(step);
+  }
+  function wake() {
+    if (running || !shouldRun()) return;
+    running = true;
+    clock.getDelta(); // que el tiempo parado no cuente como un salto
+    shadowTurn = 0;
+    moonLight.shadow.needsUpdate = fireLight.shadow.needsUpdate = true;
+    raf = requestAnimationFrame(step);
+  }
+  function stop() {
+    cancelAnimationFrame(raf);
+    window.clearTimeout(timer);
+    raf = timer = 0;
+    running = false;
+  }
+  const onVisibility = () => (document.hidden ? stop() : wake());
+  document.addEventListener('visibilitychange', onVisibility);
+  wake();
 
   return {
     update,
@@ -3237,8 +3314,14 @@ export function createVillage(container: HTMLElement): Village {
       for (const sh of sheep) if (sh.state !== 'hop') [sh.state, sh.timer] = ['hop', 0.6];
       flash = Math.max(flash, 0.6);
     },
+    setPaused(p: boolean) {
+      paused = p;
+      if (p) stop();
+      else wake();
+    },
     dispose() {
-      renderer.setAnimationLoop(null);
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
       ro.disconnect();
       io.disconnect();
       renderer.dispose();
