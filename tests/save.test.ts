@@ -56,6 +56,23 @@ describe('guardado', () => {
     expect(deserialize(serialize(s))).toEqual(s);
   });
 
+  it('guarda el hierro, la era 4 y cuándo salió el jugador', () => {
+    const s = newGame(0);
+    s.era = 4;
+    s.resources.iron = 3e9;
+    s.buildings.blacksmith = 9;
+    s.awaySince = 1234;
+    expect(deserialize(serialize(s))).toEqual(s);
+  });
+
+  it('las partidas de la era 3 empiezan sin hierro', () => {
+    const text = btoa(JSON.stringify({ version: 3, era: 3, resources: { metal: 5 } }));
+    const s = deserialize(text)!;
+    expect(s.resources.iron).toBe(0);
+    expect(s.buildings.blacksmith).toBe(0);
+    expect(s.awaySince).toBeNull();
+  });
+
   it('ajusta al tope los oficios de partidas anteriores', () => {
     const text = btoa(JSON.stringify({ version: 3, era: 2, buildings: { gatherer: 80, quarrier: 12 } }));
     const s = deserialize(text)!;

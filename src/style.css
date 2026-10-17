@@ -1,7 +1,8 @@
 /* Cada era tiene su propio estilo. Los colores y materiales viven en variables:
    el Paleolítico (por defecto) es arte rupestre, pieles curtidas, piedra, ocre y el brillo
    del fuego; el Neolítico (body[data-era='2']) es barro, cerámica incisa y luz de día; la Edad
-   del Bronce (body[data-era='3']) es bronce bruñido, pátina verde y oro, como el disco de Nebra. */
+   del Bronce (body[data-era='3']) es bronce bruñido, pátina verde y oro, como el disco de Nebra; la
+   Antigüedad (body[data-era='4']) es mármol blanco con vetas, azul del Egeo, greca y oro. */
 :root {
   --bg: #140e12;
   --text: #f3e6d0;
@@ -219,6 +220,119 @@ body[data-era='2'] {
   --toast-bg: var(--grain), linear-gradient(170deg, #fbf1df, #ecd6b0);
   --float: #b4532a;
   --float-shadow: 0 2px 0 #fff3dc, 0 0 10px rgba(255, 220, 160, 0.9);
+  color-scheme: light;
+}
+
+/* ---------- Era 4: Antigüedad. Mármol veteado, azul del Egeo, greca y oro ---------- */
+body[data-era='4'] {
+  --bg: #e6e8ea;
+  --text: #1d2836;
+  --muted: #56657a;
+  --ochre: #2c5a8c;
+  --ochre-deep: #1c3e66;
+  --hi: #b8862a;
+  --good: #2f7a3a;
+  --bad: #b0332a;
+  --focus: #b8862a;
+  --heading: 'Marcellus', 'Cinzel', Georgia, 'Times New Roman', serif;
+  --heading-scale: 0.92;
+  --r-stone: 4px;
+  /* Vetas grises del mármol, en diagonal */
+  --marble:
+    linear-gradient(118deg, transparent 18%, rgba(120, 130, 145, 0.14) 19%, transparent 22%, transparent 61%, rgba(120, 130, 145, 0.1) 62%, transparent 66%),
+    linear-gradient(64deg, transparent 38%, rgba(120, 130, 145, 0.08) 39%, transparent 43%);
+
+  --page-bg:
+    radial-gradient(ellipse at 82% -10%, rgba(255, 236, 190, 0.8), transparent 52%),
+    radial-gradient(ellipse at 8% 105%, rgba(70, 120, 180, 0.22), transparent 55%),
+    url('./assets/antiquity.svg'),
+    var(--grain),
+    linear-gradient(180deg, #f2f3f2, #e1e5e8 65%, #d4dbe2);
+  --page-size: auto, auto, 640px 640px, 220px 220px, auto;
+  --stage-bg: linear-gradient(180deg, #eceeef 85%, rgba(236, 238, 239, 0));
+  --scroll: #9aaabd;
+
+  --title: linear-gradient(180deg, #3a72aa, #1f4a7a 55%, #142f52);
+  --title-shadow: drop-shadow(0 2px 0 rgba(255, 255, 255, 0.95));
+  --badge-bg: rgba(255, 255, 255, 0.75);
+  --badge-border: rgba(44, 90, 140, 0.45);
+
+  --btn-bg: var(--grain), linear-gradient(170deg, #ffffff, #e4e8ec);
+  --btn-border: #8fa3ba;
+  --btn-shadow: #9aa8b8;
+  --btn-glow: rgba(44, 90, 140, 0.25);
+
+  --scene-bg: linear-gradient(#6fa8dc, #cfe4f2);
+  --scene-border: #8fa3ba;
+  --scene-ring: 0 0 0 5px #f4f5f5, 0 0 0 7px #b8862a;
+  --scene-ring-thin: 0 0 0 3px #f4f5f5, 0 0 0 4px #b8862a;
+  --scene-vignette: inset 0 0 50px rgba(30, 60, 100, 0.2);
+
+  --chip-bg: rgba(255, 255, 255, 0.88);
+  --chip-border: rgba(44, 90, 140, 0.4);
+  --chip-value: #1f4a7a;
+
+  --gather-bg: linear-gradient(180deg, #e8f0b0, #a8b84a 45%, #6f7f22);
+  --gather-text: #1e2608;
+  --gather-icon: #3a4610;
+  --gather-edge: #4f5c14;
+  --gather-glow: rgba(160, 180, 60, 0.35);
+
+  /* Losas de mármol veteado */
+  --panel-bg: var(--marble), var(--grain), linear-gradient(165deg, #ffffff, #f1f2f1 55%, #f7f7f5);
+  --panel-border: #b9c4cf;
+  --panel-shadow: 0 10px 24px rgba(30, 50, 80, 0.18), inset 0 1px 0 #fff, inset 0 -3px 0 rgba(120, 140, 160, 0.18);
+  --seam: 1px solid rgba(184, 134, 42, 0.45);
+  /* Greca dorada bajo los títulos */
+  --rule: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='9'%3E%3Cpath d='M0 8V1h8v7H3V4h2M8 8h8' fill='none' stroke='%23b8862a' stroke-width='1.5'/%3E%3C/svg%3E") repeat-x 0 100% / 16px 9px;
+
+  --card-bg: var(--marble), var(--grain), linear-gradient(180deg, #ffffff, #eef0f1);
+  --card-border: #c3ccd6;
+  --card-edge: #a9b4c0;
+  --icon-bg: radial-gradient(circle at 40% 35%, #f2f4f6, #d8dee5);
+  --icon-color: #8796a8;
+  --icon-on: #fdf6e4;
+  --icon-on-bg: radial-gradient(circle at 40% 35%, #4a82ba, #1f4a7a);
+  --icon-glow: rgba(44, 90, 140, 0.3);
+  --card-hover: rgba(44, 90, 140, 0.18);
+
+  --bar-bg: #dde3e9;
+  --bar-border: #b3c0cd;
+  --bar-fill: linear-gradient(90deg, #1f4a7a, #5b93c8);
+  --goal-fill: linear-gradient(90deg, #8a6418, #b8862a 70%, #e8c66a);
+  --goal-glow: rgba(184, 134, 42, 0.4);
+  --done: linear-gradient(90deg, #b8862a, #e8c66a);
+  --green-btn: linear-gradient(180deg, #4a82ba, #1f4a7a);
+  --green-edge: #142f52;
+  --green-text: #f6f2e6;
+  --green-hi: #1f4a7a;
+  --off-bg: #dfe4e9;
+
+  --dialog-wall:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 236, 190, 0.6), transparent 60%),
+    url('./assets/antiquity.svg'), var(--marble), var(--grain),
+    radial-gradient(ellipse at 50% 40%, #fbfbfa, #eceff1 65%, #dde3e8);
+  --dialog-size: auto, 640px 640px, auto, 220px 220px, auto;
+  --dialog-border: #b8862a;
+  --dialog-shadow: 0 24px 60px rgba(20, 40, 70, 0.4), inset 0 0 60px rgba(60, 90, 130, 0.15);
+  --paint: rgba(44, 90, 140, 0.65);
+  --node-bg: radial-gradient(circle at 40% 35%, #ffffff, #e2e7ec);
+  --node-border: #a9b8c8;
+  --node-owned-bg: radial-gradient(circle at 40% 35%, #4a82ba, #1f4a7a);
+  --node-owned-color: #fdf6e4;
+  --node-owned-border: #e8c66a;
+  --node-header-bg: radial-gradient(circle at 40% 35%, #fbfbfa, #dfe4ea);
+  --node-header-border: #b8862a;
+  --node-locked-bg: #e3e7eb;
+  --node-locked-border: #c0cad4;
+  --node-locked-color: #a3b0be;
+  --label-bg: rgba(255, 255, 255, 0.88);
+  --q-color: #4f6280;
+  --q-shadow: 0 2px 0 #fff;
+
+  --toast-bg: var(--marble), var(--grain), linear-gradient(170deg, #ffffff, #e8ecef);
+  --float: #1f4a7a;
+  --float-shadow: 0 2px 0 #fff, 0 0 10px rgba(255, 255, 255, 0.9);
   color-scheme: light;
 }
 
@@ -817,6 +931,20 @@ body[data-era='3'] .stone-btn.danger { background: var(--grain), linear-gradient
 body[data-era='3'] .choice[aria-checked='true'] { background: linear-gradient(180deg, #2f6a64, #1a4442); border-color: #0b2020; box-shadow: 0 3px 0 #0a1a1a; }
 body[data-era='3'] .goal .go, body[data-era='3'] .card .count { font-weight: 700; }
 
+/* Ajustes en la Antigüedad: una lápida de mármol con marco de greca azul */
+body[data-era='4'] .settings-inner {
+  border-radius: 4px;
+  background: var(--marble), var(--grain), radial-gradient(ellipse at 30% 15%, #ffffff, #eef0f1 65%, #dfe4e8);
+  border: 6px solid #2c5a8c;
+  box-shadow: 0 24px 60px rgba(20, 40, 70, 0.45), inset 0 0 0 2px #e8c66a, inset 0 0 40px rgba(60, 90, 130, 0.15);
+}
+body[data-era='4'] .settings-inner::before { inset: 8px; border: 1.5px solid rgba(184, 134, 42, 0.55); border-radius: 2px; }
+body[data-era='4'] .settings h2, body[data-era='4'] .settings h3 { color: #1f4a7a; }
+body[data-era='4'] .stone-btn { color: #f6f2e6; border-color: #142f52; background: var(--grain), linear-gradient(180deg, #3a72aa, #1f4a7a); box-shadow: 0 3px 0 #142f52; }
+body[data-era='4'] .stone-btn.danger { background: var(--grain), linear-gradient(180deg, #b0423a, #7a2420); }
+body[data-era='4'] .choice[aria-checked='true'] { background: linear-gradient(180deg, #3a72aa, #1f4a7a); border-color: #142f52; box-shadow: 0 3px 0 #142f52; color: #f6f2e6; }
+body[data-era='4'] .hint { color: #56657a; }
+
 /* Avisos */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(8px); margin: 0; z-index: 10;
@@ -874,6 +1002,21 @@ body[data-era='2'] .float { font-weight: 700; }
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5c0-3 3-4 5-2s1 5-2 4M12 5c0-3 3-4 5-2s1 5-2 4M5 3c3-3 4 4 7 2M17 3c3-3 4 4 7 2' fill='none' stroke='%23ffe4a0' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x center / 24px 10px;
 }
 .era-curtain[data-era='3'] .era-intro { text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+/* La cortina de la Antigüedad: mármol al amanecer, con el templo y la greca detrás */
+.era-curtain[data-era='4'] {
+  background:
+    url('./assets/antiquity.svg') center / 640px 640px,
+    radial-gradient(circle at 50% 40%, #fffaf0 0 14%, #f1ecdf 32%, #b9cde0 62%, #4f7eaa);
+}
+.era-curtain[data-era='4'] .era-card { color: #1d2836; }
+.era-curtain[data-era='4'] .era-kicker { color: #8a6418; }
+.era-curtain[data-era='4'] .era-card h2 {
+  font-family: 'Marcellus', 'Cinzel', Georgia, serif; font-weight: 400; font-size: clamp(2.8rem, 10vw, 5rem); color: #1f4a7a; line-height: 1;
+  text-shadow: 0 3px 0 #fff, 0 0 30px rgba(255, 255, 255, 0.8);
+}
+.era-curtain[data-era='4'] .era-card h2::after {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='9'%3E%3Cpath d='M0 8V1h8v7H3V4h2M8 8h8' fill='none' stroke='%23b8862a' stroke-width='1.5'/%3E%3C/svg%3E") repeat-x center / 16px 9px;
+}
 
 @media (max-width: 1000px) {
   .app { grid-template-columns: minmax(0, 1fr) 340px; }

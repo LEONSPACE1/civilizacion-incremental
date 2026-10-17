@@ -50,6 +50,8 @@ export class Sound {
   private cricketTimer: number | undefined;
   private birdTimer: number | undefined;
   private anvilTimer: number | undefined;
+  private cicadaTimer: number | undefined;
+  private lyreTimer: number | undefined;
   private era = 1;
   /** Si la pestaña se ve. */
   private pageVisible = true;
@@ -127,7 +129,8 @@ export class Sound {
     this.syncRunning();
   }
 
-  /** El ambiente cambia con la era: noche en el Paleolítico, día en el Neolítico y, en la Edad del Bronce, martillos sobre el yunque. */
+  /** El ambiente cambia con la era: noche en el Paleolítico, día en el Neolítico, martillos sobre el yunque
+   *  en la Edad del Bronce y, en la Antigüedad, cigarras, una lira lejana y el hierro de la forja. */
   setEra(era: number): void {
     this.era = era;
   }
@@ -273,7 +276,8 @@ export class Sound {
     // armónicos que no casan entre sí, como el metal.
     const anvil = () => {
       if (this.era >= 3 && this.audible) {
-        const base = 900 + Math.random() * 300, hits = 1 + Math.floor(Math.random() * 3);
+        // En la Antigüedad se forja hierro: el golpe suena más grave.
+        const base = (this.era >= 4 ? 620 : 900) + Math.random() * 300, hits = 1 + Math.floor(Math.random() * 3);
         for (let i = 0; i < hits; i++) {
           for (const [k, g] of [[1, 0.035], [2.76, 0.02], [5.4, 0.01]] as const) {
             this.tone({ type: 'sine', freq: base * k, decay: 0.5 + Math.random() * 0.3, gain: g, delay: i * 0.42, out: this.ambience });
@@ -284,6 +288,35 @@ export class Sound {
       this.anvilTimer = window.setTimeout(anvil, 2500 + Math.random() * 6000);
     };
     this.anvilTimer = window.setTimeout(anvil, 1800);
+
+    // Antigüedad: el canto de las cigarras al mediodía, pulsos muy rápidos que suben y se apagan.
+    const cicada = () => {
+      if (this.era >= 4 && this.audible) {
+        const f = 5600 + Math.random() * 900, pulses = 18 + Math.floor(Math.random() * 20);
+        for (let i = 0; i < pulses; i++) {
+          const k = Math.sin((i / pulses) * Math.PI);
+          this.tone({ type: 'square', freq: f, decay: 0.018, gain: 0.006 + k * 0.012, delay: i * 0.032, out: this.ambience });
+        }
+      }
+      this.cicadaTimer = window.setTimeout(cicada, 2500 + Math.random() * 5000);
+    };
+    this.cicadaTimer = window.setTimeout(cicada, 1500);
+
+    // Y a lo lejos alguien toca la lira: tres o cuatro notas pulsadas de una escala antigua.
+    const LYRE = [293.7, 329.6, 349.2, 392, 440, 523.3];
+    const lyre = () => {
+      if (this.era >= 4 && this.audible) {
+        const notes = 3 + Math.floor(Math.random() * 2);
+        let n = Math.floor(Math.random() * LYRE.length);
+        for (let i = 0; i < notes; i++) {
+          n = Math.max(0, Math.min(LYRE.length - 1, n + (Math.random() < 0.5 ? -1 : 1) * (1 + Math.floor(Math.random() * 2))));
+          this.tone({ type: 'triangle', freq: LYRE[n], attack: 0.003, decay: 1.1, gain: 0.05, delay: i * 0.38, out: this.ambience });
+          this.tone({ type: 'sine', freq: LYRE[n] * 2, attack: 0.003, decay: 0.6, gain: 0.015, delay: i * 0.38, out: this.ambience });
+        }
+      }
+      this.lyreTimer = window.setTimeout(lyre, 9000 + Math.random() * 12000);
+    };
+    this.lyreTimer = window.setTimeout(lyre, 6000);
   }
 
   dispose(): void {
@@ -291,6 +324,8 @@ export class Sound {
     window.clearTimeout(this.cricketTimer);
     window.clearTimeout(this.birdTimer);
     window.clearTimeout(this.anvilTimer);
+    window.clearTimeout(this.cicadaTimer);
+    window.clearTimeout(this.lyreTimer);
     void this.ctx?.close();
   }
 }
