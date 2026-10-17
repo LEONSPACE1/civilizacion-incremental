@@ -84,6 +84,18 @@
         </section>
 
         <section class="settings-section">
+          <h3>Gráficos</h3>
+          <div class="quality">
+            <div class="quality-ends" aria-hidden="true"><span>Más rendimiento</span><span>Más calidad</span></div>
+            <input id="set-quality" type="range" min="1" max="5" step="1" aria-label="Calidad gráfica" />
+            <p class="quality-info"><b id="quality-name"></b> <span id="quality-hint"></span></p>
+          </div>
+          <p class="sub-title">Fotogramas por segundo</p>
+          <div id="fps-options" class="choices fps" role="radiogroup" aria-label="Fotogramas por segundo"></div>
+          <p class="hint">Menos calidad y menos fotogramas por segundo gastan menos batería.</p>
+        </section>
+
+        <section class="settings-section">
           <h3>Cantidades grandes</h3>
           <div id="number-formats" class="choices" role="radiogroup" aria-label="Formato de números"></div>
         </section>
