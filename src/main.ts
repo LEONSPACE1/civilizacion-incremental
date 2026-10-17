@@ -3,6 +3,7 @@ import { BUILDING_DEFS, ERA_BY_N, RESOURCE_DEFS, UPGRADE_DEFS, type UpgradeDef }
 import {
   advanceEra,
   applyOfflineProgress,
+  atCap,
   buildingCost,
   buyBuilding,
   buyGoal,
@@ -19,7 +20,7 @@ import {
   unitRate,
   upgradeAvailable,
 } from './game/logic';
-import { MILESTONES } from './game/balance';
+import { BUILDING_CAP, MILESTONES } from './game/balance';
 import { deleteSave, deserialize, loadGame, saveGame, serialize } from './game/save';
 import { newGame, RESOURCES, type Cost, type GameState } from './game/state';
 import { formatDuration, formatNumber, getNumberFormat, NUMBER_FORMATS, setNumberFormat, type NumberFormat } from './game/format';
@@ -151,6 +152,7 @@ function applyEra(): void {
 function playEraTransition(): void {
   const era = ERA_BY_N[state.era];
   const curtain = $('era-curtain');
+  curtain.dataset.era = String(era.n);
   curtain.querySelector('.era-kicker')!.textContent = `Era ${era.n}`;
   curtain.querySelector('h2')!.textContent = era.name;
   curtain.querySelector('.era-intro')!.textContent = era.intro;
@@ -216,6 +218,7 @@ hud.append(populationChip);
 const populationValue = populationChip.querySelector('b')!;
 
 // ---------- Edificios ----------
+$('cap-note').textContent = `Cada oficio admite hasta ${BUILDING_CAP} personas. Al llegar al tope, su producción es ×${2 ** MILESTONES.length}.`;
 // Un grupo por era; los oficios de la era actual van arriba.
 const buildingGroups = Object.fromEntries(
   [...new Set(BUILDING_DEFS.map((b) => b.era))].map((n) => {
@@ -236,7 +239,14 @@ const buildingCards = BUILDING_DEFS.map((def) => {
     if (buyBuilding(state, def.id)) {
       village.update(state);
       village.celebrate();
-      if (milestonesReached(state.buildings[def.id]) > before) {
+      if (atCap(state, def.id)) {
+        // Último hito y tope a la vez: el oficio queda completo.
+        sound.upgrade();
+        showToast(`¡Oficio completo! ${BUILDING_CAP} ${def.plural}: producción ×2 y ya no caben más.`);
+        card.classList.remove('milestone-hit');
+        void card.offsetWidth;
+        card.classList.add('milestone-hit');
+      } else if (milestonesReached(state.buildings[def.id]) > before) {
         // Hito alcanzado: la barra se llena y la producción de este oficio se duplica.
         sound.upgrade();
         showToast(`¡Hito! ${state.buildings[def.id]} ${def.plural}: su producción se duplica.`);
@@ -298,7 +308,7 @@ function renderGoal(): void {
     goalPanel.classList.add('done');
     const next = ERA_BY_N[state.era + 1];
     if (canAdvanceEra(state) && next) {
-      goalPanel.innerHTML = `<h2>¡Era ${era.n} completada!</h2><p>${goal.description}</p><button class="go">Entrar en el ${next.name}</button>`;
+      goalPanel.innerHTML = `<h2>¡Era ${era.n} completada!</h2><p>${goal.description}</p><button class="go">${next.enter}</button>`;
       goalPanel.querySelector('.go')!.addEventListener('click', () => {
         if (!advanceEra(state)) return;
         sound.goal();
@@ -381,7 +391,9 @@ function render(): void {
     const cost = buildingCost(state, b.def.id);
     const n = state.buildings[b.def.id];
     const next = nextMilestone(n);
-    b.card.disabled = !canAfford(state, cost);
+    const full = atCap(state, b.def.id);
+    b.card.classList.toggle('capped', full);
+    b.card.disabled = full || !canAfford(state, cost);
     b.name.textContent = b.def.name;
     b.count.textContent = String(n);
     b.desc.textContent = b.def.description;
@@ -395,11 +407,11 @@ function render(): void {
       b.msFill.style.width = `${((n - prev) / (next - prev)) * 100}%`;
       b.milestone.classList.remove('complete');
     } else {
-      b.msText.innerHTML = `<b>Todos los hitos</b> · producción ×${2 ** reached}`;
+      b.msText.innerHTML = `<b>Tope ${n}/${BUILDING_CAP}</b> · producción ×${2 ** reached}`;
       b.msFill.style.width = '100%';
       b.milestone.classList.add('complete');
     }
-    b.cost.innerHTML = `Coste: ${costHtml(cost)}`;
+    b.cost.innerHTML = full ? 'Oficio completo: no caben más personas' : `Coste: ${costHtml(cost)}`;
   }
 
   let available = 0;

@@ -49,6 +49,7 @@ export class Sound {
   private crackleTimer: number | undefined;
   private cricketTimer: number | undefined;
   private birdTimer: number | undefined;
+  private anvilTimer: number | undefined;
   private era = 1;
 
   get muted(): boolean {
@@ -110,7 +111,7 @@ export class Sound {
     this.applyVolume();
   }
 
-  /** El ambiente cambia con la era: noche en el Paleolítico, día en el Neolítico. */
+  /** El ambiente cambia con la era: noche en el Paleolítico, día en el Neolítico y, en la Edad del Bronce, martillos sobre el yunque. */
   setEra(era: number): void {
     this.era = era;
   }
@@ -251,12 +252,29 @@ export class Sound {
       this.birdTimer = window.setTimeout(bird, 1800 + Math.random() * 5000);
     };
     this.birdTimer = window.setTimeout(bird, 1200);
+
+    // En la Edad del Bronce suenan a lo lejos martillos sobre el bronce: golpes cortos con
+    // armónicos que no casan entre sí, como el metal.
+    const anvil = () => {
+      if (this.era >= 3) {
+        const base = 900 + Math.random() * 300, hits = 1 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < hits; i++) {
+          for (const [k, g] of [[1, 0.035], [2.76, 0.02], [5.4, 0.01]] as const) {
+            this.tone({ type: 'sine', freq: base * k, decay: 0.5 + Math.random() * 0.3, gain: g, delay: i * 0.42, out: this.ambience });
+          }
+          this.noiseBurst({ freq: 3200, q: 2, decay: 0.03, gain: 0.05, out: this.ambience, delay: i * 0.42 });
+        }
+      }
+      this.anvilTimer = window.setTimeout(anvil, 2500 + Math.random() * 6000);
+    };
+    this.anvilTimer = window.setTimeout(anvil, 1800);
   }
 
   dispose(): void {
     window.clearTimeout(this.crackleTimer);
     window.clearTimeout(this.cricketTimer);
     window.clearTimeout(this.birdTimer);
+    window.clearTimeout(this.anvilTimer);
     void this.ctx?.close();
   }
 }

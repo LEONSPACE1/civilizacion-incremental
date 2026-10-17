@@ -1,5 +1,6 @@
 import { BUILDINGS, LAST_ERA, newGame, RESOURCES, SAVE_VERSION, type GameState } from './state';
 import { UPGRADE_BY_ID } from './content';
+import { BUILDING_CAP } from './balance';
 
 const STORAGE_KEY = 'civilizacion-incremental:save';
 
@@ -35,7 +36,8 @@ export function deserialize(text: string): GameState | null {
     state.resources[r] = num(resources[r]) ?? 0;
     state.totals[r] = num(totals[r]) ?? state.resources[r];
   }
-  for (const b of BUILDINGS) state.buildings[b] = Math.floor(num(buildings[b]) ?? 0);
+  // Las partidas anteriores al tope pueden tener más personas en un oficio: se ajustan al tope.
+  for (const b of BUILDINGS) state.buildings[b] = Math.min(BUILDING_CAP, Math.floor(num(buildings[b]) ?? 0));
   if (Array.isArray(data.upgrades)) state.upgrades = data.upgrades.filter((u): u is string => typeof u === 'string' && u in UPGRADE_BY_ID);
   state.goalReached = data.goalReached === true;
   // Las partidas de la versión 2 no guardaban la era: todas eran del Paleolítico.

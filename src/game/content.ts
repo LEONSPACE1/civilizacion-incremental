@@ -54,6 +54,7 @@ export const RESOURCE_DEFS: ResourceDef[] = [
   { id: 'food', name: 'Comida' },
   { id: 'wood', name: 'Madera' },
   { id: 'stone', name: 'Piedra' },
+  { id: 'metal', name: 'Bronce' },
 ];
 
 export interface EraDef {
@@ -62,17 +63,28 @@ export interface EraDef {
   /** Recursos que se muestran desde esta era. */
   resources: ResourceId[];
   gatherLabel: string;
+  /** Texto del botón para entrar en esta era. */
+  enter: string;
   intro: string;
 }
 
 export const ERA_DEFS: EraDef[] = [
-  { n: 1, name: 'Paleolítico', resources: ['food', 'wood'], gatherLabel: 'Recolectar bayas', intro: '' },
+  { n: 1, name: 'Paleolítico', resources: ['food', 'wood'], gatherLabel: 'Recolectar bayas', enter: 'Entrar en el Paleolítico', intro: '' },
   {
     n: 2,
     name: 'Neolítico',
     resources: ['food', 'wood', 'stone'],
     gatherLabel: 'Cosechar trigo',
+    enter: 'Entrar en el Neolítico',
     intro: 'Tu tribu se asienta: campos de trigo, rebaños, casas de barro y la piedra como nuevo recurso.',
+  },
+  {
+    n: 3,
+    name: 'Edad del Bronce',
+    resources: ['food', 'wood', 'stone', 'metal'],
+    gatherLabel: 'Hornear pan',
+    enter: 'Entrar en la Edad del Bronce',
+    intro: 'Hornos de fundición, arados tirados por bueyes, casas de piedra y el bronce como nuevo recurso. La aldea crece hacia el bosque.',
   },
 ];
 export const ERA_BY_N = Object.fromEntries(ERA_DEFS.map((e) => [e.n, e])) as Record<number, EraDef>;
@@ -230,6 +242,69 @@ export const BUILDING_DEFS: BuildingDef[] = [
     unlocked: (s) => s.buildings.quarrier >= 4,
     unlockHint: 'Ten 4 canteros',
   },
+  // Era 3: Edad del Bronce. El bronce es el recurso nuevo: el fundidor abre la era y el minero
+  // de cobre la sostiene. Comida, madera y piedra suman un oficio cada una, que rinde x1,5
+  // frente al minero de cobre, y los oficios de eras anteriores llegan a su tope durante la era.
+  {
+    id: 'smelter',
+    era: 3,
+    name: 'Fundidor',
+    plural: 'fundidores',
+    description: 'Funde mineral en hornos de barro avivados con fuelles de piel.',
+    baseCost: { food: 2e6, wood: 2e6, stone: 2e6 },
+    produces: 'metal',
+    rate: 12000,
+    unlocked: () => true,
+    unlockHint: '',
+  },
+  {
+    id: 'mason',
+    era: 3,
+    name: 'Picapedrero',
+    plural: 'picapedreros',
+    description: 'Labra sillares con cinceles de bronce para casas y murallas.',
+    baseCost: { food: 1.5e7, wood: 1.5e7, stone: 1.5e7, metal: 1.5e7 },
+    produces: 'stone',
+    rate: 150000,
+    unlocked: (s) => s.buildings.smelter >= 2,
+    unlockHint: 'Ten 2 fundidores',
+  },
+  {
+    id: 'plowman',
+    era: 3,
+    name: 'Arador',
+    plural: 'aradores',
+    description: 'Ara campos grandes con una yunta de bueyes.',
+    baseCost: { food: 1.5e7, wood: 1.5e7, stone: 1.5e7, metal: 1.5e7 },
+    produces: 'food',
+    rate: 150000,
+    unlocked: (s) => s.buildings.smelter >= 3,
+    unlockHint: 'Ten 3 fundidores',
+  },
+  {
+    id: 'charcoaler',
+    era: 3,
+    name: 'Carbonero',
+    plural: 'carboneros',
+    description: 'Cuece leña bajo tierra para hacer el carbón de los hornos.',
+    baseCost: { food: 1.5e7, wood: 1.5e7, stone: 1.5e7, metal: 1.5e7 },
+    produces: 'wood',
+    rate: 150000,
+    unlocked: (s) => s.buildings.smelter >= 4,
+    unlockHint: 'Ten 4 fundidores',
+  },
+  {
+    id: 'copperMiner',
+    era: 3,
+    name: 'Minero de cobre',
+    plural: 'mineros de cobre',
+    description: 'Abre galerías en la colina y saca mineral verde de cobre y estaño.',
+    baseCost: { food: 1.5e7, wood: 1.5e7, stone: 1.5e7, metal: 1.5e7 },
+    produces: 'metal',
+    rate: 100000,
+    unlocked: (s) => s.buildings.smelter >= 5,
+    unlockHint: 'Ten 5 fundidores',
+  },
 ];
 
 
@@ -380,6 +455,79 @@ const UPGRADES: (Omit<UpgradeDef, 'unlocked' | 'era'> & { era?: number })[] = [
     effect: { kind: 'global', multiplier: 1.5 },
     requires: { total: 'stone', amount: 20000000 },
   },
+  // Era 3
+  {
+    id: 'threshing',
+    era: 3,
+    name: 'Trillo',
+    description: 'Cada clic suma además el 5 % de tu comida por segundo.',
+    cost: { food: 2e7, wood: 2e7, stone: 2e7, metal: 2e7 },
+    effect: { kind: 'clickRate', multiplier: 1, share: 0.05 },
+    requires: { building: 'smelter', count: 2 },
+  },
+  {
+    id: 'bellows',
+    era: 3,
+    name: 'Fuelles de piel',
+    description: 'Los fundidores producen el doble.',
+    cost: { food: 1.5e8, wood: 1.5e8, stone: 1.5e8, metal: 1.5e8 },
+    effect: { kind: 'building', building: 'smelter', multiplier: 2 },
+    requires: { building: 'smelter', count: 5 },
+  },
+  {
+    id: 'wheel',
+    era: 3,
+    name: 'La rueda',
+    description: 'Carros para llevarlo todo: toda la producción +50 %.',
+    cost: { food: 6e8, wood: 6e8, stone: 6e8, metal: 6e8 },
+    effect: { kind: 'global', multiplier: 1.5 },
+    requires: { total: 'metal', amount: 1.5e8 },
+  },
+  {
+    id: 'timbering',
+    era: 3,
+    name: 'Galerías entibadas',
+    description: 'Los mineros de cobre producen el doble.',
+    cost: { food: 2e9, wood: 2e9, stone: 2e9, metal: 2e9 },
+    effect: { kind: 'building', building: 'copperMiner', multiplier: 2 },
+    requires: { building: 'copperMiner', count: 5 },
+  },
+  {
+    id: 'bronze-plough',
+    era: 3,
+    name: 'Reja de bronce',
+    description: 'Los aradores producen el doble.',
+    cost: { food: 2e9, wood: 2e9, stone: 2e9, metal: 2e9 },
+    effect: { kind: 'building', building: 'plowman', multiplier: 2 },
+    requires: { building: 'plowman', count: 5 },
+  },
+  {
+    id: 'kilns',
+    era: 3,
+    name: 'Carboneras cubiertas',
+    description: 'Los carboneros producen el doble.',
+    cost: { food: 2e9, wood: 2e9, stone: 2e9, metal: 2e9 },
+    effect: { kind: 'building', building: 'charcoaler', multiplier: 2 },
+    requires: { building: 'charcoaler', count: 5 },
+  },
+  {
+    id: 'chisels',
+    era: 3,
+    name: 'Cinceles de bronce',
+    description: 'Los picapedreros producen el doble.',
+    cost: { food: 2e9, wood: 2e9, stone: 2e9, metal: 2e9 },
+    effect: { kind: 'building', building: 'mason', multiplier: 2 },
+    requires: { building: 'mason', count: 5 },
+  },
+  {
+    id: 'sky-disk',
+    era: 3,
+    name: 'Disco celeste',
+    description: 'Un disco de bronce y oro marca las siembras y las fiestas: toda la producción +50 %.',
+    cost: { food: 5e9, wood: 5e9, stone: 5e9, metal: 5e9 },
+    effect: { kind: 'global', multiplier: 1.5 },
+    requires: { total: 'metal', amount: 2e9 },
+  },
 ];
 
 
@@ -406,8 +554,14 @@ export const GOALS: Record<number, GoalDef> = {
   2: {
     name: 'Fundir el cobre',
     action: 'Fundir el cobre',
-    description: 'Calentar piedras verdes en un horno de barro hasta que suelten metal abre la Edad de los Metales.',
+    description: 'Calentar piedras verdes en un horno de barro hasta que suelten metal abre la Edad del Bronce.',
     cost: { food: 260000000, wood: 260000000, stone: 260000000 },
+  },
+  3: {
+    name: 'Inventar la escritura',
+    action: 'Inventar la escritura',
+    description: 'Llevar la cuenta del grano y del bronce con signos en tablillas de barro abre la Antigüedad.',
+    cost: { food: 4e10, wood: 4e10, stone: 4e10, metal: 4e10 },
   },
 };
 export const ERA1_GOAL = GOALS[1];

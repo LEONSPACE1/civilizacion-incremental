@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <!-- Motivos de la Edad del Bronce, muy tenues: el disco celeste de Nebra, espirales dobles,
+       hachas y puñales de bronce, ruedas solares, un carro con bueyes y lingotes -->
+  <g opacity=".12" fill="none" stroke="#e2b45a" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Disco celeste: sol, luna creciente, estrellas y el arco del horizonte -->
+    <g transform="translate(150 150)">
+      <circle r="78" stroke-width="5"/>
+      <circle cx="-26" cy="-18" r="17" fill="#e2b45a" stroke="none"/>
+      <path d="M30-30a26 26 0 1 0 6 40 20 20 0 1 1-6-40z" fill="#e2b45a" stroke="none"/>
+      <path d="M-70 26c10 22 30 38 52 44" stroke-width="7"/>
+      <g fill="#e2b45a" stroke="none">
+        <circle cx="-48" cy="-46" r="4"/><circle cx="4" cy="-58" r="4"/><circle cx="52" cy="-42" r="4"/><circle cx="-56" cy="6" r="4"/>
+        <circle cx="12" cy="-24" r="4"/><circle cx="-6" cy="22" r="4"/><circle cx="38" cy="40" r="4"/><circle cx="58" cy="10" r="4"/>
+        <circle cx="-30" cy="46" r="4"/><circle cx="-14" cy="-40" r="3.5"/><circle cx="-4" cy="-8" r="3.5"/><circle cx="2" cy="-12" r="3.5"/>
+        <circle cx="-2" cy="-4" r="3.5"/><circle cx="6" cy="-6" r="3.5"/>
+      </g>
+    </g>
+
+    <!-- Espirales dobles unidas -->
+    <path stroke-width="4.5" d="M330 90c0-10 12-14 20-8 9 7 5 22-6 24-16 3-26-12-22-26 5-18 28-24 44-12M366 68c14 10 34 6 40-10 4-12-6-24-18-22-10 2-14 14-6 20 6 4 14 0 13-6"/>
+    <path stroke-width="4.5" d="M470 210c0-10 12-14 20-8 9 7 5 22-6 24-16 3-26-12-22-26 5-18 28-24 44-12M506 188c14 10 34 6 40-10 4-12-6-24-18-22-10 2-14 14-6 20 6 4 14 0 13-6"/>
+
+    <!-- Hacha de bronce con enmangue -->
+    <g transform="translate(520 380) rotate(-20)" stroke-width="4">
+      <path d="M0-60v120"/>
+      <path d="M0-40c18-6 34-8 46-2 4 18 4 38 0 56-12 6-28 4-46-2z" fill="#e2b45a" fill-opacity=".6"/>
+    </g>
+
+    <!-- Puñal con nervio central -->
+    <g transform="translate(80 420) rotate(25)" stroke-width="4">
+      <path d="M0-80l14 70H-14z" fill="#e2b45a" fill-opacity=".5"/>
+      <path d="M0-74v62M-22-10h44M-6-10v40M6-10v40M-12 30h24"/>
+    </g>
+
+    <!-- Rueda solar de cuatro radios -->
+    <g transform="translate(300 330)" stroke-width="5">
+      <circle r="40"/><circle r="8" fill="#e2b45a" stroke="none"/>
+      <path d="M-40 0H40M0-40V40"/>
+    </g>
+
+    <!-- Carro con una yunta de bueyes -->
+    <g transform="translate(230 500)" stroke-width="4">
+      <path d="M0 0h70v-24H0z"/>
+      <circle cx="16" cy="12" r="14"/><circle cx="56" cy="12" r="14"/>
+      <path d="M16 12h0M56 12h0" stroke-width="6"/>
+      <path d="M70-12h40"/>
+      <path d="M110-30c10-8 30-8 40 0l6-12M150-30l8 26M116-30l-4 26M138-30l2 26" />
+      <path d="M156-42c4-4 10-4 12 0M148-44c-2-6 0-10 4-12" />
+    </g>
+
+    <!-- Lingotes en forma de piel de buey -->
+    <g transform="translate(470 560)" stroke-width="4" fill="#e2b45a" fill-opacity=".45">
+      <path d="M-30-14c8 4 22 4 30 0 8 4 22 4 30 0l-4 14 4 14c-8-4-22-4-30 0-8-4-22-4-30 0l4-14z"/>
+    </g>
+
+    <!-- Banda de triángulos rellenos, como en la cerámica campaniforme -->
+    <g fill="#e2b45a" stroke="none">
+      <path d="M20 620l12-18 12 18zM44 620l12-18 12 18zM68 620l12-18 12 18zM92 620l12-18 12 18zM116 620l12-18 12 18zM140 620l12-18 12 18z"/>
+      <path d="M380 24l12 18 12-18zM404 24l12 18 12-18zM428 24l12 18 12-18zM452 24l12 18 12-18zM476 24l12 18 12-18z"/>
+    </g>
+  </g>
+</svg>

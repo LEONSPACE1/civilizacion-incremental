@@ -1,6 +1,7 @@
 /* Cada era tiene su propio estilo. Los colores y materiales viven en variables:
    el Paleolítico (por defecto) es arte rupestre, pieles curtidas, piedra, ocre y el brillo
-   del fuego; el Neolítico (body[data-era='2']) es barro, cerámica incisa y luz de día. */
+   del fuego; el Neolítico (body[data-era='2']) es barro, cerámica incisa y luz de día; la Edad
+   del Bronce (body[data-era='3']) es bronce bruñido, pátina verde y oro, como el disco de Nebra. */
 :root {
   --bg: #140e12;
   --text: #f3e6d0;
@@ -221,6 +222,120 @@ body[data-era='2'] {
   color-scheme: light;
 }
 
+/* ---------- Era 3: Edad del Bronce. Pátina verde, bronce bruñido y oro de tarde ---------- */
+body[data-era='3'] {
+  --bg: #0e2526;
+  --text: #f4ead2;
+  --muted: #a9c2b4;
+  --ochre: #e2b45a;
+  --ochre-deep: #a8742a;
+  --hi: #ffd77e;
+  --good: #9fe0a0;
+  --bad: #ff9d82;
+  --focus: #ffd77e;
+  --heading: 'Cinzel', Georgia, 'Times New Roman', serif;
+  --heading-scale: 0.86;
+  --r-stone: 8px;
+
+  --page-bg:
+    radial-gradient(ellipse at 78% -8%, rgba(255, 196, 96, 0.28), transparent 52%),
+    radial-gradient(ellipse at 12% 105%, rgba(60, 160, 140, 0.22), transparent 55%),
+    url('./assets/bronze.svg'),
+    var(--grain),
+    linear-gradient(180deg, #16383a, #0f2a2c 60%, #0b1f21);
+  --page-size: auto, auto, 640px 640px, 220px 220px, auto;
+  --stage-bg: linear-gradient(180deg, #123032 85%, rgba(18, 48, 50, 0));
+  --scroll: #8a6a34;
+
+  --title: linear-gradient(180deg, #fff0c0, #e8bd62 50%, #a8742a);
+  --title-shadow: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5));
+  --badge-bg: rgba(226, 180, 90, 0.14);
+  --badge-border: rgba(226, 180, 90, 0.45);
+
+  --btn-bg: var(--grain), linear-gradient(170deg, #2b4a48, #1a3332);
+  --btn-border: #9a7438;
+  --btn-shadow: #081615;
+  --btn-glow: rgba(255, 200, 100, 0.3);
+
+  --scene-bg: linear-gradient(#e9a95e, #f6d79a);
+  --scene-border: #b88a40;
+  --scene-ring: 0 0 0 5px #0e2526, 0 0 0 7px #8a6a34;
+  --scene-ring-thin: 0 0 0 3px #0e2526, 0 0 0 4px #8a6a34;
+  --scene-vignette: inset 0 0 60px rgba(60, 30, 5, 0.35);
+
+  --chip-bg: rgba(14, 37, 38, 0.8);
+  --chip-border: rgba(226, 180, 90, 0.5);
+  --chip-value: #ffd77e;
+
+  --gather-bg: linear-gradient(180deg, #ffe4a0, #e2a948 45%, #a8742a);
+  --gather-text: #2a1806;
+  --gather-icon: #5a3510;
+  --gather-edge: #6e4a18;
+  --gather-glow: rgba(255, 200, 90, 0.35);
+
+  /* Láminas de bronce con pátina en los bordes y remaches */
+  --panel-bg:
+    radial-gradient(circle at 12px 12px, #e2b45a 0 2.5px, transparent 3px),
+    radial-gradient(circle at calc(100% - 12px) 12px, #e2b45a 0 2.5px, transparent 3px),
+    radial-gradient(circle at 12px calc(100% - 12px), #e2b45a 0 2.5px, transparent 3px),
+    radial-gradient(circle at calc(100% - 12px) calc(100% - 12px), #e2b45a 0 2.5px, transparent 3px),
+    var(--grain), linear-gradient(160deg, #24484a, #183536 55%, #1d3e3f);
+  --panel-border: #a07a3a;
+  --panel-shadow: 0 12px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 230, 170, 0.12), inset 0 0 24px rgba(90, 200, 170, 0.08);
+  --seam: 1px solid rgba(226, 180, 90, 0.28);
+  /* Línea de espirales unidas bajo los títulos, como en los objetos de bronce */
+  --rule: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5c0-3 3-4 5-2s1 5-2 4M12 5c0-3 3-4 5-2s1 5-2 4M5 3c3-3 4 4 7 2M17 3c3-3 4 4 7 2' fill='none' stroke='%23e2b45a' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 100% / 24px 10px;
+
+  --card-bg: var(--grain), linear-gradient(180deg, #2a5052, #1f4142);
+  --card-border: #4f7466;
+  --card-edge: #0a1a1a;
+  --icon-bg: radial-gradient(circle at 40% 35%, #33605c, #173332);
+  --icon-color: #7fa596;
+  --icon-on: #2a1806;
+  --icon-on-bg: radial-gradient(circle at 40% 35%, #ffe2a0, #c99040 60%, #8a5a20);
+  --icon-glow: rgba(255, 200, 100, 0.4);
+  --card-hover: rgba(255, 200, 100, 0.22);
+
+  --bar-bg: #0b1f20;
+  --bar-border: #3c5e56;
+  --bar-fill: linear-gradient(90deg, #3d9a86, #8fd6b8);
+  --goal-fill: linear-gradient(90deg, #a8742a, #e2b45a 70%, #ffe4a0);
+  --goal-glow: rgba(255, 200, 90, 0.5);
+  --done: linear-gradient(90deg, #c99040, #ffe0a0);
+  --green-btn: linear-gradient(180deg, #ffe4a0, #d8a048);
+  --green-edge: #7a5218;
+  --green-text: #2a1806;
+  --green-hi: #ffd77e;
+  --off-bg: #1a3434;
+
+  --dialog-wall:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 200, 100, 0.2), transparent 60%),
+    url('./assets/bronze.svg'), var(--grain),
+    radial-gradient(ellipse at 50% 40%, #1f4446, #143032 65%, #0d2224);
+  --dialog-size: auto, 640px 640px, 220px 220px, auto;
+  --dialog-border: #a07a3a;
+  --dialog-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), inset 0 0 60px rgba(0, 0, 0, 0.4);
+  --paint: rgba(226, 180, 90, 0.75);
+  --node-bg: radial-gradient(circle at 40% 35%, #2f5c5a, #173233);
+  --node-border: #5f8476;
+  --node-owned-bg: radial-gradient(circle at 40% 35%, #ffe2a0, #c99040 60%, #8a5a20);
+  --node-owned-color: #2a1806;
+  --node-owned-border: #ffe4a0;
+  --node-header-bg: radial-gradient(circle at 40% 35%, #33605c, #1a3a3a);
+  --node-header-border: #c99a4a;
+  --node-locked-bg: #10292a;
+  --node-locked-border: #345a52;
+  --node-locked-color: #4c6e64;
+  --label-bg: rgba(12, 32, 33, 0.82);
+  --q-color: #9fc2b2;
+  --q-shadow: 0 2px 0 #000;
+
+  --toast-bg: var(--grain), linear-gradient(170deg, #2b4a48, #1a3332);
+  --float: #ffd77e;
+  --float-shadow: 0 2px 0 #4a2a08, 0 0 12px rgba(255, 200, 90, 0.7);
+  color-scheme: dark;
+}
+
 * { box-sizing: border-box; }
 /* En móvil, tocar rápido (recolectar, comprar) no debe hacer zoom ni seleccionar texto. */
 html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
@@ -339,6 +454,7 @@ body {
   background: var(--rule);
 }
 body[data-era='2'] .panel h2, body[data-era='2'] .tree-head h2, body[data-era='2'] .tree-detail h3, body[data-era='2'] .settings h2, body[data-era='2'] .settings h3 { font-weight: 700; }
+.panel-note { margin: -2px 0 0; color: var(--muted); font-size: 0.82rem; }
 .list { display: grid; gap: 9px; }
 .empty, .owned { margin: 0; color: var(--muted); font-size: 0.9rem; }
 
@@ -379,11 +495,13 @@ body[data-era='2'] .card .count { font-weight: 700; }
 .card .cost { grid-column: 2 / -1; font-size: 0.85rem; font-variant-numeric: tabular-nums; margin-top: 2px; }
 .cost .ok { color: var(--good); }
 .cost .no { color: var(--bad); }
+.card.capped { border-style: solid; border-color: var(--ochre); opacity: 0.92; }
+.card.capped .cost { color: var(--muted); font-style: italic; }
 .card.locked { opacity: 0.6; border-style: dashed; cursor: default; }
 .card.locked .name { color: var(--muted); }
 .card.upgrade { grid-template-columns: 46px minmax(0, 1fr); }
 
-/* Barra de hito: se llena hasta el siguiente 10, 25, 50, 100 */
+/* Barra de hito: se llena hasta el siguiente 10, 25 y 50, que es el tope del oficio */
 .card .milestone { grid-column: 2 / -1; display: grid; gap: 3px; margin-top: 5px; font-size: 0.76rem; color: var(--muted); }
 .card .milestone b { color: var(--text); font-variant-numeric: tabular-nums; }
 .ms-bar { height: 7px; border-radius: 99px; overflow: hidden; background: var(--bar-bg); border: 1px solid var(--bar-border); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35); }
@@ -600,6 +718,21 @@ body[data-era='2'] .settings-inner::before { inset: 10px 26px; border: 2px dotte
 body[data-era='2'] .stone-btn { color: #fff3e0; border-color: #6e2a12; background: var(--grain), linear-gradient(180deg, #c06a32, #8a3a1a); box-shadow: 0 3px 0 #5e2410; }
 body[data-era='2'] .stone-btn.danger { background: var(--grain), linear-gradient(180deg, #8a3a3a, #5e1e1e); }
 
+/* Ajustes en la Edad del Bronce: una tablilla de barro claro enmarcada en bronce */
+body[data-era='3'] .settings-inner {
+  border-radius: 10px;
+  background: var(--grain), radial-gradient(ellipse at 30% 15%, #f3e6c8, #e2cfa2 65%, #cdb47e);
+  border: 6px solid #a8742a;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 2px #ffe0a0, inset 0 0 40px rgba(120, 80, 20, 0.3);
+}
+body[data-era='3'] .settings-inner::before { inset: 8px; border: 1.5px solid rgba(120, 80, 20, 0.45); border-radius: 4px; }
+body[data-era='3'] .settings h2, body[data-era='3'] .settings h3 { color: #6e4a12; }
+body[data-era='3'] .stone-btn { color: #fff3dc; border-color: #0b2020; background: var(--grain), linear-gradient(180deg, #2f6a64, #1a4442); box-shadow: 0 3px 0 #0a1a1a; }
+body[data-era='3'] .stone-btn.danger { background: var(--grain), linear-gradient(180deg, #8a3a2a, #5e1e16); }
+body[data-era='3'] .choice[aria-checked='true'] { background: linear-gradient(180deg, #2f6a64, #1a4442); border-color: #0b2020; box-shadow: 0 3px 0 #0a1a1a; }
+body[data-era='3'] .goal .go, body[data-era='3'] .card .count { font-weight: 700; }
+body[data-era='3'] .card .count { font-size: 1.6rem; }
+
 /* Avisos */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(8px); margin: 0; z-index: 10;
@@ -641,6 +774,22 @@ body[data-era='2'] .float { font-weight: 700; }
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='10'%3E%3Cpath d='M0 9l5-8 5 8 5-8 5 8' fill='none' stroke='%238a3a1a' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E") repeat-x center / 20px 10px;
 }
 .era-intro { margin: 0; font-size: 1.1rem; font-weight: 700; }
+/* La cortina de la Edad del Bronce: oro y pátina, con el disco celeste detrás */
+.era-curtain[data-era='3'] {
+  background:
+    url('./assets/bronze.svg') center / 640px 640px,
+    radial-gradient(circle at 50% 42%, #f6d58a 0 12%, #c99040 22%, #2a5a56 52%, #0e2526);
+}
+.era-curtain[data-era='3'] .era-card { color: #fff3dc; }
+.era-curtain[data-era='3'] .era-kicker { color: #ffe4a0; }
+.era-curtain[data-era='3'] .era-card h2 {
+  font-family: 'Cinzel', Georgia, serif; font-size: clamp(2.6rem, 9vw, 4.6rem); color: #ffe4a0; line-height: 1;
+  text-shadow: 0 3px 0 #4a2a08, 0 0 30px rgba(255, 210, 120, 0.6);
+}
+.era-curtain[data-era='3'] .era-card h2::after {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5c0-3 3-4 5-2s1 5-2 4M12 5c0-3 3-4 5-2s1 5-2 4M5 3c3-3 4 4 7 2M17 3c3-3 4 4 7 2' fill='none' stroke='%23ffe4a0' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x center / 24px 10px;
+}
+.era-curtain[data-era='3'] .era-intro { text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
 
 @media (max-width: 1000px) {
   .app { grid-template-columns: minmax(0, 1fr) 340px; }
@@ -668,6 +817,7 @@ body[data-era='2'] .float { font-weight: 700; }
   .slider input { grid-column: 1 / -1; grid-row: 2; }
   .settings-inner { padding: 20px 20px; }
   body[data-era='2'] .settings-inner { padding: 20px 32px; }
+  body[data-era='3'] .card .count { font-size: 1.35rem; }
   .tree-inner { padding: 16px 14px; }
   .tree-head h2 { font-size: calc(1.8rem * var(--heading-scale)); }
   .tree-detail { grid-template-columns: auto 1fr; bottom: -16px; }

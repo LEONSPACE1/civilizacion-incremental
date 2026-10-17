@@ -1,6 +1,7 @@
 import { BUILDING_DEFS, UPGRADE_DEFS } from './content';
 import {
   advanceEra,
+  atCap,
   buildingCost,
   buyBuilding,
   buyGoal,
@@ -46,7 +47,7 @@ export interface SimOptions {
   onSecond?: (t: number, s: GameState) => void;
 }
 
-let bias: Record<ResourceId, number> = { food: 1, wood: 1, stone: 1 };
+let bias: Record<ResourceId, number> = { food: 1, wood: 1, stone: 1, metal: 1 };
 const value = (c: Cost) => RESOURCES.reduce((sum, r) => sum + (c[r] ?? 0) * bias[r], 0);
 
 /** Un jugador razonable: compra mejoras en cuanto puede y, si no, el edificio más rentable. */
@@ -55,7 +56,7 @@ function nextTarget(s: GameState): { cost: Cost; buy: () => boolean; name: strin
   if (secondsUntil(s, goal.cost) < 120) {
     return { cost: goal.cost, buy: () => buyGoal(s), name: goal.name };
   }
-  const buildings = BUILDING_DEFS.filter((b) => b.unlocked(s)).map((b) => {
+  const buildings = BUILDING_DEFS.filter((b) => b.unlocked(s) && !atCap(s, b.id)).map((b) => {
     const cost = buildingCost(s, b.id);
     const gainValue = unitRate(s, b.id) * bias[b.produces];
     return { b, cost, score: value(cost) / gainValue + secondsUntil(s, cost) };
@@ -76,6 +77,7 @@ function nextTarget(s: GameState): { cost: Cost; buy: () => boolean; name: strin
     }
     return { cost: u.cost, buy: () => buyUpgrade(s, u.id), name: u.name };
   }
+  if (!buildings.length) return { cost: goal.cost, buy: () => buyGoal(s), name: goal.name };
   return asTarget(buildings.reduce((a, c) => (c.score < a.score ? c : a)));
 }
 
@@ -90,16 +92,23 @@ export function simulateEra2(options: SimOptions = {}): SimResult {
   return simulateEra(s, { earlyClickSeconds: 0, ...options });
 }
 
+/** La era 3 sigue a la era 2 del mismo jugador. */
+export function simulateEra3(options: SimOptions = {}): SimResult {
+  const s = simulateEra2(options).state;
+  advanceEra(s);
+  return simulateEra(s, { earlyClickSeconds: 0, ...options });
+}
+
 /** Juega la era en la que está la partida hasta pagar su meta. */
 export function simulateEra(s: GameState, options: SimOptions = {}): SimResult {
   const { earlyClicksPerSecond = 3, earlyClickSeconds = 180, maxSeconds = 4 * 3600 } = options;
-  bias = { food: 1, wood: 1, stone: 1, ...options.bias };
+  bias = { food: 1, wood: 1, stone: 1, metal: 1, ...options.bias };
   const events: SimEvent[] = [];
   let lastBuy = 0;
   let longestWait = 0;
   let longestWaitBefore = '';
   let pendingClicks = 0;
-  const blockedBy: Record<ResourceId, number> = { food: 0, wood: 0, stone: 0 };
+  const blockedBy: Record<ResourceId, number> = { food: 0, wood: 0, stone: 0, metal: 0 };
   for (let t = 0; t < maxSeconds; t++) {
     pendingClicks += t < earlyClickSeconds ? earlyClicksPerSecond : 0.2;
     for (; pendingClicks >= 1; pendingClicks--) gather(s);
