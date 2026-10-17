@@ -33,6 +33,11 @@ const AUTOSAVE_MS = 10_000;
 const SETTINGS_KEY = 'civilizacion-incremental:settings';
 const RESOURCE_NAME = Object.fromEntries(RESOURCE_DEFS.map((r) => [r.id, r.name.toLowerCase()])) as Record<string, string>;
 
+// Safari de iOS ignora user-scalable=no: se bloquean a mano el pellizco y el doble toque.
+for (const type of ['gesturestart', 'gesturechange', 'dblclick']) {
+  document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+}
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') => {
   const e = document.createElement(tag);

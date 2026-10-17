@@ -222,6 +222,9 @@ body[data-era='2'] {
 }
 
 * { box-sizing: border-box; }
+/* En móvil, tocar rápido (recolectar, comprar) no debe hacer zoom ni seleccionar texto. */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+button, .card, .hud { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 button { font: inherit; color: inherit; }
 svg { display: block; }
