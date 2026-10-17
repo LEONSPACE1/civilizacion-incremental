@@ -41,7 +41,7 @@ describe('lógica de la era 1', () => {
     expect(buildingCost(s, 'gatherer')).toEqual({ food: 10 });
     s.buildings.gatherer = 10;
     expect(buildingCost(s, 'gatherer')).toEqual({ food: 41 });
-    expect(buildingCost(s, 'hunter')).toEqual({ food: 80, wood: 40 });
+    expect(buildingCost(s, 'hunter')).toEqual({ food: 60, wood: 60 });
   });
 
   it('no se puede comprar sin recursos ni antes del desbloqueo', () => {
@@ -133,6 +133,6 @@ describe('paso a la era 2', () => {
     s.resources = { food: 1e6, wood: 1e6, stone: 1e6 };
     expect(upgradeAvailable(s, 'quern')).toBe(true);
     buyUpgrade(s, 'quern');
-    expect(clickAmount(s)).toBeCloseTo(1 + 500 * 0.05);
+    expect(clickAmount(s)).toBeCloseTo(1 + 750 * 0.05);
   });
 });

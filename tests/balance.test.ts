@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { simulateEra1, simulateEra2 } from '../src/game/simulate';
-import { UPGRADE_DEFS } from '../src/game/content';
+import { BUILDING_DEFS, GOALS, UPGRADE_DEFS } from '../src/game/content';
 
 // El pilar del juego: progreso constante, sin muros de dificultad.
 describe('balance de la era 1', () => {
@@ -46,9 +46,12 @@ describe('balance de la era 2', () => {
     expect(result.longestWait).toBeLessThanOrEqual(180);
   });
 
-  it('comida, madera y piedra crecen a la par', () => {
-    const rates = Object.values(result.finalRates);
-    expect(Math.max(...rates) / Math.min(...rates)).toBeLessThan(1.5);
+  // Comida y madera, recursos de la era anterior, sobran; la piedra marca el ritmo.
+  it('comida y madera crecen a la par y por encima de la piedra', () => {
+    const { food, wood, stone } = result.finalRates;
+    expect(Math.max(food, wood) / Math.min(food, wood)).toBeLessThan(1.2);
+    expect(Math.min(food, wood) / stone).toBeGreaterThan(1.2);
+    expect(Math.min(food, wood) / stone).toBeLessThan(2.5);
   });
 
   it('se compran todas las mejoras de la era antes de la meta', () => {
@@ -65,3 +68,17 @@ describe('balance de la era 2', () => {
     });
   }
 }, 30000);
+
+// Los precios piden lo mismo de cada recurso: así ninguno se acumula sin uso.
+describe('precios uniformes', () => {
+  const costs = [
+    ...BUILDING_DEFS.map((b) => [b.name, b.baseCost] as const),
+    ...UPGRADE_DEFS.map((u) => [u.name, u.cost] as const),
+    ...Object.values(GOALS).map((g) => [g.name, g.cost] as const),
+  ];
+  for (const [name, cost] of costs) {
+    it(`${name} pide la misma cantidad de cada recurso`, () => {
+      expect(new Set(Object.values(cost)).size).toBe(1);
+    });
+  }
+});
