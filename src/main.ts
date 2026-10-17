@@ -89,18 +89,23 @@ muteButton.addEventListener('click', () => {
 
 // ---------- Ajustes ----------
 const graphics: { quality: QualityLevel; fps: FpsLimit } = { quality: DEFAULT_QUALITY, fps: DEFAULT_FPS };
+// Panel que se ve en la barra lateral (o debajo de la aldea, en móvil).
+const TABS = ['jobs', 'upgrades', 'goal'] as const;
+type Tab = (typeof TABS)[number];
+let panelTab: Tab = 'jobs';
 try {
   const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
   if (NUMBER_FORMATS.some((f) => f.id === saved.numberFormat)) setNumberFormat(saved.numberFormat);
   if (isQualityLevel(saved.quality)) graphics.quality = saved.quality;
   if (isFpsLimit(saved.fps)) graphics.fps = saved.fps;
+  if (TABS.includes(saved.tab)) panelTab = saved.tab;
 } catch {
   // Ajustes ilegibles: se usan los de siempre.
 }
 village.setGraphics(graphics.quality, graphics.fps);
 function saveSettings(): void {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ numberFormat: getNumberFormat(), ...graphics }));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ numberFormat: getNumberFormat(), ...graphics, tab: panelTab }));
   } catch {
     // Sin almacenamiento: los ajustes duran solo esta sesión.
   }
@@ -204,6 +209,7 @@ function applyEra(): void {
   document.body.dataset.era = String(era.n);
   (document.querySelector('.header .era') as HTMLElement).textContent = `Era ${era.n} · ${era.name}`;
   (document.querySelector('.gather-icon') as HTMLElement).innerHTML = ICONS[ERA_ICONS[era.n].gather];
+  (document.querySelector('#tabbtn-goal .tab-icon') as HTMLElement).innerHTML = ICONS[ERA_ICONS[era.n].goal];
   $('gather-label').textContent = era.gatherLabel;
   sound.setEra(era.n);
 }
@@ -224,9 +230,12 @@ function playEraTransition(): void {
     applyEra();
     village.update(state);
     render();
-    // Los oficios nuevos aparecen arriba de la lista: se muestra desde el principio.
-    document.querySelector('.sidebar')!.scrollTop = 0;
-    window.scrollTo(0, 0);
+    // Era nueva: sus oficios abiertos arriba y las eras anteriores plegadas.
+    folded.jobs.clear();
+    folded.upgrades.clear();
+    showDone.clear();
+    showTab('jobs');
+    render();
   }, reduce ? 0 : 750);
   let closed = false;
   const close = () => {
@@ -277,23 +286,120 @@ populationChip.innerHTML = `<span class="chip-icon">${ICONS.person}</span><span 
 hud.append(populationChip);
 const populationValue = populationChip.querySelector('b')!;
 
+// ---------- Paneles: una pestaña a la vez, eras plegables y lo completado oculto ----------
+// Cada panel agrupa sus tarjetas por era. La era actual va abierta y arriba; las anteriores se
+// pliegan en una línea con su resumen. Dentro de cada era, lo terminado (oficios al tope y mejoras
+// obtenidas) se esconde tras «Ver…» para que la lista no crezca sin fin con las eras.
+type ListKind = 'jobs' | 'upgrades';
+interface EraGroup {
+  era: number;
+  root: HTMLElement;
+  head: HTMLButtonElement;
+  summary: HTMLElement;
+  body: HTMLElement;
+  active: HTMLElement;
+  doneToggle: HTMLButtonElement;
+  done: HTMLElement;
+}
+// Lo que el jugador abre o cierra a mano; si no ha tocado una era, solo la actual va abierta.
+const folded: Record<ListKind, Map<number, boolean>> = { jobs: new Map(), upgrades: new Map() };
+const showDone = new Set<string>();
+const isOpen = (kind: ListKind, era: number) => folded[kind].get(era) ?? era === state.era;
+function setAttr(e: Element, name: string, value: string): void {
+  if (e.getAttribute(name) !== value) e.setAttribute(name, value);
+}
+
+function createEraGroups(kind: ListKind, container: HTMLElement, eras: number[]): Record<number, EraGroup> {
+  return Object.fromEntries(
+    [...new Set(eras)].map((n) => {
+      const root = el('div', 'era-group');
+      root.dataset.era = String(n);
+      const head = el('button', 'era-head');
+      head.type = 'button';
+      head.innerHTML = `<span class="chev" aria-hidden="true">${ICONS.chevron}</span><span class="era-name">${ERA_BY_N[n].name}</span><span class="era-sum"></span>`;
+      const body = el('div', 'era-body');
+      const active = el('div', 'list');
+      const doneToggle = el('button', 'done-toggle');
+      doneToggle.type = 'button';
+      const done = el('div', 'list done-list');
+      body.append(active, doneToggle, done);
+      root.append(head, body);
+      container.append(root);
+      head.addEventListener('click', () => {
+        folded[kind].set(n, !isOpen(kind, n));
+        render();
+      });
+      doneToggle.addEventListener('click', () => {
+        const key = `${kind}-${n}`;
+        if (!showDone.delete(key)) showDone.add(key);
+        render();
+      });
+      return [n, { era: n, root, head, summary: head.querySelector('.era-sum') as HTMLElement, body, active, doneToggle, done }];
+    }),
+  ) as Record<number, EraGroup>;
+}
+
+function renderEraGroup(kind: ListKind, g: EraGroup, counts: { active: number; done: number }, summary: string, complete: boolean, doneText: string): void {
+  setHidden(g.root, g.era > state.era || counts.active + counts.done === 0);
+  // La era actual arriba y las anteriores debajo, de la más reciente a la más antigua.
+  if (g.root.style.order !== String(state.era - g.era)) g.root.style.order = String(state.era - g.era);
+  const open = isOpen(kind, g.era);
+  g.root.classList.toggle('open', open);
+  g.root.classList.toggle('complete', complete);
+  setAttr(g.head, 'aria-expanded', String(open));
+  setHidden(g.body, !open);
+  setText(g.summary, summary);
+  // Si ya no queda nada en curso, lo completado se ve directamente al abrir la era.
+  const doneOpen = counts.active === 0 || showDone.has(`${kind}-${g.era}`);
+  setHidden(g.active, counts.active === 0);
+  setHidden(g.doneToggle, counts.active === 0 || counts.done === 0);
+  setText(g.doneToggle, `${doneOpen ? 'Ocultar' : 'Ver'} ${doneText}`);
+  setAttr(g.doneToggle, 'aria-expanded', String(doneOpen));
+  setHidden(g.done, !doneOpen || counts.done === 0);
+}
+
+/** Pone la tarjeta en la lista de su era que toca (en curso o completada) sin moverla si ya está. */
+function place(item: HTMLElement, list: HTMLElement): void {
+  if (item.parentElement !== list) list.append(item);
+}
+
+/** Una línea compacta por tarjeta: tocarla compra y la flecha de la derecha despliega el detalle. */
+function createItem(card: HTMLButtonElement, index: number): HTMLElement {
+  const item = el('div', 'item');
+  item.style.order = String(index);
+  const more = el('button', 'more');
+  more.type = 'button';
+  more.innerHTML = ICONS.chevron;
+  more.setAttribute('aria-label', 'Ver detalle');
+  more.setAttribute('aria-expanded', 'false');
+  more.addEventListener('click', () => {
+    const open = item.classList.toggle('open');
+    more.setAttribute('aria-expanded', String(open));
+    more.setAttribute('aria-label', open ? 'Ocultar detalle' : 'Ver detalle');
+  });
+  item.append(card, more);
+  return item;
+}
+
+// Precio en una línea: como cada coste pide lo mismo de cada recurso, basta la cifra y los iconos.
+function priceHtml(cost: Cost): string {
+  const rs = RESOURCES.filter((r) => cost[r]);
+  const amount = Math.max(...rs.map((r) => cost[r]!));
+  const icons = rs
+    .map((r) => `<span class="${state.resources[r] >= cost[r]! ? 'ok' : 'no'}" title="${RESOURCE_NAME[r]}">${ICONS[RESOURCE_ICONS[r]]}</span>`)
+    .join('');
+  return `<span class="${canAfford(state, cost) ? 'ok' : 'no'}">${formatNumber(amount)}</span><span class="price-icons">${icons}</span>`;
+}
+
 // ---------- Edificios ----------
 $('cap-note').textContent = `Cada oficio admite hasta ${BUILDING_CAP} personas. Al llegar al tope, su producción es ×${2 ** MILESTONES.length}.`;
-// Un grupo por era; los oficios de la era actual van arriba.
-const buildingGroups = Object.fromEntries(
-  [...new Set(BUILDING_DEFS.map((b) => b.era))].map((n) => {
-    const group = el('div', 'job-group');
-    group.innerHTML = `<h3 class="group-title">${ERA_BY_N[n].name}</h3>`;
-    group.dataset.era = String(n);
-    $('buildings').append(group);
-    return [n, group];
-  }),
-) as Record<number, HTMLElement>;
-const buildingCards = BUILDING_DEFS.map((def) => {
+const buildingGroups = createEraGroups('jobs', $('buildings'), BUILDING_DEFS.map((b) => b.era));
+const buildingCards = BUILDING_DEFS.map((def, index) => {
   const card = el('button', 'card');
   card.innerHTML =
-    `<span class="icon"></span><span class="name"></span><span class="count"></span><span class="desc"></span><span class="meta"></span>` +
-    `<span class="milestone"><span class="ms-text"></span><span class="ms-bar"><span></span></span></span><span class="cost"></span>`;
+    `<span class="icon"></span><span class="name"></span><span class="price"></span><span class="count"></span><span class="ms-bar"><span></span></span>` +
+    `<span class="details"><span class="desc"></span><span class="meta"></span><span class="ms-text"></span><span class="cost"></span></span>`;
+  const item = createItem(card, index);
   card.addEventListener('click', () => {
     const before = milestonesReached(state.buildings[def.id]);
     if (buyBuilding(state, def.id)) {
@@ -317,17 +423,19 @@ const buildingCards = BUILDING_DEFS.map((def) => {
       render();
     }
   });
-  buildingGroups[def.era].append(card);
+  buildingGroups[def.era].active.append(item);
   const q = (s: string) => card.querySelector(s) as HTMLElement;
   return {
     def,
+    item,
     card,
     icon: q('.icon'),
     name: q('.name'),
+    price: q('.price'),
     count: q('.count'),
     desc: q('.desc'),
     meta: q('.meta'),
-    milestone: q('.milestone'),
+    msBar: q('.ms-bar'),
     msText: q('.ms-text'),
     msFill: q('.ms-bar span'),
     cost: q('.cost'),
@@ -343,12 +451,16 @@ function purchaseUpgrade(def: UpgradeDef): void {
   village.celebrate();
   render();
 }
-const upgradeCards = UPGRADE_DEFS.map((def) => {
+const upgradeGroups = createEraGroups('upgrades', $('upgrades'), UPGRADE_DEFS.map((u) => u.era));
+const upgradeCards = UPGRADE_DEFS.map((def, index) => {
   const card = el('button', 'card upgrade');
-  card.innerHTML = `<span class="icon">${ICONS[UPGRADE_ICONS[def.id] ?? 'fire']}</span><span class="name">${def.name}</span><span class="desc">${def.description}</span><span class="cost"></span>`;
+  card.innerHTML =
+    `<span class="icon">${ICONS[UPGRADE_ICONS[def.id] ?? 'fire']}</span><span class="name">${def.name}</span><span class="price"></span>` +
+    `<span class="details"><span class="desc">${def.description}</span><span class="cost"></span></span>`;
   card.addEventListener('click', () => purchaseUpgrade(def));
-  $('upgrades').append(card);
-  return { def, card, cost: card.querySelector('.cost') as HTMLElement };
+  const item = createItem(card, index);
+  upgradeGroups[def.era].active.append(item);
+  return { def, item, card, price: card.querySelector('.price') as HTMLElement, cost: card.querySelector('.cost') as HTMLElement };
 });
 
 // ---------- Árbol de mejoras ----------
@@ -405,8 +517,67 @@ function renderGoal(): void {
   setDisabled(goalPanel.querySelector('.go') as HTMLButtonElement, !canAfford(state, goal.cost));
 }
 
+// ---------- Pestañas de la barra inferior ----------
+const tabButtons = TABS.map((t) => ({ t, b: $<HTMLButtonElement>(`tabbtn-${t}`) }));
+const tabPanels: Record<Tab, HTMLElement> = { jobs: $('tab-jobs'), upgrades: $('tab-upgrades'), goal: goalPanel };
+const tabBadges = Object.fromEntries(tabButtons.map(({ t, b }) => [t, b.querySelector('.tab-badge') as HTMLElement])) as Record<Tab, HTMLElement>;
+(document.querySelector('#tabbtn-jobs .tab-icon') as HTMLElement).innerHTML = ICONS.person;
+(document.querySelector('#tabbtn-upgrades .tab-icon') as HTMLElement).innerHTML = ICONS.hammer;
+function showTab(t: Tab): void {
+  const changed = t !== panelTab;
+  panelTab = t;
+  for (const { t: key, b } of tabButtons) {
+    setHidden(tabPanels[key], key !== t);
+    setAttr(b, 'aria-selected', String(key === t));
+    b.classList.toggle('on', key === t);
+  }
+  setHidden(goalMini, t === 'goal');
+  if (!changed) return;
+  saveSettings();
+  // El panel nuevo se ve desde arriba.
+  $('panels').scrollTop = 0;
+  if (window.scrollY > 0) window.scrollTo(0, 0);
+}
+for (const { t, b } of tabButtons) b.addEventListener('click', () => showTab(t));
+
+// Meta resumida (en escritorio, siempre visible debajo del panel): un toque abre la pestaña.
+const goalMini = $<HTMLButtonElement>('goal-mini');
+goalMini.innerHTML = `<span class="gm-label"></span><span class="bar"><span></span></span><span class="gm-pct"></span>`;
+const goalMiniLabel = goalMini.querySelector('.gm-label') as HTMLElement;
+const goalMiniFill = goalMini.querySelector('.bar span') as HTMLElement;
+const goalMiniPct = goalMini.querySelector('.gm-pct') as HTMLElement;
+goalMini.addEventListener('click', () => showTab('goal'));
+
+/** Avance de la meta: lo reunido de todos sus recursos frente a lo que pide. */
+function goalProgress(): number {
+  const cost = currentGoal(state).cost;
+  let have = 0, need = 0;
+  for (const r of RESOURCES) {
+    if (!cost[r]) continue;
+    need += cost[r]!;
+    have += Math.min(state.resources[r], cost[r]!);
+  }
+  return need ? have / need : 1;
+}
+
+function renderTabs(affordableUpgrades: number): void {
+  // Aviso en «Mejoras»: cuántas se pueden comprar ya.
+  setHidden(tabBadges.upgrades, affordableUpgrades === 0);
+  setText(tabBadges.upgrades, String(affordableUpgrades));
+  const goal = currentGoal(state);
+  const ready = state.goalReached || canAfford(state, goal.cost);
+  const pct = Math.floor(goalProgress() * 100);
+  setHidden(tabBadges.goal, false);
+  tabBadges.goal.classList.toggle('ready', ready);
+  setText(tabBadges.goal, ready ? '✓' : `${pct}%`);
+  goalMini.classList.toggle('ready', ready);
+  setText(goalMiniLabel, state.goalReached ? `¡Era ${state.era} completada!` : `Meta: ${goal.name}`);
+  setWidth(goalMiniFill, `${state.goalReached ? 100 : pct}%`);
+  setText(goalMiniPct, state.goalReached ? '✓' : `${pct}%`);
+}
+
 // ---------- Dibujo ----------
-const gatherAmount = $('gather-amount'), buildingsList = $('buildings'), noUpgrades = $('no-upgrades'), ownedUpgrades = $('owned-upgrades');
+const gatherAmount = $('gather-amount'), noUpgrades = $('no-upgrades');
 function render(): void {
   applyEra();
   const rates = ratePerSecond(state);
@@ -420,31 +591,36 @@ function render(): void {
   setText(populationValue, formatNumber(1 + Object.values(state.buildings).reduce((a, b) => a + b, 0)));
   setText(gatherAmount, `+${formatNumber(clickAmount(state))}`);
 
-  // Los oficios de la era actual arriba; los de eras futuras no se muestran.
-  for (const [n, group] of Object.entries(buildingGroups)) {
-    setHidden(group, Number(n) > state.era);
-    if (group.style.order !== String(state.era - Number(n))) group.style.order = String(state.era - Number(n));
-  }
-  buildingsList.classList.toggle('grouped', state.era > 1);
+  // Oficios: los de eras futuras no se muestran y los que llegan al tope pasan a «completos».
+  const jobCounts: Record<number, { active: number; done: number; total: number }> = {};
   const shownLocked = new Set<number>();
   for (const b of buildingCards) {
+    const group = buildingGroups[b.def.era];
+    const counts = (jobCounts[b.def.era] ??= { active: 0, done: 0, total: 0 });
+    counts.total++;
     const unlocked = b.def.unlocked(state);
     // Solo se anticipa el siguiente edificio bloqueado de cada era, para no saturar la lista.
-    setHidden(b.card, !unlocked && shownLocked.has(b.def.era));
+    const hidden = !unlocked && shownLocked.has(b.def.era);
+    setHidden(b.item, hidden);
     const icon = unlocked ? BUILDING_ICONS[b.def.id] ?? 'person' : 'locked';
     if (b.icon.dataset.icon !== icon) {
       b.icon.dataset.icon = icon;
       b.icon.innerHTML = ICONS[icon];
     }
+    b.item.classList.toggle('locked', !unlocked);
     if (!unlocked) {
       shownLocked.add(b.def.era);
+      if (!hidden) counts.active++;
+      place(b.item, group.active);
       b.card.classList.add('locked');
       setDisabled(b.card, true);
       setText(b.name, '???');
       setText(b.count, '');
+      setHtml(b.price, '');
       setText(b.desc, `Se desbloquea: ${b.def.unlockHint.toLowerCase()}`);
       setText(b.meta, '');
-      setHidden(b.milestone, true);
+      setHidden(b.msBar, true);
+      setHtml(b.msText, '');
       setHtml(b.cost, '');
       continue;
     }
@@ -453,41 +629,75 @@ function render(): void {
     const n = state.buildings[b.def.id];
     const next = nextMilestone(n);
     const full = atCap(state, b.def.id);
+    counts[full ? 'done' : 'active']++;
+    place(b.item, full ? group.done : group.active);
     b.card.classList.toggle('capped', full);
     setDisabled(b.card, full || !canAfford(state, cost));
     setText(b.name, b.def.name);
     setText(b.count, String(n));
+    setHtml(b.price, full ? '<span class="full">Completo</span>' : priceHtml(cost));
     setText(b.desc, b.def.description);
     setText(b.meta, `+${formatNumber(unitRate(state, b.def.id))} ${RESOURCE_NAME[b.def.produces]}/s cada uno`);
     // Barra de hito: avance desde el hito anterior hasta el siguiente.
-    setHidden(b.milestone, false);
+    setHidden(b.msBar, false);
     const reached = milestonesReached(n);
     if (next) {
       const prev = reached ? MILESTONES[reached - 1] : 0;
       setHtml(b.msText, `Hito <b>${n}/${next}</b> · al llegar, producción ×2`);
       setWidth(b.msFill, `${((n - prev) / (next - prev)) * 100}%`);
-      b.milestone.classList.remove('complete');
+      b.msBar.classList.remove('complete');
     } else {
       setHtml(b.msText, `<b>Tope ${n}/${BUILDING_CAP}</b> · producción ×${2 ** reached}`);
       setWidth(b.msFill, '100%');
-      b.milestone.classList.add('complete');
+      b.msBar.classList.add('complete');
     }
     setHtml(b.cost, full ? 'Oficio completo: no caben más personas' : `Coste: ${costHtml(cost)}`);
   }
+  for (const g of Object.values(buildingGroups)) {
+    const c = jobCounts[g.era];
+    const complete = c.done === c.total;
+    renderEraGroup('jobs', g, c, complete ? `${c.total}/${c.total} completos ✓` : `${c.done} de ${c.total} completos`, complete,
+      c.done === 1 ? '1 oficio completo' : `${c.done} oficios completos`);
+  }
 
-  let available = 0;
+  // Mejoras: las disponibles en curso y las obtenidas plegadas aparte.
+  const upCounts: Record<number, { active: number; done: number; total: number }> = {};
+  let available = 0, affordable = 0;
   for (const u of upgradeCards) {
-    const show = upgradeAvailable(state, u.def.id);
-    setHidden(u.card, !show);
+    const group = upgradeGroups[u.def.era];
+    const counts = (upCounts[u.def.era] ??= { active: 0, done: 0, total: 0 });
+    counts.total++;
+    const owned = state.upgrades.includes(u.def.id);
+    const show = owned || upgradeAvailable(state, u.def.id);
+    setHidden(u.item, !show);
     if (!show) continue;
+    counts[owned ? 'done' : 'active']++;
+    place(u.item, owned ? group.done : group.active);
+    u.card.classList.toggle('owned', owned);
+    if (owned) {
+      setDisabled(u.card, true);
+      setHtml(u.price, '<span class="full">Obtenida ✓</span>');
+      setHtml(u.cost, 'Mejora obtenida');
+      continue;
+    }
     available++;
-    setDisabled(u.card, !canAfford(state, u.def.cost));
+    const can = canAfford(state, u.def.cost);
+    if (can) affordable++;
+    setDisabled(u.card, !can);
+    setHtml(u.price, priceHtml(u.def.cost));
     setHtml(u.cost, `Coste: ${costHtml(u.def.cost)}`);
   }
+  for (const g of Object.values(upgradeGroups)) {
+    const c = upCounts[g.era];
+    const complete = c.done === c.total;
+    const summary = complete
+      ? `${c.total}/${c.total} obtenidas ✓`
+      : [c.active ? `${c.active} ${c.active === 1 ? 'disponible' : 'disponibles'}` : '', `${c.done}/${c.total} obtenidas`].filter(Boolean).join(' · ');
+    renderEraGroup('upgrades', g, c, summary, complete, c.done === 1 ? '1 mejora obtenida' : `${c.done} mejoras obtenidas`);
+  }
   setHidden(noUpgrades, available > 0);
-  const owned = UPGRADE_DEFS.filter((u) => state.upgrades.includes(u.id)).map((u) => u.name);
-  setText(ownedUpgrades, owned.length ? `Obtenidas: ${owned.join(', ')}` : '');
 
+  renderTabs(affordable);
   renderGoal();
   tree.update();
 }
@@ -591,6 +801,7 @@ new MutationObserver(() => village.setPaused(dialogs.some((d) => d.open))).obser
   attributeFilter: ['open'],
 });
 
+showTab(panelTab);
 village.update(state);
 render();
 if (offlineSeconds > 60) {
