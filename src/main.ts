@@ -11,6 +11,7 @@ import {
   canAdvanceEra,
   canAfford,
   clickAmount,
+  creditedSeconds,
   currentGoal,
   gather,
   milestonesReached,
@@ -20,7 +21,7 @@ import {
   unitRate,
   upgradeAvailable,
 } from './game/logic';
-import { BUILDING_CAP, MILESTONES } from './game/balance';
+import { BUILDING_CAP, MAX_OFFLINE_SECONDS, MILESTONES } from './game/balance';
 import { deleteSave, deserialize, loadGame, saveGame, serialize } from './game/save';
 import { newGame, RESOURCES, type Cost, type GameState } from './game/state';
 import { formatDuration, formatNumber, getNumberFormat, NUMBER_FORMATS, setNumberFormat, type NumberFormat } from './game/format';
@@ -72,7 +73,9 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 };
 
 let state: GameState = loadGame() ?? newGame();
-const offlineSeconds = applyOfflineProgress(state, Date.now());
+// Cuánto tiempo estuvo fuera el jugador (para el aviso), antes de que se apliquen sus minutos.
+const offlineSeconds = (Date.now() - (state.awaySince ?? state.lastSaved)) / 1000;
+applyOfflineProgress(state, Date.now());
 const village = createVillage($('scene'));
 const sound = new Sound();
 
@@ -363,7 +366,8 @@ function place(item: HTMLElement, list: HTMLElement): void {
   if (item.parentElement !== list) list.append(item);
 }
 
-/** Una línea compacta por tarjeta: tocarla compra y la flecha de la derecha despliega el detalle. */
+/** Tarjeta: tocarla compra. Las que están en curso enseñan todo su detalle; las completadas quedan
+ *  en una línea y la flecha de la derecha lo despliega. */
 function createItem(card: HTMLButtonElement, index: number): HTMLElement {
   const item = el('div', 'item');
   item.style.order = String(index);
@@ -612,6 +616,7 @@ function render(): void {
       shownLocked.add(b.def.era);
       if (!hidden) counts.active++;
       place(b.item, group.active);
+      b.item.classList.remove('pending');
       b.card.classList.add('locked');
       setDisabled(b.card, true);
       setText(b.name, '???');
@@ -631,6 +636,8 @@ function render(): void {
     const full = atCap(state, b.def.id);
     counts[full ? 'done' : 'active']++;
     place(b.item, full ? group.done : group.active);
+    // Lo que aún está en curso muestra siempre todo su detalle; lo completo queda en una línea.
+    b.item.classList.toggle('pending', !full);
     b.card.classList.toggle('capped', full);
     setDisabled(b.card, full || !canAfford(state, cost));
     setText(b.name, b.def.name);
@@ -673,6 +680,7 @@ function render(): void {
     if (!show) continue;
     counts[owned ? 'done' : 'active']++;
     place(u.item, owned ? group.done : group.active);
+    u.item.classList.toggle('pending', !owned);
     u.card.classList.toggle('owned', owned);
     if (owned) {
       setDisabled(u.card, true);
@@ -775,12 +783,16 @@ function announceUnlocks(): void {
   }
 }
 
-// Bucle principal: usa el tiempo real transcurrido para no perder producción en segundo plano.
-let last = performance.now();
-window.setInterval(() => {
-  const now = performance.now();
-  tick(state, (now - last) / 1000);
+// Bucle principal: usa el tiempo real transcurrido, así que con la pestaña oculta la tribu sigue
+// trabajando, pero solo los primeros minutos desde que el jugador se fue (creditedSeconds).
+let last = Date.now();
+function advance(): void {
+  const now = Date.now();
+  tick(state, creditedSeconds(state, last, now));
   last = now;
+}
+window.setInterval(() => {
+  advance();
   announceUnlocks();
   village.update(state);
   render();
@@ -788,7 +800,16 @@ window.setInterval(() => {
 
 window.setInterval(save, AUTOSAVE_MS);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') save();
+  advance();
+  if (document.visibilityState === 'hidden') {
+    state.awaySince = Date.now();
+    save();
+  } else if (state.awaySince !== null) {
+    const away = (Date.now() - state.awaySince) / 1000;
+    state.awaySince = null;
+    save();
+    if (away > 60) showToast(awayMessage(away));
+  }
   sound.setActive(document.visibilityState === 'visible');
 });
 window.addEventListener('beforeunload', save);
@@ -804,6 +825,10 @@ new MutationObserver(() => village.setPaused(dialogs.some((d) => d.open))).obser
 showTab(panelTab);
 village.update(state);
 render();
-if (offlineSeconds > 60) {
-  showToast(`Mientras no estabas (${formatDuration(offlineSeconds)}) tu tribu siguió trabajando.`);
+/** Aviso al volver: cuánto trabajó la tribu y, si la ausencia fue larga, que el resto no cuenta. */
+function awayMessage(away: number): string {
+  return away > MAX_OFFLINE_SECONDS
+    ? `Estuviste fuera ${formatDuration(away)}. Tu tribu trabajó los primeros ${formatDuration(MAX_OFFLINE_SECONDS)} y luego descansó.`
+    : `Mientras no estabas (${formatDuration(away)}) tu tribu siguió trabajando.`;
 }
+if (offlineSeconds > 60) showToast(awayMessage(offlineSeconds));

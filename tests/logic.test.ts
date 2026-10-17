@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { newGame } from '../src/game/state';
 import {
   applyOfflineProgress,
+  creditedSeconds,
   atCap,
   buildingCost,
   buyBuilding,
@@ -94,6 +95,27 @@ describe('lógica de la era 1', () => {
     const applied = applyOfflineProgress(s, 100 * 3600 * 1000);
     expect(applied).toBe(MAX_OFFLINE_SECONDS);
     expect(s.resources.food).toBe(MAX_OFFLINE_SECONDS);
+    expect(MAX_OFFLINE_SECONDS).toBe(600);
+  });
+
+  it('fuera del juego solo cuentan los 10 minutos desde que el jugador se fue', () => {
+    const s = newGame(0);
+    s.buildings.gatherer = 2;
+    // Se fue al minuto 5 y la partida se volvió a guardar al minuto 12 con la pestaña oculta.
+    s.awaySince = 5 * 60_000;
+    s.lastSaved = 12 * 60_000;
+    expect(applyOfflineProgress(s, 3600_000)).toBe(3 * 60);
+    expect(s.awaySince).toBeNull();
+  });
+
+  it('con la pestaña oculta la producción se detiene a los 10 minutos', () => {
+    const s = newGame(0);
+    s.awaySince = 1000;
+    expect(creditedSeconds(s, 1000, 1000 + 300_000)).toBe(300);
+    expect(creditedSeconds(s, 1000 + 300_000, 1000 + 900_000)).toBe(300);
+    expect(creditedSeconds(s, 1000 + 900_000, 1000 + 2_000_000)).toBe(0);
+    s.awaySince = null;
+    expect(creditedSeconds(s, 0, 100)).toBeCloseTo(0.1);
   });
 });
 

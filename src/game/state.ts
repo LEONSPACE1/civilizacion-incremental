@@ -23,6 +23,8 @@ export interface GameState {
   /** Si ya se pagó la meta de la era actual. */
   goalReached: boolean;
   lastSaved: number;
+  /** Cuándo dejó el jugador la partida (pestaña oculta), en ms; null mientras juega. */
+  awaySince: number | null;
 }
 
 export const SAVE_VERSION = 3;
@@ -40,5 +42,6 @@ export function newGame(now = Date.now()): GameState {
     upgrades: [],
     goalReached: false,
     lastSaved: now,
+    awaySince: null,
   };
 }

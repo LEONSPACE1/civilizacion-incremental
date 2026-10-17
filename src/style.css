@@ -520,8 +520,8 @@ body[data-era='2'] .panel h2, body[data-era='2'] .tree-head h2, body[data-era='2
 .done-toggle[aria-expanded='true']::before { content: '▾ '; }
 .done-toggle:hover { color: var(--text); border-color: var(--ochre); }
 
-/* Tarjetas de piedra (o de barro) en una sola línea: icono, nombre, precio y cantidad.
-   Tocarlas compra; la flecha de la derecha despliega la descripción, el hito y el coste completo. */
+/* Tarjetas de piedra (o de barro): icono, nombre, precio y cantidad, y debajo la descripción, la
+   producción, el hito y el coste. Las completadas quedan en una línea y su flecha despliega el detalle. */
 .item { position: relative; }
 .card {
   display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; gap: 0 10px; text-align: left; align-items: center; width: 100%;
@@ -555,7 +555,7 @@ body[data-era='2'] .panel h2, body[data-era='2'] .tree-head h2, body[data-era='2
 body[data-era='2'] .card .count { font-weight: 700; }
 .card .ms-bar { grid-column: 2 / -1; margin-top: 4px; height: 5px; }
 .card .details { display: none; grid-column: 2 / -1; gap: 2px; margin-top: 4px; }
-.item.open .card .details, .item.locked .card .details { display: grid; }
+.item.open .card .details, .item.locked .card .details, .item.pending .card .details { display: grid; }
 .card .desc, .card .meta { color: var(--muted); font-size: 0.82rem; }
 .card .meta { color: var(--text); opacity: 0.85; }
 .card .ms-text { font-size: 0.76rem; color: var(--muted); }
@@ -578,7 +578,8 @@ body[data-era='2'] .card .count { font-weight: 700; }
 .more svg { width: 14px; height: 14px; transition: transform 0.15s; }
 .item.open .more svg { transform: rotate(90deg); }
 .more:hover { border-color: var(--ochre); }
-.item.locked .more { display: none; }
+.item.locked .more, .item.pending .more { display: none; }
+.item.pending .card, .item.locked .card { padding-right: 8px; }
 
 /* Barra de hito: se llena hasta el siguiente 10, 25 y 50, que es el tope del oficio */
 .ms-bar { display: block; height: 7px; border-radius: 99px; overflow: hidden; background: var(--bar-bg); border: 1px solid var(--bar-border); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35); }

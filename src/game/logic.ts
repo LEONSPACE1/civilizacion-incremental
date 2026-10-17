@@ -150,9 +150,22 @@ export function secondsUntil(state: GameState, cost: Cost): number {
   return worst;
 }
 
+/**
+ * Segundos de producción que cuentan entre dos instantes (en ms). Si el jugador se fue, solo cuentan
+ * los primeros MAX_OFFLINE_SECONDS desde que se fue; si no, un salto largo del reloj (el equipo
+ * suspendido) tampoco suma más que eso.
+ */
+export function creditedSeconds(state: GameState, from: number, to: number): number {
+  const end = state.awaySince === null ? to : Math.min(to, state.awaySince + MAX_OFFLINE_SECONDS * 1000);
+  return Math.min(Math.max(0, end - from) / 1000, MAX_OFFLINE_SECONDS);
+}
+
 /** Aplica el tiempo que el jugador estuvo fuera y devuelve los segundos aplicados. */
 export function applyOfflineProgress(state: GameState, now: number): number {
-  const elapsed = Math.min((now - state.lastSaved) / 1000, MAX_OFFLINE_SECONDS);
+  // Una partida guardada sin marca de salida se cerró de golpe: se fue al guardarla.
+  state.awaySince ??= state.lastSaved;
+  const elapsed = creditedSeconds(state, state.lastSaved, now);
+  state.awaySince = null;
   if (elapsed <= 0) return 0;
   tick(state, elapsed);
   return elapsed;
