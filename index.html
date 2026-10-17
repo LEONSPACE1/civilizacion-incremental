@@ -39,22 +39,31 @@
       </div>
 
       <aside class="sidebar">
-        <section class="panel">
-          <h2>Tu tribu</h2>
-          <p id="cap-note" class="panel-note"></p>
-          <div id="buildings" class="list"></div>
-        </section>
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Mejoras</h2>
-            <button id="open-tree" class="mini-btn" title="Ver todas las mejoras en forma de árbol"><span class="mini-icon" aria-hidden="true"></span>Ver árbol</button>
-          </div>
-          <div id="upgrades" class="list"></div>
-          <p id="no-upgrades" class="empty">Sigue haciendo crecer tu tribu para descubrir mejoras.</p>
-          <p id="owned-upgrades" class="owned"></p>
-        </section>
-        <section class="panel goal" id="goal"></section>
-        <p id="save-status" class="save-status"></p>
+        <!-- Un panel a la vez: se elige con la barra de pestañas de abajo -->
+        <div class="panels" id="panels">
+          <section class="panel" id="tab-jobs" role="tabpanel" aria-labelledby="tabbtn-jobs">
+            <h2>Tu tribu</h2>
+            <p id="cap-note" class="panel-note"></p>
+            <div id="buildings" class="list"></div>
+          </section>
+          <section class="panel" id="tab-upgrades" role="tabpanel" aria-labelledby="tabbtn-upgrades" hidden>
+            <div class="panel-head">
+              <h2>Mejoras</h2>
+              <button id="open-tree" class="mini-btn" title="Ver todas las mejoras en forma de árbol"><span class="mini-icon" aria-hidden="true"></span>Ver árbol</button>
+            </div>
+            <p id="no-upgrades" class="empty">Sigue haciendo crecer tu tribu para descubrir mejoras.</p>
+            <div id="upgrades" class="list"></div>
+          </section>
+          <section class="panel goal" id="goal" role="tabpanel" aria-labelledby="tabbtn-goal" hidden></section>
+          <p id="save-status" class="save-status"></p>
+        </div>
+        <!-- En escritorio, la meta resumida queda siempre a la vista -->
+        <button id="goal-mini" class="goal-mini" type="button"></button>
+        <nav class="tabbar" role="tablist" aria-label="Paneles">
+          <button id="tabbtn-jobs" class="tab" role="tab" data-tab="jobs" aria-controls="tab-jobs"><span class="tab-icon" aria-hidden="true"></span><span class="tab-name">Oficios</span><span class="tab-badge" hidden></span></button>
+          <button id="tabbtn-upgrades" class="tab" role="tab" data-tab="upgrades" aria-controls="tab-upgrades"><span class="tab-icon" aria-hidden="true"></span><span class="tab-name">Mejoras</span><span class="tab-badge" hidden></span></button>
+          <button id="tabbtn-goal" class="tab" role="tab" data-tab="goal" aria-controls="goal"><span class="tab-icon" aria-hidden="true"></span><span class="tab-name">Meta</span><span class="tab-badge" hidden></span></button>
+        </nav>
       </aside>
       <p id="toast" class="toast" role="status"></p>
     </main>

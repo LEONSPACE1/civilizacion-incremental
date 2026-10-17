@@ -53,6 +53,7 @@ export const ICONS = {
   timber: svg(line('M10 44V12M38 44V12', 4.5) + line('M6 12h36', 5) + '<path d="M16 44l4-10 6 4 6-6 2 12z" stroke="none" opacity=".7"/>'),
   skyDisk: svg('<circle cx="24" cy="24" r="19" fill="none" stroke-width="3"/><circle cx="17" cy="19" r="5" stroke="none"/><path d="M32 15a8 8 0 1 0 2 12 6 6 0 1 1-2-12z" stroke="none"/><path d="M9 31c3 5 7 8 12 9" fill="none" stroke-width="3"/><circle cx="26" cy="32" r="1.6" stroke="none"/><circle cx="14" cy="28" r="1.6" stroke="none"/><circle cx="24" cy="11" r="1.6" stroke="none"/><circle cx="35" cy="34" r="1.6" stroke="none"/>'),
   close: svg(line('M12 12l24 24M36 12L12 36', 4.5)),
+  chevron: svg(line('M18 12l12 12-12 12', 5)),
 };
 
 export type IconId = keyof typeof ICONS;
