@@ -51,6 +51,8 @@ export class Sound {
   private birdTimer: number | undefined;
   private anvilTimer: number | undefined;
   private era = 1;
+  /** Si la pestaña se ve. */
+  private pageVisible = true;
 
   get muted(): boolean {
     return this.settings.muted;
@@ -84,13 +86,26 @@ export class Sound {
       this.applyVolume();
       this.startAmbience();
     }
-    if (this.ctx.state === 'suspended') void this.ctx.resume();
+    this.syncRunning();
+  }
+
+  /** Si no va a oírse nada, el audio se apaga del todo: el procesado de sonido gasta batería aunque esté en silencio. */
+  private get audible(): boolean {
+    return this.pageVisible && !this.settings.muted && this.settings.volume > 0;
+  }
+
+  private syncRunning(): void {
+    if (!this.ctx) return;
+    if (this.audible) {
+      if (this.ctx.state === 'suspended') void this.ctx.resume();
+    } else if (this.ctx.state === 'running') void this.ctx.suspend();
   }
 
   setMuted(muted: boolean): void {
     this.settings.muted = muted;
     saveSettings(this.settings);
     this.applyVolume();
+    this.syncRunning();
   }
 
   setVolume(volume: number): void {
@@ -109,6 +124,7 @@ export class Sound {
     Object.assign(this.settings, change);
     saveSettings(this.settings);
     this.applyVolume();
+    this.syncRunning();
   }
 
   /** El ambiente cambia con la era: noche en el Paleolítico, día en el Neolítico y, en la Edad del Bronce, martillos sobre el yunque. */
@@ -118,9 +134,8 @@ export class Sound {
 
   /** Pausa el ambiente cuando la pestaña no se ve. */
   setActive(active: boolean): void {
-    if (!this.ctx) return;
-    if (active) void this.ctx.resume();
-    else void this.ctx.suspend();
+    this.pageVisible = active;
+    this.syncRunning();
   }
 
   // ---------- Efectos ----------
@@ -223,16 +238,17 @@ export class Sound {
     rumble.start();
 
     const crackle = () => {
+      // En silencio no se programan sonidos: se acumularían y sonarían todos juntos al volver.
       const n = 1 + Math.floor(Math.random() * 3);
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n && this.audible; i++) {
         this.noiseBurst({ freq: 1800 + Math.random() * 3000, q: 4, decay: 0.015 + Math.random() * 0.03, gain: 0.15 + Math.random() * 0.35, out: this.ambience, delay: i * 0.03 });
       }
-      this.crackleTimer = window.setTimeout(crackle, 120 + Math.random() * 700);
+      this.crackleTimer = window.setTimeout(crackle, this.audible ? 120 + Math.random() * 700 : 2000);
     };
     crackle();
 
     const cricket = () => {
-      if (this.era === 1) {
+      if (this.era === 1 && this.audible) {
         const f = 4200 + Math.random() * 500;
         for (let i = 0; i < 3; i++) this.tone({ type: 'sine', freq: f, decay: 0.04, gain: 0.03, delay: i * 0.07, out: this.ambience });
       }
@@ -242,7 +258,7 @@ export class Sound {
 
     // De día cantan los pájaros: trinos cortos que suben y bajan.
     const bird = () => {
-      if (this.era >= 2) {
+      if (this.era >= 2 && this.audible) {
         const base = 2200 + Math.random() * 1400, notes = 2 + Math.floor(Math.random() * 4);
         for (let i = 0; i < notes; i++) {
           const up = i % 2 === 0;
@@ -256,7 +272,7 @@ export class Sound {
     // En la Edad del Bronce suenan a lo lejos martillos sobre el bronce: golpes cortos con
     // armónicos que no casan entre sí, como el metal.
     const anvil = () => {
-      if (this.era >= 3) {
+      if (this.era >= 3 && this.audible) {
         const base = 900 + Math.random() * 300, hits = 1 + Math.floor(Math.random() * 3);
         for (let i = 0; i < hits; i++) {
           for (const [k, g] of [[1, 0.035], [2.76, 0.02], [5.4, 0.01]] as const) {
