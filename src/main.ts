@@ -27,6 +27,7 @@ import { formatDuration, formatNumber, getNumberFormat, NUMBER_FORMATS, setNumbe
 import { BUILDING_ICONS, ERA_ICONS, ICONS, RESOURCE_ICONS, UPGRADE_ICONS } from './ui/icons';
 import { createUpgradeTree } from './ui/tree';
 import { createVillage } from './scene/village';
+import { DEFAULT_FPS, DEFAULT_QUALITY, FPS_OPTIONS, isFpsLimit, isQualityLevel, QUALITY_PRESETS, type FpsLimit, type QualityLevel } from './scene/quality';
 import { Sound } from './audio/sound';
 
 const TICK_MS = 100;
@@ -87,11 +88,22 @@ muteButton.addEventListener('click', () => {
 });
 
 // ---------- Ajustes ----------
+const graphics: { quality: QualityLevel; fps: FpsLimit } = { quality: DEFAULT_QUALITY, fps: DEFAULT_FPS };
 try {
   const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
   if (NUMBER_FORMATS.some((f) => f.id === saved.numberFormat)) setNumberFormat(saved.numberFormat);
+  if (isQualityLevel(saved.quality)) graphics.quality = saved.quality;
+  if (isFpsLimit(saved.fps)) graphics.fps = saved.fps;
 } catch {
   // Ajustes ilegibles: se usan los de siempre.
+}
+village.setGraphics(graphics.quality, graphics.fps);
+function saveSettings(): void {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ numberFormat: getNumberFormat(), ...graphics }));
+  } catch {
+    // Sin almacenamiento: los ajustes duran solo esta sesión.
+  }
 }
 const settingsDialog = $<HTMLDialogElement>('settings');
 $('open-settings').innerHTML = ICONS.gear;
@@ -132,16 +144,35 @@ const formatButtons = NUMBER_FORMATS.map((f) => {
   b.innerHTML = `<span class="choice-name">${f.name}</span><span class="choice-example">${formatNumber(1_234_567, f.id)}</span>`;
   b.addEventListener('click', () => {
     setNumberFormat(f.id);
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ numberFormat: f.id }));
-    } catch {
-      // Sin almacenamiento: el formato dura solo esta sesión.
-    }
+    saveSettings();
     renderSettings();
     render();
   });
   $('number-formats').append(b);
   return { id: f.id as NumberFormat, b };
+});
+
+// Gráficos: un control deslizante de cinco niveles, del máximo rendimiento a la máxima calidad, y el tope de fps.
+const qualityInput = $<HTMLInputElement>('set-quality');
+qualityInput.addEventListener('input', () => {
+  graphics.quality = Number(qualityInput.value) as QualityLevel;
+  village.setGraphics(graphics.quality, graphics.fps);
+  saveSettings();
+  renderSettings();
+});
+const fpsButtons = FPS_OPTIONS.map((o) => {
+  const b = el('button', 'choice');
+  b.type = 'button';
+  b.setAttribute('role', 'radio');
+  b.innerHTML = `<span class="choice-name">${o.name}</span><span class="choice-example">${o.hint}</span>`;
+  b.addEventListener('click', () => {
+    graphics.fps = o.id;
+    village.setGraphics(graphics.quality, graphics.fps);
+    saveSettings();
+    renderSettings();
+  });
+  $('fps-options').append(b);
+  return { id: o.id, b };
 });
 
 function renderSettings(): void {
@@ -156,6 +187,12 @@ function renderSettings(): void {
     s.out.textContent = `${Math.round(s.get() * 100)} %`;
   }
   for (const f of formatButtons) f.b.setAttribute('aria-checked', String(f.id === getNumberFormat()));
+  const preset = QUALITY_PRESETS[graphics.quality];
+  qualityInput.value = String(graphics.quality);
+  qualityInput.setAttribute('aria-valuetext', preset.name);
+  $('quality-name').textContent = `${graphics.quality}/5 · ${preset.name}.`;
+  $('quality-hint').textContent = preset.hint;
+  for (const f of fpsButtons) f.b.setAttribute('aria-checked', String(f.id === graphics.fps));
 }
 renderSettings();
 

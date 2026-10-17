@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { BuildingId, GameState } from '../game/state';
 import { BUILDING_DEFS } from '../game/content';
+import { DEFAULT_FPS, DEFAULT_QUALITY, frameIntervals, pixelRatioFor, QUALITY_PRESETS, type FpsLimit, type QualityLevel } from './quality';
 
 // Escena 3D low poly. Lee el estado del juego y hace crecer la aldea; nunca lo modifica.
 // Cada oficio tiene su rutina (ir, trabajar, volver) y el entorno se mueve con viento,
@@ -224,6 +225,8 @@ export interface Village {
   celebrate(): void;
   /** Detiene el dibujo mientras una ventana tapa la escena. */
   setPaused(paused: boolean): void;
+  /** Nivel de calidad gráfica (1 = máximo rendimiento, 5 = máxima calidad) y tope de fps. */
+  setGraphics(quality: QualityLevel, fps: FpsLimit): void;
   dispose(): void;
 }
 
@@ -239,11 +242,12 @@ export function createVillage(container: HTMLElement): Village {
   } catch {
     canvas.remove();
     container.classList.add('no-3d');
-    return { update() {}, pulse() {}, celebrate() {}, setPaused() {}, dispose() {} };
+    return { update() {}, pulse() {}, celebrate() {}, setPaused() {}, setGraphics() {}, dispose() {} };
   }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(pixelRatioFor(DEFAULT_QUALITY, window.devicePixelRatio));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  let quality = QUALITY_PRESETS[DEFAULT_QUALITY];
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const rng = mulberry32(7);
@@ -3160,7 +3164,10 @@ export function createVillage(container: HTMLElement): Village {
         const m = o as THREE.Mesh;
         if (!m.isMesh || !m.castShadow || (m as unknown as THREE.InstancedMesh).isInstancedMesh) return;
         if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
-        if (m.geometry.boundingSphere!.radius * m.matrixWorld.getMaxScaleOnAxis() < SHADOW_MIN_R) m.castShadow = false;
+        if (m.geometry.boundingSphere!.radius * m.matrixWorld.getMaxScaleOnAxis() < SHADOW_MIN_R) {
+          m.userData.tinyShadow = true;
+          m.castShadow = quality.tinyShadows;
+        }
       });
     }
     newObjects.length = 0;
@@ -3253,19 +3260,21 @@ export function createVillage(container: HTMLElement): Village {
     }
     // Cada sombra se recalcula en fotogramas alternos: la luz de la luna en uno y la del fuego en
     // el siguiente. Lo que se mueve es lento, así que no se nota y se ahorra casi la mitad del trabajo.
-    if (shadowTurn++ % 2 === 0) moonLight.shadow.needsUpdate = true;
+    // En calidad alta se recalculan las dos en cada fotograma.
+    if (quality.shadowsEveryFrame) moonLight.shadow.needsUpdate = fireLight.shadow.needsUpdate = true;
+    else if (shadowTurn++ % 2 === 0) moonLight.shadow.needsUpdate = true;
     else fireLight.shadow.needsUpdate = true;
     if (newObjects.length) trimShadows();
     renderer.render(scene, camera);
   }
 
-  // Bucle de dibujo con ritmo propio para ahorrar batería: 30 fotogramas por segundo en pantallas
-  // táctiles (60 mientras se arrastra la cámara) y como mucho 60 en el resto, aunque la pantalla
-  // vaya a 90, 120 o 144 Hz. Entre fotograma y fotograma se espera con un temporizador, así el
+  // Bucle de dibujo con ritmo propio para ahorrar batería. En «Auto», 30 fotogramas por segundo en
+  // pantallas táctiles (60 mientras se arrastra la cámara) y como mucho 60 en el resto, aunque la
+  // pantalla vaya a 90, 120 o 144 Hz; en los ajustes se puede fijar otro tope (frameIntervals()). Entre fotograma y fotograma se espera con un temporizador, así el
   // navegador no despierta al juego en cada refresco de pantalla para nada. Si la escena no se ve
   // (pestaña oculta, escena fuera de la pantalla o una ventana encima), el bucle se para del todo.
   const touch = window.matchMedia('(pointer: coarse)').matches;
-  const IDLE_MS = 1000 / (touch ? 30 : 60), DRAG_MS = 1000 / 60;
+  let intervals = frameIntervals(DEFAULT_FPS, touch);
   let paused = false, running = false, raf = 0, timer = 0;
   const shouldRun = () => visible && !paused && !document.hidden;
   function step(now: number) {
@@ -3275,7 +3284,7 @@ export function createVillage(container: HTMLElement): Village {
       return;
     }
     frame();
-    const wait = (dragX === null ? IDLE_MS : DRAG_MS) - (performance.now() - now) - 4;
+    const wait = (dragX === null ? intervals.idle : intervals.drag) - (performance.now() - now) - 4;
     if (wait > 1) timer = window.setTimeout(() => ((timer = 0), (raf = requestAnimationFrame(step))), wait);
     else raf = requestAnimationFrame(step);
   }
@@ -3293,6 +3302,31 @@ export function createVillage(container: HTMLElement): Village {
     raf = timer = 0;
     running = false;
   }
+  /** Aplica un nivel de calidad: resolución, sombras y su tamaño. */
+  function applyQuality(level: QualityLevel): void {
+    const before = quality;
+    quality = QUALITY_PRESETS[level];
+    renderer.setPixelRatio(pixelRatioFor(level, window.devicePixelRatio));
+    resize();
+    renderer.shadowMap.enabled = quality.shadows;
+    renderer.shadowMap.type = quality.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    fireLight.castShadow = quality.fireShadows;
+    if (moonLight.shadow.mapSize.x !== quality.shadowMap) {
+      moonLight.shadow.map?.dispose();
+      moonLight.shadow.map = null;
+      moonLight.shadow.mapSize.set(quality.shadowMap, quality.shadowMap);
+    }
+    // Activar o cambiar el tipo de sombras obliga a recompilar los materiales.
+    const recompile = before.shadows !== quality.shadows || before.softShadows !== quality.softShadows || before.fireShadows !== quality.fireShadows;
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      if (m.userData.tinyShadow) m.castShadow = quality.tinyShadows;
+      if (recompile) (Array.isArray(m.material) ? m.material : [m.material]).forEach((mt) => (mt.needsUpdate = true));
+    });
+    moonLight.shadow.needsUpdate = fireLight.shadow.needsUpdate = true;
+  }
+
   const onVisibility = () => (document.hidden ? stop() : wake());
   document.addEventListener('visibilitychange', onVisibility);
   wake();
@@ -3313,6 +3347,16 @@ export function createVillage(container: HTMLElement): Village {
       for (const p of people.hunter) p.cheer = 0.9;
       for (const sh of sheep) if (sh.state !== 'hop') [sh.state, sh.timer] = ['hop', 0.6];
       flash = Math.max(flash, 0.6);
+    },
+    setGraphics(level: QualityLevel, fps: FpsLimit) {
+      intervals = frameIntervals(fps, touch);
+      if (QUALITY_PRESETS[level] === quality) return;
+      applyQuality(level);
+      // Con los ajustes abiertos la escena está parada: se dibuja una vez para ver el cambio detrás.
+      if (!running && visible && !document.hidden) {
+        if (newObjects.length) trimShadows();
+        renderer.render(scene, camera);
+      }
     },
     setPaused(p: boolean) {
       paused = p;
