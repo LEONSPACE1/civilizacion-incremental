@@ -48,6 +48,22 @@ describe('guardado', () => {
     expect(deserialize(serialize(s))).toEqual(s);
   });
 
+  it('guarda el bronce y la era 3', () => {
+    const s = newGame(0);
+    s.era = 3;
+    s.resources.metal = 5e6;
+    s.buildings.smelter = 7;
+    expect(deserialize(serialize(s))).toEqual(s);
+  });
+
+  it('ajusta al tope los oficios de partidas anteriores', () => {
+    const text = btoa(JSON.stringify({ version: 3, era: 2, buildings: { gatherer: 80, quarrier: 12 } }));
+    const s = deserialize(text)!;
+    expect(s.buildings.gatherer).toBe(50);
+    expect(s.buildings.quarrier).toBe(12);
+    expect(s.resources.metal).toBe(0);
+  });
+
   it('rechaza texto inválido', () => {
     expect(deserialize('no es una partida')).toBeNull();
   });

@@ -1,4 +1,4 @@
-import { BASE_CLICK, MAX_OFFLINE_SECONDS, MILESTONES } from './balance';
+import { BASE_CLICK, BUILDING_CAP, MAX_OFFLINE_SECONDS, MILESTONES } from './balance';
 import { BUILDING_BY_ID, BUILDING_DEFS, COST_GROWTH, GOALS, UPGRADE_BY_ID, UPGRADE_DEFS, type GoalDef } from './content';
 import { LAST_ERA, RESOURCES, type Amounts, type BuildingId, type Cost, type GameState, type ResourceId } from './state';
 
@@ -11,7 +11,7 @@ function upgradeMultiplier(state: GameState, match: (e: (typeof UPGRADE_DEFS)[nu
   return m;
 }
 
-/** Cuántos hitos (10, 25, 50, 100) ha alcanzado un edificio. */
+/** Cuántos hitos (10, 25, 50) ha alcanzado un edificio. */
 export function milestonesReached(count: number): number {
   return MILESTONES.filter((m) => count >= m).length;
 }
@@ -85,10 +85,15 @@ function pay(state: GameState, cost: Cost): void {
   for (const r of RESOURCES) state.resources[r] -= cost[r] ?? 0;
 }
 
+/** Si el oficio ya tiene el máximo de personas que admite la tribu. */
+export function atCap(state: GameState, id: BuildingId): boolean {
+  return state.buildings[id] >= BUILDING_CAP;
+}
+
 export function buyBuilding(state: GameState, id: BuildingId): boolean {
   const def = BUILDING_BY_ID[id];
   const cost = buildingCost(state, id);
-  if (!def.unlocked(state) || !canAfford(state, cost)) return false;
+  if (!def.unlocked(state) || atCap(state, id) || !canAfford(state, cost)) return false;
   pay(state, cost);
   state.buildings[id] += 1;
   return true;

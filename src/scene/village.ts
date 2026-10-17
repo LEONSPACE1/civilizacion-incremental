@@ -1,18 +1,37 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { BuildingId, GameState } from '../game/state';
+import { BUILDING_DEFS } from '../game/content';
 
 // Escena 3D low poly. Lee el estado del juego y hace crecer la aldea; nunca lo modifica.
 // Cada oficio tiene su rutina (ir, trabajar, volver) y el entorno se mueve con viento,
 // humo, agua y animales para que el progreso se sienta vivo. En el Paleolítico es de noche
 // junto al fuego; al llegar el Neolítico amanece y aparecen campos, rebaños, casas de barro,
-// la cantera y las minas de sílex.
+// la cantera y las minas de sílex. En la Edad del Bronce cae una tarde dorada y llegan los
+// hornos de fundición, la mina de cobre, los campos arados con bueyes, las carboneras y las
+// casas de piedra. Con cada era el bosque retrocede y el claro de la aldea se hace más grande.
 
 const POND = new THREE.Vector2(11, -7);
 const POND_R = 5.2;
 const MAX_SHOWN: Record<BuildingId, number> = {
   gatherer: 10, woodcutter: 10, hunter: 8, feller: 8, fisher: 6, rafter: 4,
   quarrier: 4, farmer: 6, forester: 4, herder: 3, carpenter: 4, miner: 3,
+  smelter: 4, mason: 4, plowman: 3, charcoaler: 4, copperMiner: 4,
+};
+// Radio del claro de la aldea en cada era: más allá empieza el bosque. Al pasar de era se talan
+// los árboles que quedan dentro y la cámara se aleja para que se note el crecimiento.
+const CLEARING: Record<number, number> = { 1: 24, 2: 31, 3: 40 };
+const CAMERA: Record<number, { r: number; y: number }> = { 1: { r: 21, y: 9.5 }, 2: { r: 29, y: 15 }, 3: { r: 39, y: 23 } };
+const FOG: Record<number, [number, number]> = { 1: [28, 85], 2: [36, 110], 3: [48, 140] };
+// Las colinas empiezan detrás del claro de la última era.
+const HILLS_R = 50;
+const JOB_ERA = Object.fromEntries(BUILDING_DEFS.map((b) => [b.id, b.era])) as Record<BuildingId, number>;
+// Las viviendas de cada era crecen con sus propios oficios. En el Paleolítico cuentan solo los
+// que viven junto al fuego.
+const BUILDINGS_OF: Record<number, BuildingId[]> = {
+  1: ['gatherer', 'woodcutter', 'hunter', 'fisher'],
+  2: BUILDING_DEFS.filter((b) => b.era === 2).map((b) => b.id),
+  3: BUILDING_DEFS.filter((b) => b.era === 3).map((b) => b.id),
 };
 // Pasillos de trabajo: hacia los arbustos y hacia la arboleda. Ahí no se levantan tiendas.
 const GATHER_ANGLE = -2.3;
@@ -42,7 +61,10 @@ function heightAt(x: number, z: number): number {
   const r = Math.hypot(x, z);
   let h = Math.sin(x * 0.21 + 1.3) * Math.cos(z * 0.17 + 0.4) * 1.4 + Math.sin((x + z) * 0.09) * 1.6 + Math.cos(x * 0.5 - z * 0.3) * 0.35;
   h *= THREE.MathUtils.smoothstep(r, 5, 15);
-  h += Math.max(0, r - 24) * 0.35;
+  h += Math.max(0, r - HILLS_R) * 0.35;
+  // La colina de la mina de cobre
+  const md = Math.hypot(x - COPPER_HILL.x, z - COPPER_HILL.z);
+  if (md < 7) h += Math.cos((md / 7) * Math.PI * 0.5) ** 2 * 3.2;
   const pd = Math.hypot(x - POND.x, z - POND.y);
   if (pd < 5.5) h = Math.min(h, -0.6 + (pd / 5.5) * 0.6);
   return h;
@@ -52,15 +74,25 @@ function heightAt(x: number, z: number): number {
 // Se calcula una sola vez para que las rutas de trabajo nunca atraviesen tiendas ni rocas.
 const FARM = polar(2.5, 12);
 // Zonas de trabajo del Neolítico, fuera del anillo de casas.
-const FIELDS = polar(2.5, 13.2);
-const PEN = polar(-1.43, 13.4);
+// Desde la era 2 el claro es más grande, así que quedan más separadas que antes.
+const FIELDS = polar(2.5, 16.5);
+const PEN = polar(-1.43, 17.5);
 const PEN_R = 2.7;
-const QUARRY = polar(3.28, 17);
-const MINE = polar(0.08, 16.2);
-const NURSERY = polar(1.78, 12.6);
+const QUARRY = polar(3.3, 21.5);
+const MINE = polar(0.06, 20.5);
+const NURSERY = polar(1.88, 15.5);
 const BENCHES = [polar(1.47, 6.5), polar(1.58, 8.1)];
 const POTS = polar(-1.5, 3.7);
-const MENHIRS = polar(2.98, 20);
+const MENHIRS = polar(2.92, 27);
+// Zonas de la Edad del Bronce, en el anillo que se gana al bosque.
+const FOUNDRY = polar(-0.85, 26);
+const COPPER_HILL = polar(0.42, 34);
+const COPPER_MOUTH = polar(0.42, 29.6);
+const PLOW = polar(-0.28, 31.5);
+const CHARCOAL = polar(1.2, 26.5);
+const MASONRY = polar(-2.05, 25.5);
+const SKY_DISK = polar(-0.2, 11.5);
+const CART = polar(-2.75, 13.5);
 const PAINT_ROCK = polar(3.0, 10.2);
 const SPEAR_RACK = { x: -4.5, z: 2.5 };
 const LOG_PILE = { x: 3.6, z: -3 };
@@ -78,6 +110,13 @@ const blockers: { x: number; z: number; r: number }[] = [
   { ...BENCHES[0], r: 1.1 },
   { ...BENCHES[1], r: 1.1 },
   { ...MENHIRS, r: 3.2 },
+  { ...FOUNDRY, r: 4 },
+  { ...COPPER_HILL, r: 7.5 },
+  { ...PLOW, r: 6.5 },
+  { ...CHARCOAL, r: 3.8 },
+  { ...MASONRY, r: 3.6 },
+  { ...SKY_DISK, r: 1.2 },
+  { ...CART, r: 1.8 },
   { ...PAINT_ROCK, r: 2.2 },
   { ...SPEAR_RACK, r: 1.6 },
   { ...LOG_PILE, r: 1.3 },
@@ -85,19 +124,24 @@ const blockers: { x: number; z: number; r: number }[] = [
 const isFree = (x: number, z: number, r: number) =>
   Math.hypot(x - POND.x, z - POND.y) > POND_R + 0.8 + r && blockers.every((b) => Math.hypot(x - b.x, z - b.z) > b.r + r);
 
-const TENT_SLOTS = (() => {
-  // Anillos de dentro hacia fuera: las primeras tiendas quedan cerca del fuego.
-  const slots: { x: number; z: number; s: number; tone: number }[] = [];
-  for (const d of [6.2, 8, 9.8]) {
-    for (let k = 0; k < 126 && slots.length < 10; k++) {
+type Slot = { x: number; z: number; s: number; tone: number };
+/** Huecos para viviendas en anillos de dentro hacia fuera: las primeras quedan cerca del fuego. */
+function dwellingSlots(rings: number[], max: number, r: number, reserve: boolean): Slot[] {
+  const slots: Slot[] = [];
+  for (const d of rings) {
+    for (let k = 0; k < 126 && slots.length < max; k++) {
       const { x, z } = polar(-Math.PI + k * 0.05, d);
-      if (inCorridor(x, z, 0.5 + 1.4 / d) || !isFree(x, z, 1.45)) continue;
+      if (inCorridor(x, z, 0.5 + 1.4 / d) || !isFree(x, z, r) || slots.some((o) => Math.hypot(o.x - x, o.z - z) < r * 2)) continue;
       slots.push({ x, z, s: 0.8 + ((slots.length * 7) % 5) * 0.08, tone: slots.length % 2 });
-      blockers.push({ x, z, r: 1.45 });
     }
   }
+  if (reserve) for (const sl of slots) blockers.push({ ...sl, r });
   return slots;
-})();
+}
+// Casas de barro del Neolítico y casas de piedra de la Edad del Bronce: cada era ocupa más anillos.
+const HUT_SLOTS = dwellingSlots([7, 9.4, 11.8, 14.2], 16, 1.55, false);
+const HOUSE_SLOTS = dwellingSlots([9.4, 11.8, 14.2, 16.6, 19.2, 21.8], 26, 1.35, false);
+const TENT_SLOTS = dwellingSlots([6.2, 8, 9.8], 10, 1.45, true);
 const BUSHES = Array.from({ length: 8 }, (_, k) => polar(GATHER_ANGLE + (k - 3.5) * 0.15, 11 + (k % 2) * 1.4));
 const GROVE = Array.from({ length: MAX_SHOWN.woodcutter }, (_, k) => polar(WOOD_ANGLE + (k - 4.5) * 0.12, 11 + (k % 2) * 1.7));
 // Los taladores trabajan árboles más grandes, detrás de la arboleda y en sus huecos.
@@ -267,8 +311,8 @@ export function createVillage(container: HTMLElement): Village {
   const moonLight = new THREE.DirectionalLight(0x9aa8ff, 1.3);
   moonLight.position.set(-25, 35, -20);
   moonLight.castShadow = true;
-  Object.assign(moonLight.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 100 });
-  moonLight.shadow.mapSize.set(1024, 1024);
+  Object.assign(moonLight.shadow.camera, { left: -46, right: 46, top: 46, bottom: -46, near: 1, far: 130 });
+  moonLight.shadow.mapSize.set(2048, 2048);
   scene.add(moonLight);
   const fireLight = new THREE.PointLight(0xff8a3a, 60, 26, 2);
   fireLight.position.set(0, 1.4, 0);
@@ -277,7 +321,7 @@ export function createVillage(container: HTMLElement): Village {
   scene.add(fireLight);
 
   // Terreno
-  let tg: THREE.BufferGeometry = new THREE.PlaneGeometry(110, 110, 60, 60);
+  let tg: THREE.BufferGeometry = new THREE.PlaneGeometry(250, 250, 112, 112);
   tg.rotateX(-Math.PI / 2);
   const tp = tg.attributes.position;
   for (let i = 0; i < tp.count; i++) tp.setY(i, heightAt(tp.getX(i), tp.getZ(i)) + (rng() - 0.5) * 0.25);
@@ -293,7 +337,7 @@ export function createVillage(container: HTMLElement): Village {
     let c = grassA.clone().lerp(grassB, rng());
     if (r < 4.5 + rng()) c = dirt.clone().offsetHSL(0, 0, (rng() - 0.5) * 0.04);
     else if (pd < 6.5) c = sand.clone().offsetHSL(0, 0, (rng() - 0.5) * 0.05);
-    else if (cy > 4) c = rockC.clone().lerp(new THREE.Color(0x8a8296), Math.min(1, (cy - 4) / 8));
+    else if (cy > 4 && Math.hypot(cx - COPPER_HILL.x, cz - COPPER_HILL.z) > 7) c = rockC.clone().lerp(new THREE.Color(0x8a8296), Math.min(1, (cy - 4) / 8));
     // Senderos pisados hacia los arbustos y la arboleda
     else if (r < 11 && (angDist(Math.atan2(cz, cx), GATHER_ANGLE) < 0.12 || angDist(Math.atan2(cz, cx), WOOD_ANGLE) < 0.12)) c = c.lerp(dirt, 0.55);
     for (let k = 0; k < 3; k++) tcol.push(c.r, c.g, c.b);
@@ -315,7 +359,7 @@ export function createVillage(container: HTMLElement): Village {
   // Montañas (de noche se ven violetas; de día, azuladas por la distancia)
   const mountainMat = mat(0x4a4066);
   for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2 + rng() * 0.2, d = 62 + rng() * 14, r = 10 + rng() * 9, h = 16 + rng() * 16, rot = rng() * Math.PI;
+    const a = (i / 16) * Math.PI * 2 + rng() * 0.2, d = 92 + rng() * 16, r = 14 + rng() * 12, h = 22 + rng() * 22, rot = rng() * Math.PI;
     const mx = Math.cos(a) * d, mz = Math.sin(a) * d;
     add(new THREE.Mesh(new THREE.ConeGeometry(r, h, 5), mountainMat), mx, h / 2 - 1, mz, false).rotation.y = rot;
     const sh = h * 0.3;
@@ -338,21 +382,53 @@ export function createVillage(container: HTMLElement): Village {
     }
     return g;
   };
-  for (let i = 0, near = 0, far = 0; i < 600 && far < 116; i++) {
+  // Bosque: un anillo cerca del fuego (solo en el Paleolítico) y uno ancho alrededor del claro.
+  // Cada pino recuerda en qué era se tala: entonces se encoge y deja un tocón.
+  interface Pine { obj: THREE.Group; clearedIn: number; k: number }
+  const pines: Pine[] = [];
+  const stumpMat = mat(0x8a6440);
+  for (let i = 0, near = 0, far = 0; i < 1400 && far < 230; i++) {
     const isNear = near < 14;
-    const a = rng() * Math.PI * 2, d = isNear ? 9 + rng() * 4 : 25 + Math.pow(rng(), 0.8) * 26;
+    const a = rng() * Math.PI * 2, d = isNear ? 9 + rng() * 4 : 25 + Math.pow(rng(), 0.85) * 36;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
     if (Math.hypot(x - POND.x, z - POND.y) < 7.5) continue;
     if (isNear && (inCorridor(x, z, 0.75) || !isFree(x, z, 1.2))) continue;
+    // Los pinos del bosque lejano no crecen encima de lo que se construirá en su era.
+    if (!isNear && blockers.some((b) => Math.hypot(x - b.x, z - b.z) < b.r + 0.6)) continue;
     if (isNear) near++;
     else far++;
     const g = add(makePine(0.8 + rng() * 0.8), x, heightAt(x, z) - 0.05, z);
+    // Fuera del alcance de la sombra del sol no hace falta que proyecten sombra
+    if (d > 44) g.traverse((c) => (c.castShadow = false));
     swaying.push({ obj: g, phase: rng() * 6, amp: 0.02 + rng() * 0.025 });
+    const clearedIn = isNear ? 2 : d < CLEARING[2] ? 2 : d < CLEARING[3] ? 3 : 99;
+    pines.push({ obj: g, clearedIn, k: 1 });
+  }
+  /** Tala (o vuelve a plantar) los pinos del claro de la era. Con `animate`, se encogen poco a poco. */
+  function clearForest(era: number, animate: boolean): void {
+    for (const p of pines) {
+      const target = era >= p.clearedIn ? 0 : 1;
+      if (!animate) setPine(p, target);
+      p.obj.userData.target = target;
+    }
+  }
+  function setPine(p: Pine, k: number): void {
+    p.k = k;
+    const [trunk, ...cones] = p.obj.children;
+    for (const c of cones) {
+      c.visible = k > 0.02;
+      c.scale.setScalar(Math.max(0.02, k));
+    }
+    // Al talarlo queda un tocón claro
+    trunk.userData.y0 ??= trunk.position.y;
+    trunk.scale.y = 0.3 + 0.7 * k;
+    trunk.position.y = trunk.userData.y0 * trunk.scale.y;
+    (trunk as THREE.Mesh).material = k < 0.5 ? stumpMat : trunkMat;
   }
   const rockMat = mat(0x7a7484);
-  for (let i = 0; i < 22; i++) {
-    const a = rng() * Math.PI * 2, d = 7 + rng() * 26, x = Math.cos(a) * d, z = Math.sin(a) * d;
-    if (d < 13 && inCorridor(x, z, 0.3)) continue;
+  for (let i = 0; i < 34; i++) {
+    const a = rng() * Math.PI * 2, d = 7 + rng() * 36, x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if ((d < 13 && inCorridor(x, z, 0.3)) || !isFree(x, z, 0.6)) continue;
     const r = add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + rng() * 0.8, 0), rockMat), x, heightAt(x, z), z);
     r.scale.y = 0.6;
     r.rotation.set(rng(), rng() * 3, rng());
@@ -547,17 +623,18 @@ export function createVillage(container: HTMLElement): Village {
     root.scale.setScalar(k === 2 ? 0.75 : 1);
     return { root, neck, legs, x: p.x, z: p.z, heading: fx() * 6, tx: p.x, tz: p.z, state: 'graze', timer: 2 + fx() * 4, walk: 0 };
   });
-  // En el Neolítico los ciervos se apartan de campos, corral, cantera y minas.
-  const NEO_ZONES = [{ ...FIELDS, r: 4 }, { ...PEN, r: PEN_R + 1 }, { ...QUARRY, r: 3.4 }, { ...MINE, r: 3 }, { ...NURSERY, r: 2.4 }];
+  // Los ciervos pastan cerca del borde del bosque y se apartan de lo construido.
+  const deerZones = () => blockers.filter((b) => b.r > 1.9);
+  const deerRing = () => CLEARING[Math.max(1, shownEra)] - 9.5;
   const deerSpot = (fromAngle: number) => {
-    for (let n = 0; n < 40; n++) {
-      const a = fromAngle + (fx() - 0.5) * 1.2, d = 14.5 + fx() * 3;
+    for (let n = 0; n < 60; n++) {
+      const a = fromAngle + (fx() - 0.5) * 1.2, d = deerRing() + fx() * 3;
       if (angDist(a, Math.atan2(POND.y, POND.x)) < 0.55 || angDist(a, WOOD_ANGLE) < 0.75) continue;
       const p = polar(a, d);
-      if (shownEra >= 2 && NEO_ZONES.some((z) => Math.hypot(p.x - z.x, p.z - z.z) < z.r + 0.8)) continue;
+      if (shownEra >= 2 && deerZones().some((z) => Math.hypot(p.x - z.x, p.z - z.z) < z.r + 0.8)) continue;
       return p;
     }
-    return polar(shownEra >= 2 ? 3.9 + (fx() - 0.5) * 0.6 : fromAngle, 15.5);
+    return polar(shownEra >= 2 ? 3.75 + (fx() - 0.5) * 0.4 : fromAngle, deerRing() + 1);
   };
 
   // Bandada de pájaros que cruza el cielo de vez en cuando
@@ -626,9 +703,11 @@ export function createVillage(container: HTMLElement): Village {
   const clothes: Record<BuildingId, number> = {
     gatherer: 0x9a7048, woodcutter: 0x6b4a2c, hunter: 0x8b5a3c, feller: 0x5a3a26, fisher: 0x56606d, rafter: 0x4a6a62,
     quarrier: 0x7a7468, farmer: 0xd6c08a, forester: 0x5f7a3a, herder: 0xb0784a, carpenter: 0x9a6a3e, miner: 0x5c5248,
+    smelter: 0x7a3a24, mason: 0xa49c8a, plowman: 0xb89a62, charcoaler: 0x3e3a38, copperMiner: 0x4f6a5e,
   };
   const wheatMat = mat(0xe2b64a), flintMat = mat(0x2e2a30, { roughness: 0.6 }), blockMat = mat(0xa8a3a0), clayMat = mat(0xb5683a);
   const wrapMat = mat(0x3d2a1c), stoneMat = mat(0x9a9aa8), berryMat = mat(0xc23a3a);
+  const bronzeHeadMat = mat(0xc98a3a, { metalness: 0.5, roughness: 0.45 }), oreHeadMat = mat(0x3f9a7a);
   function makePerson(kind: BuildingId, i: number): Rig {
     const root = new THREE.Group();
     const skin = mat(skins[i % skins.length]);
@@ -791,6 +870,67 @@ export function createVillage(container: HTMLElement): Village {
         torso.add(basket);
         rig.carry = load;
       }
+    } else if (kind === 'smelter' || kind === 'mason') {
+      // Fundidor con un lingote al hombro; picapedrero con maza y un sillar
+      const tool = new THREE.Group();
+      tool.position.set(0, -0.48, 0.02);
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.45, 4), pole);
+      handle.rotation.x = Math.PI / 2;
+      handle.position.z = 0.2;
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.2), kind === 'smelter' ? stoneMat : bronzeHeadMat);
+      head.position.set(0, 0, 0.44);
+      tool.add(handle, head);
+      armR.add(tool);
+      const load = new THREE.Mesh(kind === 'smelter' ? new THREE.BoxGeometry(0.46, 0.13, 0.26) : new THREE.BoxGeometry(0.5, 0.3, 0.34), kind === 'smelter' ? bronzeHeadMat : mat(0xd6cab2));
+      load.position.set(0, 0.72, -0.18);
+      torso.add(load);
+      rig.carry = load;
+    } else if (kind === 'charcoaler') {
+      // Pértiga para avivar la carbonera y un tronco al hombro
+      const stick = new THREE.Group();
+      stick.position.set(0, -0.48, 0.02);
+      const s2 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.8, 4), pole);
+      s2.position.y = 0.2;
+      stick.add(s2);
+      armR.add(stick);
+      rig.tool = stick;
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.95, 6), mat(0x6b4527));
+      log.position.set(0, 0.68, -0.22);
+      log.rotation.z = Math.PI / 2;
+      torso.add(log);
+      rig.carry = log;
+    } else if (kind === 'copperMiner') {
+      // Pico de bronce y un capazo de mineral verde a la espalda
+      const tool = new THREE.Group();
+      tool.position.set(0, -0.48, 0.02);
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7, 4), pole);
+      handle.rotation.x = Math.PI / 2;
+      handle.position.z = 0.3;
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.45, 4), bronzeHeadMat);
+      head.rotation.z = Math.PI / 2;
+      head.position.set(0, 0, 0.64);
+      tool.add(handle, head);
+      armR.add(tool);
+      const basket = new THREE.Group();
+      basket.position.set(0, 0.35, -0.3);
+      basket.add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.32, 7), mat(0x7a5a32)));
+      const load = new THREE.Group();
+      for (let k = 0; k < 5; k++) {
+        const b = new THREE.Mesh(new THREE.DodecahedronGeometry(0.08, 0), oreHeadMat);
+        b.position.set((k % 3 - 1) * 0.1, 0.17, (Math.floor(k / 3) - 0.5) * 0.12);
+        load.add(b);
+      }
+      basket.add(load);
+      torso.add(basket);
+      rig.carry = load;
+    } else if (kind === 'plowman') {
+      // Vara para guiar a los bueyes, siempre en alto
+      const goad = new THREE.Group();
+      goad.position.set(0, -0.48, 0.02);
+      const g2 = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 1.6, 4), pole);
+      g2.position.y = 0.5;
+      goad.add(g2);
+      armR.add(goad);
     } else {
       const rod = new THREE.Group();
       rod.position.set(0, -0.48, 0.02);
@@ -859,6 +999,18 @@ export function createVillage(container: HTMLElement): Village {
     } else if (kind === 'miner') {
       const pit = pitOf(i);
       [p.x, p.z, p.state, p.timer, p.depth] = [pit.x, pit.z, 'dig', 1 + fx() * 3, -1.9];
+    } else if (kind === 'smelter' || kind === 'mason') {
+      const spot = kind === 'smelter' ? furnaceStand(i).stand : around(ROUGH_BLOCKS[i % 4], 0, -0.95);
+      [p.x, p.z, p.state, p.timer] = [spot.x, spot.z, 'work', 1 + fx() * 4];
+    } else if (kind === 'charcoaler') {
+      const start = around(CHARCOAL, (i - 1.5) * 0.8, -1.4);
+      [p.x, p.z, p.state] = [start.x, start.z, 'toStack'];
+    } else if (kind === 'copperMiner') {
+      const start = around(COPPER_MOUTH, (i - 1.5) * 0.9, -2.6 - i * 0.5);
+      [p.x, p.z, p.state] = [start.x, start.z, i % 2 ? 'toMine' : 'toHeap'];
+    } else if (kind === 'plowman') {
+      const start = furrow(i, 0);
+      [p.x, p.z, p.state] = [start.x, start.z, 'plow'];
     } else if (kind === 'rafter') {
       // Cada balsero navega en círculo por el lago con su carga de troncos.
       p.timer = (i / MAX_SHOWN.rafter) * Math.PI * 2;
@@ -893,6 +1045,11 @@ export function createVillage(container: HTMLElement): Village {
     if (p.line) scene.remove(p.line);
     if (p.bobber) scene.remove(p.bobber);
     if (p.raft) scene.remove(p.raft);
+    const team = teamOf.get(p);
+    if (team) {
+      scene.remove(team.root);
+      teamOf.delete(p);
+    }
   }
 
   const raftRadius = (i: number) => 1.5 + (i % 2) * 0.8;
@@ -1251,6 +1408,59 @@ export function createVillage(container: HTMLElement): Village {
       netMesh.position.set(0.9, 1.45, 0);
       g.add(netMesh);
       return add(g, POND.x - 5.8, 0, POND.y + 2.5);
+    },
+    // Edad del Bronce
+    wheel: () => {
+      // Un carro de ruedas macizas aparcado junto a la aldea
+      const g = new THREE.Group();
+      const box = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.45, 2), mat(0x8a6038));
+      box.position.y = 0.85;
+      g.add(box);
+      for (const s of [-1, 1]) {
+        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.14, 12), mat(0x6a4a2c));
+        w.rotation.z = Math.PI / 2;
+        w.position.set(s * 0.78, 0.5, 0.15);
+        const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.2, 6), mat(0xc98a3a, { metalness: 0.5 }));
+        hub.rotation.z = Math.PI / 2;
+        hub.position.copy(w.position);
+        g.add(w, hub);
+      }
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 4), pole);
+      shaft.rotation.x = Math.PI / 2 - 0.25;
+      shaft.position.set(0, 0.55, 1.9);
+      g.add(shaft);
+      const load = new THREE.Mesh(new THREE.BoxGeometry(1, 0.3, 1.5), mat(0xd6cab2));
+      load.position.y = 1.2;
+      g.add(load);
+      add(g, CART.x, heightAt(CART.x, CART.z), CART.z);
+      g.rotation.y = 0.6;
+      return g;
+    },
+    'sky-disk': () => {
+      // El disco celeste en lo alto de un poste, mirando a la aldea
+      const g = new THREE.Group();
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 3, 6), pole);
+      post.position.y = 1.5;
+      const disk = new THREE.Group();
+      disk.position.y = 3.3;
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.08, 20), mat(0x2f6a5e, { metalness: 0.4, roughness: 0.5 }));
+      plate.rotation.x = Math.PI / 2;
+      const gold = mat(0xf2c450, { metalness: 0.7, roughness: 0.3, emissive: 0x4a3008 });
+      const sunD = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.1, 14), gold);
+      sunD.rotation.x = Math.PI / 2;
+      sunD.position.set(-0.25, 0.15, 0.03);
+      disk.add(plate, sunD);
+      for (let k = 0; k < 9; k++) {
+        const a = k * 2.3, r = 0.3 + (k % 3) * 0.13;
+        const star = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.1, 6), gold);
+        star.rotation.x = Math.PI / 2;
+        star.position.set(Math.cos(a) * r + 0.1, Math.sin(a) * r - 0.05, 0.03);
+        disk.add(star);
+      }
+      g.add(post, disk);
+      add(g, SKY_DISK.x, heightAt(SKY_DISK.x, SKY_DISK.z), SKY_DISK.z);
+      g.lookAt(0, g.position.y, 0);
+      return g;
     },
     // Neolítico
     quern: () => {
@@ -1947,30 +2157,498 @@ export function createVillage(container: HTMLElement): Village {
     }
   }
 
+  // ---------- Edad del Bronce: fundición, mina de cobre, arado, carboneras y cantería ----------
+  // Se construye la primera vez que la tribu entra en la era 3, en el anillo que se gana al bosque.
+  const bronzeStatics: THREE.Object3D[] = [];
+  let bronzeBuilt = false;
+  const bronzeMat = mat(0xc98a3a, { metalness: 0.55, roughness: 0.45 });
+  const oreMat = mat(0x3f9a7a), charMat = mat(0x2a2522), ashlarMat = mat(0xd6cab2), earthMat = mat(0x5a4632);
+  const furnaceMat = mat(0xa45a34), timberMat = mat(0x6a4a2c), roofMat = mat(0xb08a4a);
+  const FURNACES = [around(FOUNDRY, -1.7, 0.6), around(FOUNDRY, 1.7, 0.6)];
+  const INGOT_PILE = around(FOUNDRY, 0.2, -2.6);
+  const ORE_HEAP = around(COPPER_MOUTH, 2.4, -1.4);
+  const MOUNDS = [around(CHARCOAL, -1.7, 0.4), around(CHARCOAL, 1.5, 0.9), around(CHARCOAL, -0.1, 2.4)];
+  const LOG_STACK = around(CHARCOAL, 0.4, -2.4);
+  const ASHLAR_PILE = around(MASONRY, 2.1, -1.5);
+  const ROUGH_BLOCKS = [around(MASONRY, -1.4, 0.2), around(MASONRY, 0.5, 0.7), around(MASONRY, -0.5, 2), around(MASONRY, 1.7, 1.6)];
+  const furnaceGlows: THREE.MeshBasicMaterial[] = [];
+  let foundryLight: THREE.PointLight | null = null;
+  let ingotStack: THREE.Object3D[] = [], oreLumps: THREE.Object3D[] = [], ashlarStack: THREE.Object3D[] = [];
+  /** Humo de carboneras y hornos: bocanadas que suben y se deshacen. */
+  const puffs: { m: THREE.Mesh; age: number; x: number; z: number; y: number; speed: number }[] = [];
+  const puffMat = new THREE.MeshStandardMaterial({ color: 0x7a7470, flatShading: true, transparent: true, opacity: 0, depthWrite: false });
+  function puff(x: number, z: number, y: number, speed = 1): void {
+    let p = puffs.find((q) => q.age >= 1);
+    if (!p) {
+      if (puffs.length >= 40) return;
+      p = { m: new THREE.Mesh(smokeGeo, puffMat.clone()), age: 1, x: 0, z: 0, y: 0, speed: 1 };
+      scene.add(p.m);
+      puffs.push(p);
+    }
+    Object.assign(p, { age: 0, x, z, y, speed });
+  }
+
+  // Yunta de bueyes con su arado: una por arador, va y viene por su surco.
+  interface Team { root: THREE.Group; oxen: { legs: THREE.Object3D[] }[]; s: number; dir: number; walk: number }
+  const teamOf = new Map<Person, Team>();
+  const oxMat = [mat(0x8a5a36), mat(0x6e4a32), mat(0xb08a62)], hornMat = mat(0xeee2c8);
+  function makeTeam(i: number): Team {
+    const root = new THREE.Group();
+    const oxen = [-0.55, 0.55].map((x, k) => {
+      const ox = new THREE.Group();
+      ox.position.x = x;
+      const m = oxMat[(i + k) % oxMat.length];
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 1.35), m);
+      body.position.y = 0.95;
+      const hump = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.4), m);
+      hump.position.set(0, 1.3, 0.45);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.4, 0.45), m);
+      head.position.set(0, 1.0, 0.9);
+      ox.add(body, hump, head);
+      for (const s of [-1, 1]) {
+        const horn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.32, 4), hornMat);
+        horn.position.set(s * 0.25, 1.25, 0.9);
+        horn.rotation.z = -s * 1.1;
+        ox.add(horn);
+      }
+      const legs = [[-0.2, 0.45], [0.2, 0.45], [-0.2, -0.45], [0.2, -0.45]].map(([lx, lz]) => {
+        const pivot = new THREE.Group();
+        pivot.position.set(lx, 0.68, lz);
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.68, 5), m);
+        leg.position.y = -0.34;
+        pivot.add(leg);
+        ox.add(pivot);
+        return pivot;
+      });
+      root.add(ox);
+      return { legs };
+    });
+    // Yugo sobre los cuellos, lanza hasta el arado y la reja de bronce que abre el surco
+    const yoke = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.7, 5), timberMat);
+    yoke.rotation.z = Math.PI / 2;
+    yoke.position.set(0, 1.28, 0.68);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 2.4, 4), timberMat);
+    beam.rotation.x = Math.PI / 2 - 0.12;
+    beam.position.set(0, 0.95, -0.45);
+    const share = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 4), bronzeMat);
+    share.rotation.x = Math.PI / 2 + 0.6;
+    share.position.set(0, 0.22, -1.6);
+    const stilt = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.1, 4), timberMat);
+    stilt.rotation.x = -0.6;
+    stilt.position.set(0, 0.62, -1.85);
+    root.add(yoke, beam, share, stilt);
+    root.traverse((c) => { c.castShadow = true; });
+    scene.add(root);
+    return { root, oxen, s: fx() * 2 - 1, dir: i % 2 ? -1 : 1, walk: 0 };
+  }
+  /** Punto del surco de un arador: `s` de -1 a 1 a lo largo del campo. */
+  const furrow = (i: number, s: number) => around(PLOW, (i - 1) * 2.2, s * 3.6);
+
+  function buildBronze(): void {
+    bronzeBuilt = true;
+    // Fundición: dos hornos de barro bajo un cobertizo, con el yunque de piedra en medio
+    const shed = new THREE.Group();
+    for (const [u, v] of [[-3.2, -1.2], [3.2, -1.2], [-3.2, 2.2], [3.2, 2.2]]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 2.6, 5), timberMat);
+      post.position.set(u, 1.3, v);
+      shed.add(post);
+    }
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(7, 0.18, 4), roofMat);
+    roof.position.set(0, 2.7, 0.5);
+    roof.rotation.x = 0.12;
+    shed.add(roof);
+    const anvil = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.55, 0.5), mat(0x6e6a72));
+    anvil.position.set(0, 0.28, -0.4);
+    shed.add(anvil);
+    faceCenter(shed, FOUNDRY);
+    bronzeStatics.push(spawn(add(shed, FOUNDRY.x, heightAt(FOUNDRY.x, FOUNDRY.z), FOUNDRY.z)));
+    for (const f of FURNACES) {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.85, 1.5, 9), furnaceMat);
+      body.position.y = 0.75;
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.09, 4, 10), furnaceMat);
+      rim.rotation.x = Math.PI / 2;
+      rim.position.y = 1.5;
+      // Boca del horno que brilla más cuando se avivan los fuelles
+      const glowMat = new THREE.MeshBasicMaterial({ color: 0xff8a32 });
+      furnaceGlows.push(glowMat);
+      const mouth = new THREE.Mesh(new THREE.CircleGeometry(0.26, 8), glowMat);
+      mouth.position.set(0, 0.42, -0.79);
+      mouth.rotation.y = Math.PI;
+      mouth.rotation.x = 0.25;
+      const top = new THREE.Mesh(new THREE.CircleGeometry(0.42, 9), glowMat);
+      top.rotation.x = -Math.PI / 2;
+      top.position.y = 1.46;
+      // Fuelles de piel a un lado
+      const bellows = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 4), mat(0x8a6040));
+      bellows.scale.set(1, 0.45, 1.3);
+      bellows.position.set(0.9, 0.18, -0.6);
+      g.add(body, rim, mouth, top, bellows);
+      g.userData.bellows = bellows;
+      faceCenter(g, f);
+      g.rotation.y += Math.PI;
+      bronzeStatics.push(spawn(add(g, f.x, heightAt(f.x, f.z), f.z)));
+    }
+    foundryLight = new THREE.PointLight(0xff8a3a, 0, 14, 2);
+    foundryLight.position.set(FOUNDRY.x, heightAt(FOUNDRY.x, FOUNDRY.z) + 1.6, FOUNDRY.z);
+    scene.add(foundryLight);
+    bronzeStatics.push(foundryLight);
+    const pile = new THREE.Group();
+    ingotStack = Array.from({ length: 14 }, (_, k) => {
+      const row = Math.floor(k / 4), col = k % 4;
+      const ingot = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.12, 0.24), bronzeMat);
+      ingot.position.set((col - 1.5) * 0.46 + (row % 2) * 0.12, 0.07 + row * 0.13, 0);
+      ingot.rotation.y = row % 2 ? Math.PI / 2 * 0.15 : 0;
+      pile.add(ingot);
+      return ingot;
+    });
+    faceCenter(pile, INGOT_PILE);
+    bronzeStatics.push(spawn(add(pile, INGOT_PILE.x, heightAt(INGOT_PILE.x, INGOT_PILE.z), INGOT_PILE.z)));
+
+    // Mina de cobre: boca entibada en la ladera de la colina, con su montón de mineral verde
+    const mouth = new THREE.Group();
+    for (const s of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.1, 0.22), timberMat);
+      post.position.set(s * 0.85, 1.05, 0);
+      mouth.add(post);
+    }
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.26, 0.3), timberMat);
+    lintel.position.y = 2.15;
+    const dark = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2), new THREE.MeshBasicMaterial({ color: 0x0b0806 }));
+    dark.position.set(0, 1, 0.12);
+    mouth.add(lintel, dark);
+    faceCenter(mouth, COPPER_MOUTH);
+    mouth.rotation.y += Math.PI;
+    bronzeStatics.push(spawn(add(mouth, COPPER_MOUTH.x, heightAt(COPPER_MOUTH.x, COPPER_MOUTH.z) - 0.15, COPPER_MOUTH.z)));
+    const heap = new THREE.Group();
+    oreLumps = Array.from({ length: 18 }, (_, k) => {
+      const layer = Math.floor(k / 8), a = k * 2.1, rad = (0.75 - layer * 0.3) * (0.35 + ((k * 37) % 10) / 14);
+      const lump = new THREE.Mesh(new THREE.DodecahedronGeometry(0.17, 0), k % 3 ? oreMat : mat(0x6a6a58));
+      lump.position.set(Math.cos(a) * rad, 0.12 + layer * 0.17, Math.sin(a) * rad);
+      heap.add(lump);
+      return lump;
+    });
+    bronzeStatics.push(spawn(add(heap, ORE_HEAP.x, heightAt(ORE_HEAP.x, ORE_HEAP.z), ORE_HEAP.z)));
+    // Carretilla de mano junto a la boca
+    const cartTrack = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 4), timberMat);
+    const ct = around(COPPER_MOUTH, 0, -2.2);
+    faceCenter(cartTrack, ct);
+    cartTrack.rotation.y += Math.PI / 2;
+    bronzeStatics.push(spawn(add(cartTrack, ct.x, heightAt(ct.x, ct.z) + 0.04, ct.z)));
+
+    // Campo de arado: tierra oscura con surcos y lindes de piedra
+    const field = new THREE.Group();
+    const soil = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.3, 8.6), earthMat);
+    field.add(soil);
+    for (let r = 0; r < 13; r++) {
+      const f = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 8.2), mat(0x45331f));
+      f.position.set((r - 6) * 0.56, 0.17, 0);
+      field.add(f);
+    }
+    for (let k = 0; k < 22; k++) {
+      const edge = k % 2 ? 1 : -1, along = (Math.floor(k / 2) / 10 - 0.5) * 8.6;
+      const st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), stoneMat);
+      st.position.set(edge * 4.05, 0.15, along);
+      field.add(st);
+    }
+    faceCenter(field, PLOW);
+    field.rotation.y += Math.PI / 2;
+    bronzeStatics.push(spawn(add(field, PLOW.x, heightAt(PLOW.x, PLOW.z) - 0.05, PLOW.z)));
+
+    // Carboneras: montículos de tierra que humean, y la pila de leña
+    for (const m of MOUNDS) {
+      const mound = new THREE.Mesh(new THREE.SphereGeometry(1.2, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x3e3228));
+      mound.scale.y = 0.75;
+      bronzeStatics.push(spawn(add(mound, m.x, heightAt(m.x, m.z) - 0.05, m.z)));
+    }
+    const stack = new THREE.Group();
+    for (let k = 0; k < 9; k++) {
+      const row = Math.floor(k / 4), l = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 1.5, 6), logMat);
+      l.rotation.z = Math.PI / 2;
+      l.position.set(0, 0.14 + row * 0.25, ((k % 4) - 1.5 + row * 0.5) * 0.28);
+      stack.add(l);
+    }
+    const coal = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.45, 7), charMat);
+    coal.position.set(0, 0.22, 1.3);
+    stack.add(coal);
+    faceCenter(stack, LOG_STACK);
+    bronzeStatics.push(spawn(add(stack, LOG_STACK.x, heightAt(LOG_STACK.x, LOG_STACK.z), LOG_STACK.z)));
+
+    // Cantería: bloques en bruto donde trabajan los picapedreros y sillares listos
+    for (const b of ROUGH_BLOCKS) {
+      const block = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.75, 0.85), mat(0xb8ae9c));
+      block.rotation.y = fx() * 3;
+      bronzeStatics.push(spawn(add(block, b.x, heightAt(b.x, b.z) + 0.35, b.z)));
+    }
+    const ashlars = new THREE.Group();
+    ashlarStack = Array.from({ length: 12 }, (_, k) => {
+      let row = 0, left = k;
+      while (left >= 5 - row) left -= 5 - row++;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.36, 0.42), ashlarMat);
+      b.position.set((left - (4 - row) / 2) * 0.63, 0.18 + row * 0.37, 0);
+      ashlars.add(b);
+      return b;
+    });
+    faceCenter(ashlars, ASHLAR_PILE);
+    bronzeStatics.push(spawn(add(ashlars, ASHLAR_PILE.x, heightAt(ASHLAR_PILE.x, ASHLAR_PILE.z), ASHLAR_PILE.z)));
+  }
+
+  // Casas de piedra con tejado de paja a dos aguas (sustituyen a las de barro)
+  const wallA = mat(0xcfc2a6), wallB = mat(0xb9ab90), thatchC = mat(0xc9a050);
+  function makeHouse(x: number, z: number, s: number, tone: number) {
+    const g = new THREE.Group();
+    const w = 2.3 * s, d = 1.7 * s, h = 1.35 * s;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), tone ? wallB : wallA);
+    wall.position.y = h / 2;
+    // Prisma triangular tumbado a lo largo de la casa, con la cumbrera arriba
+    const rr = (d + 0.35 * s) / Math.sqrt(3);
+    const roofGeo = new THREE.CylinderGeometry(rr, rr, w + 0.3 * s, 3, 1);
+    roofGeo.rotateZ(Math.PI / 2);
+    roofGeo.rotateX(-Math.PI / 2);
+    const roof = new THREE.Mesh(roofGeo, tone ? thatchA : thatchC);
+    roof.scale.y = 0.7;
+    roof.position.y = h + rr * 0.5 * 0.7;
+    const base = new THREE.Mesh(new THREE.BoxGeometry(w + 0.16, 0.22 * s, d + 0.16), stoneMat);
+    base.position.y = 0.1 * s;
+    g.add(wall, roof, base);
+    const poles = new THREE.Group(); // remate de paja en la cumbrera
+    poles.position.y = h + rr * 1.5 * 0.7;
+    poles.add(new THREE.Mesh(new THREE.BoxGeometry(w + 0.35 * s, 0.12 * s, 0.18 * s), thatchB));
+    g.add(poles);
+    const door = new THREE.Group();
+    door.position.set(0, 0.95 * s, d / 2 + 0.02);
+    const curtain = new THREE.Mesh(new THREE.PlaneGeometry(0.55 * s, 0.9 * s), mat(0x3f6a5a, { side: THREE.DoubleSide }));
+    curtain.position.y = -0.45 * s;
+    door.add(curtain);
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.75 * s, 1.0 * s, 0.08), timberMat);
+    frame.position.set(0, 0.52 * s, d / 2 - 0.02);
+    g.add(frame, door);
+    g.userData.door = door;
+    g.userData.poles = poles;
+    g.userData.phase = fx() * 6;
+    add(g, x, heightAt(x, z), z);
+    g.lookAt(0, heightAt(x, z), 0);
+    return g;
+  }
+
+  // ---------- Rutinas de los oficios de la Edad del Bronce ----------
+  const furnaceStand = (i: number) => {
+    const f = FURNACES[i % FURNACES.length], side = Math.floor(i / FURNACES.length) ? 1 : -1;
+    return { stand: around(f, side * 0.95, -1.15), face: f };
+  };
+  const furnaceHeat = [0, 0];
+
+  /** Trabajo en un puesto y, al terminar, llevar la pieza a su montón. Lo usan fundidor y picapedrero. */
+  function updateCrafter(p: Person, dt: number, t: number): void {
+    const r = p.rig, smelter = p.kind === 'smelter';
+    const spot = smelter ? furnaceStand(p.i) : { stand: around(ROUGH_BLOCKS[p.i % 4], 0, -0.95), face: ROUGH_BLOCKS[p.i % 4] };
+    const pile = smelter ? INGOT_PILE : ASHLAR_PILE;
+    if (p.state === 'toWork' || p.state === 'toPile') {
+      const target = p.state === 'toWork' ? spot.stand : pile;
+      r.armL.rotation.x = p.state === 'toPile' ? ease(r.armL.rotation.x, -2.6, dt) : -Math.sin(p.walk) * 0.5;
+      r.armR.rotation.x = Math.sin(p.walk) * 0.4;
+      if (walkTo(p, target.x, target.z, dt, p.state === 'toPile' ? 0.9 : 1.1)) {
+        p.state = p.state === 'toWork' ? 'work' : 'drop';
+        p.timer = p.state === 'work' ? 4 + fx() * 3 : 0.7;
+      }
+      return;
+    }
+    standPose(p, dt);
+    p.timer -= dt;
+    if (p.state === 'drop') {
+      faceTo(p, pile.x, pile.z, dt);
+      r.torso.rotation.x = ease(r.torso.rotation.x, 0.5, dt);
+      if (p.timer <= 0) {
+        if (r.carry) r.carry.visible = false;
+        p.state = 'toWork';
+      }
+      return;
+    }
+    faceTo(p, spot.face.x, spot.face.z, dt);
+    if (smelter) {
+      // Pisa y aprieta el fuelle: el horno se aviva con cada golpe de aire
+      const pump = Math.sin(t * 4.5 + p.phase);
+      r.torso.rotation.x = 0.35 + pump * 0.12;
+      r.armR.rotation.x = -1.1 + pump * 0.45;
+      r.armL.rotation.x = -1.1 + pump * 0.45;
+      const k = p.i % FURNACES.length;
+      if (pump > 0.9) furnaceHeat[k] = Math.min(1, furnaceHeat[k] + dt * 3);
+      if (fx() < dt * 4) {
+        const f = FURNACES[k];
+        emit(sparkMat, f.x, heightAt(f.x, f.z) + 1.6, f.z, 1, 1.4, 0.04, 1.6, false);
+      }
+    } else {
+      // Cincel en una mano, maza en la otra: golpes cortos y rápidos
+      const ph = (t * 2.6 + p.phase) % 1, raise = ph < 0.6 ? ph / 0.6 : (1 - ph) / 0.4;
+      r.torso.rotation.x = 0.55;
+      r.armL.rotation.x = -1.2;
+      r.armR.rotation.x = -0.8 - raise * 1.3;
+      if (ph < 0.08 && fx() < 0.5) {
+        const b = spot.face;
+        emit(stoneChipMat, b.x, heightAt(b.x, b.z) + 0.8, b.z, 2, 0.9, 0.05);
+      }
+    }
+    if (p.timer <= 0) {
+      if (r.carry) r.carry.visible = true;
+      p.state = 'toPile';
+    }
+  }
+
+  function updateCharcoaler(p: Person, dt: number, t: number): void {
+    const r = p.rig, mound = MOUNDS[p.i % MOUNDS.length];
+    const { rx, rz } = radial(CHARCOAL);
+    const at = { x: mound.x - rx * 1.5 + (p.i % 2 ? 0.5 : -0.5), z: mound.z - rz * 1.5 };
+    if (p.state === 'toStack' || p.state === 'toMound') {
+      const target = p.state === 'toStack' ? LOG_STACK : at;
+      r.armL.rotation.x = p.state === 'toMound' ? ease(r.armL.rotation.x, -2.6, dt) : -Math.sin(p.walk) * 0.5;
+      r.armR.rotation.x = Math.sin(p.walk) * 0.3;
+      if (walkTo(p, target.x, target.z, dt, 1)) {
+        p.state = p.state === 'toStack' ? 'load' : 'tend';
+        p.timer = p.state === 'load' ? 0.8 : 3 + fx() * 2;
+      }
+      return;
+    }
+    standPose(p, dt);
+    p.timer -= dt;
+    if (p.state === 'load') {
+      faceTo(p, LOG_STACK.x, LOG_STACK.z + 1, dt);
+      r.torso.rotation.x = ease(r.torso.rotation.x, 0.6, dt);
+      if (p.timer <= 0) {
+        if (r.carry) r.carry.visible = true;
+        p.state = 'toMound';
+      }
+      return;
+    }
+    // Deja la leña y aviva la carbonera con la pértiga
+    if (r.carry?.visible) {
+      r.carry.visible = false;
+      emit(chipMat, mound.x, heightAt(mound.x, mound.z) + 0.6, mound.z, 3, 0.6, 0.05);
+    }
+    faceTo(p, mound.x, mound.z, dt);
+    const poke = Math.sin(t * 2.4 + p.phase);
+    r.torso.rotation.x = 0.3 + Math.max(0, poke) * 0.2;
+    r.armR.rotation.x = -0.9 - poke * 0.35;
+    r.armL.rotation.x = -0.8 - poke * 0.3;
+    if (fx() < dt * 1.5) puff(mound.x + (fx() - 0.5) * 0.8, mound.z + (fx() - 0.5) * 0.8, heightAt(mound.x, mound.z) + 0.9, 1.3);
+    if (p.timer <= 0) p.state = 'toStack';
+  }
+
+  function updateCopperMiner(p: Person, dt: number, t: number): void {
+    const r = p.rig;
+    const { rx, rz } = radial(COPPER_MOUTH);
+    const inside = { x: COPPER_MOUTH.x + rx * 0.6, z: COPPER_MOUTH.z + rz * 0.6 };
+    const out = { x: COPPER_MOUTH.x - rx * 1.4 + (p.i % 2 ? 0.4 : -0.4), z: COPPER_MOUTH.z - rz * 1.4 };
+    if (p.state === 'toMine' || p.state === 'enter' || p.state === 'toHeap' || p.state === 'exit') {
+      const target = p.state === 'toMine' ? out : p.state === 'enter' ? inside : p.state === 'exit' ? out : ORE_HEAP;
+      r.armL.rotation.x = -Math.sin(p.walk) * 0.5;
+      r.armR.rotation.x = Math.sin(p.walk) * 0.5;
+      if (walkTo(p, target.x, target.z, dt, p.state === 'toHeap' ? 0.9 : 1.05)) {
+        if (p.state === 'toMine') p.state = 'enter';
+        else if (p.state === 'enter') {
+          // Dentro de la galería: no se ve, pero sale polvo de la boca
+          r.root.visible = false;
+          p.state = 'dig';
+          p.timer = 4 + fx() * 4;
+        } else if (p.state === 'exit') p.state = 'toHeap';
+        else {
+          p.state = 'drop';
+          p.timer = 0.7;
+        }
+      }
+      return;
+    }
+    standPose(p, dt);
+    p.timer -= dt;
+    if (p.state === 'dig') {
+      if (fx() < dt * 1.2) emit(chalkMat, COPPER_MOUTH.x, heightAt(COPPER_MOUTH.x, COPPER_MOUTH.z) + 0.6, COPPER_MOUTH.z, 2, 0.5, 0.05, 0.7);
+      if (p.timer <= 0) {
+        r.root.visible = true;
+        if (r.carry) r.carry.visible = true;
+        p.state = 'exit';
+      }
+    } else {
+      faceTo(p, ORE_HEAP.x, ORE_HEAP.z + 1, dt);
+      r.torso.rotation.x = ease(r.torso.rotation.x, 0.6, dt);
+      if (p.timer <= 0) {
+        if (r.carry?.visible) {
+          r.carry.visible = false;
+          emit(oreMat, ORE_HEAP.x, heightAt(ORE_HEAP.x, ORE_HEAP.z) + 0.9, ORE_HEAP.z, 4, 0.7, 0.07, 0.5);
+        }
+        p.state = 'toMine';
+      }
+    }
+    void t;
+  }
+
+  function updatePlowman(p: Person, dt: number, t: number): void {
+    const r = p.rig;
+    let team = teamOf.get(p);
+    if (!team) teamOf.set(p, (team = makeTeam(p.i)));
+    // La yunta avanza despacio por su surco; al llegar al final da la vuelta
+    team.s += (dt * 0.42 * team.dir) / 3.6;
+    if (Math.abs(team.s) > 1) {
+      team.s = Math.sign(team.s);
+      team.dir = -team.dir;
+    }
+    const at = furrow(p.i, team.s), ahead = furrow(p.i, team.s + team.dir * 0.05);
+    const heading = Math.atan2(ahead.x - at.x, ahead.z - at.z);
+    team.root.rotation.y = lerpAngle(team.root.rotation.y, heading, Math.min(1, dt * 3));
+    team.root.position.set(at.x, heightAt(at.x, at.z), at.z);
+    team.walk += dt * 3.2;
+    team.oxen.forEach((ox, k) => ox.legs.forEach((l, j) => (l.rotation.x = Math.sin(team.walk + k + (j === 0 || j === 3 ? 0 : Math.PI)) * 0.35)));
+    // El arador camina detrás, con las manos en la esteva y la vara en alto
+    const back = 2.3, hr = team.root.rotation.y;
+    p.x = at.x - Math.sin(hr) * back;
+    p.z = at.z - Math.cos(hr) * back;
+    p.heading = hr;
+    p.walk += dt * 3.4;
+    const s = Math.sin(p.walk);
+    r.legL.rotation.x = s * 0.5;
+    r.legR.rotation.x = -s * 0.5;
+    p.bob = Math.abs(Math.cos(p.walk)) * 0.05;
+    r.torso.rotation.x = 0.3;
+    r.armL.rotation.x = -0.9;
+    r.armR.rotation.x = -1.3 + Math.sin(t * 1.3 + p.phase) * 0.15;
+    if (fx() < dt * 3) {
+      const sx = at.x - Math.sin(hr) * 1.6, sz = at.z - Math.cos(hr) * 1.6;
+      emit(soilMat, sx, heightAt(sx, sz) + 0.2, sz, 1, 0.5, 0.06, 0.5);
+    }
+  }
+  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffb347 }), soilMat = mat(0x4a3622);
+
   const chaffMat = mat(0xe8c060), stoneChipMat = mat(0xb8b2ac), chalkMat = mat(0xf0ece2);
 
   let flash = 0;
   let lastFood = -1, lastWood = -1;
   // ---------- Día y noche: el Neolítico amanece ----------
-  let day = 0, dayTarget = 0;
+  let day = 0, dayTarget = 0, warm = 0, warmTarget = 0, zoom = 1, zoomTarget = 1;
   const nightFog = new THREE.Color(0x3a2a52), dayFog = new THREE.Color(0xcfdde6);
   const hemiSky = [new THREE.Color(0x8a7ac8), new THREE.Color(0xfff0d8)], hemiGround = [new THREE.Color(0x2a1a10), new THREE.Color(0x6e5a3a)];
   const lightCol = [new THREE.Color(0x9aa8ff), new THREE.Color(0xffefd0)];
   const mountainCol = [new THREE.Color(0x4a4066), new THREE.Color(0x7d8aa6)];
   const lightPos = [new THREE.Vector3(-25, 35, -20), new THREE.Vector3(28, 42, 18)];
-  function applyDay(k: number): void {
-    const e = k * k * (3 - 2 * k);
+  // Edad del Bronce: tarde dorada, con el sol más bajo y la luz cálida
+  const skyGold = skyGradient(new THREE.Color(0x5a88c4), new THREE.Color(0xf0c890), new THREE.Color(0xffa45a));
+  const goldFog = new THREE.Color(0xf0cfa0), goldLight = new THREE.Color(0xffcf94), goldSky = new THREE.Color(0xffe2b8);
+  const goldPos = new THREE.Vector3(40, 26, 30), goldMountain = new THREE.Color(0x9a8aa0);
+  const sunDay = new THREE.Vector3(90, 80, 60), sunGold = new THREE.Vector3(120, 34, 90);
+  function applyDay(k: number, w = warm): void {
+    const e = k * k * (3 - 2 * k), g = w * w * (3 - 2 * w);
     const colors = skyGeo.attributes.color as THREE.BufferAttribute;
-    for (let i = 0; i < skyNight.length; i++) (colors.array as Float32Array)[i] = skyNight[i] + (skyDay[i] - skyNight[i]) * e;
+    for (let i = 0; i < skyNight.length; i++) {
+      const dayC = skyDay[i] + (skyGold[i] - skyDay[i]) * g;
+      (colors.array as Float32Array)[i] = skyNight[i] + (dayC - skyNight[i]) * e;
+    }
     colors.needsUpdate = true;
-    (scene.fog as THREE.Fog).color.copy(nightFog).lerp(dayFog, e);
-    hemi.color.copy(hemiSky[0]).lerp(hemiSky[1], e);
+    (scene.fog as THREE.Fog).color.copy(nightFog).lerp(dayFog, e).lerp(goldFog, g);
+    hemi.color.copy(hemiSky[0]).lerp(hemiSky[1], e).lerp(goldSky, g);
     hemi.groundColor.copy(hemiGround[0]).lerp(hemiGround[1], e);
     hemi.intensity = 1.6 + e * 0.2;
-    moonLight.color.copy(lightCol[0]).lerp(lightCol[1], e);
-    moonLight.intensity = 1.3 + e * 1.6;
-    moonLight.position.copy(lightPos[0]).lerp(lightPos[1], e);
-    mountainMat.color.copy(mountainCol[0]).lerp(mountainCol[1], e);
+    moonLight.color.copy(lightCol[0]).lerp(lightCol[1], e).lerp(goldLight, g);
+    moonLight.intensity = 1.3 + e * 1.6 - g * 0.2;
+    moonLight.position.copy(lightPos[0]).lerp(lightPos[1], e).lerp(goldPos, g);
+    sun.position.copy(sunDay).lerp(sunGold, g);
+    mountainMat.color.copy(mountainCol[0]).lerp(mountainCol[1], e).lerp(goldMountain, g);
     moonMat.opacity = 1 - e;
     sunMat.opacity = e;
     (sunHalo.material as THREE.MeshBasicMaterial).opacity = e * 0.28;
@@ -1980,47 +2658,62 @@ export function createVillage(container: HTMLElement): Village {
   }
 
   let dwellingStyle = 0;
-  const NEO_JOBS: BuildingId[] = ['quarrier', 'farmer', 'forester', 'herder', 'carpenter', 'miner'];
   function update(state: GameState) {
-    const neolithic = state.era >= 2;
+    const neolithic = state.era >= 2, bronze = state.era >= 3;
     gentleDrops = false;
     if (state.era !== shownEra) {
       const first = shownEra === 0;
       gentleDrops = !first;
       shownEra = state.era;
       dayTarget = neolithic ? 1 : 0;
-      if (first || reduceMotion) applyDay((day = dayTarget));
+      warmTarget = bronze ? 1 : 0;
+      zoomTarget = state.era;
+      if (first || reduceMotion) {
+        applyDay((day = dayTarget), (warm = warmTarget));
+        zoom = zoomTarget;
+      }
+      // Desde el Neolítico la partida se abre mirando por encima de los campos, sin la arboleda delante.
+      if (first && neolithic) angle = 2.5;
+      // El bosque retrocede: los árboles dentro del nuevo claro se talan.
+      clearForest(state.era, !first && !reduceMotion);
       if (neolithic) {
         if (!neoBuilt) buildNeolithic();
         else for (const o of neoStatics) o.visible = true;
-        // Los ciervos se van al prado del oeste, lejos de campos y rebaños.
-        deer.forEach((d, k) => {
-          if (!NEO_ZONES.some((z) => Math.hypot(d.x - z.x, d.z - z.z) < z.r + 0.8)) return;
-          const to = polar(3.7 + k * 0.3, 15.5 + k);
-          [d.x, d.z, d.tx, d.tz, d.state] = [to.x, to.z, to.x, to.z, 'graze'];
-        });
       } else for (const o of neoStatics) o.visible = false;
+      if (bronze) {
+        if (!bronzeBuilt) buildBronze();
+        else for (const o of bronzeStatics) o.visible = true;
+      } else for (const o of bronzeStatics) o.visible = false;
       wheatInst.visible = neolithic && neoBuilt;
+      // Los ciervos que se quedan dentro de lo construido se van al borde del bosque.
+      deer.forEach((d) => {
+        if (Math.hypot(d.x, d.z) > CLEARING[state.era] - 11 && !blockers.some((z) => z.r > 1.9 && Math.hypot(d.x - z.x, d.z - z.z) < z.r + 0.8)) return;
+        const to = deerSpot(Math.atan2(d.z, d.x));
+        [d.x, d.z, d.tx, d.tz, d.state] = [to.x, to.z, to.x, to.z, 'graze'];
+      });
     }
 
-    // Tiendas de piel en el Paleolítico; casas de barro con techo de paja en el Neolítico.
-    const style = neolithic ? 2 : 1;
+    // Tiendas de piel en el Paleolítico, casas de barro en el Neolítico y casas de piedra en la
+    // Edad del Bronce. Cada era empieza con unas pocas y crecen con los oficios de esa era.
+    const style = Math.min(3, state.era);
     if (dwellingStyle !== style) {
       for (const t of tents) scene.remove(t);
       tents.length = 0;
       dwellingStyle = style;
     }
-    const units = neolithic
-      ? Object.values(state.buildings).reduce((a, b) => a + b, 0)
-      : state.buildings.gatherer + state.buildings.woodcutter + state.buildings.hunter + state.buildings.fisher;
-    const wantTents = Math.min(TENT_SLOTS.length, 1 + Math.floor(units / 6));
+    // Nunca hay menos viviendas que al final de la era anterior: la aldea solo crece.
+    const slots = style === 3 ? HOUSE_SLOTS : style === 2 ? HUT_SLOTS : TENT_SLOTS;
+    const units = (n: number) => BUILDINGS_OF[n].reduce((a, b) => a + state.buildings[b], 0);
+    let wantTents = Math.min(TENT_SLOTS.length, 1 + Math.floor(units(1) / 6));
+    if (style >= 2) wantTents = Math.min(HUT_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(2) / 12));
+    if (style >= 3) wantTents = Math.min(HOUSE_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(3) / 9));
     while (tents.length < wantTents) {
-      const t = TENT_SLOTS[tents.length];
-      tents.push(spawn(neolithic ? makeHut(t.x, t.z, t.s * 0.8, t.tone) : makeTent(t.x, t.z, t.s, t.tone)));
+      const t = slots[tents.length];
+      tents.push(spawn(style === 3 ? makeHouse(t.x, t.z, t.s * 0.72, t.tone) : style === 2 ? makeHut(t.x, t.z, t.s * 0.8, t.tone) : makeTent(t.x, t.z, t.s, t.tone)));
     }
     while (tents.length > wantTents) scene.remove(tents.pop()!);
     for (const kind of Object.keys(people) as BuildingId[]) {
-      const want = neolithic || !NEO_JOBS.includes(kind) ? Math.min(MAX_SHOWN[kind], state.buildings[kind]) : 0;
+      const want = state.era >= JOB_ERA[kind] ? Math.min(MAX_SHOWN[kind], state.buildings[kind]) : 0;
       const list = people[kind];
       while (list.length < want) {
         const p = createPerson(kind, list.length);
@@ -2068,6 +2761,12 @@ export function createVillage(container: HTMLElement): Village {
       stoneBlocks.forEach((b, k) => (b.visible = k < stone));
       flintNodules.forEach((n, k) => (n.visible = k < 3 + state.buildings.miner * 2));
       sheafPile.forEach((sh, k) => (sh.visible = k < 1 + state.buildings.farmer));
+    }
+    if (bronzeBuilt) {
+      const metal = Math.min(ingotStack.length, Math.round(Math.log10(state.resources.metal + 1) * 1.3));
+      ingotStack.forEach((b, k) => (b.visible = k < metal));
+      oreLumps.forEach((n, k) => (n.visible = k < 4 + state.buildings.copperMiner * 2));
+      ashlarStack.forEach((b, k) => (b.visible = k < 2 + state.buildings.mason));
     }
     dropDelay = 0;
   }
@@ -2130,6 +2829,41 @@ export function createVillage(container: HTMLElement): Village {
       c.position.x = Math.cos(c.userData.a) * 95;
       c.position.z = Math.sin(c.userData.a) * 95;
       c.lookAt(0, c.position.y, 0);
+    }
+    // Tala del bosque al pasar de era: los pinos del nuevo claro se encogen hasta dejar un tocón
+    for (const p of pines) {
+      const target = p.obj.userData.target as number | undefined;
+      if (target === undefined || p.k === target) continue;
+      const k = target < p.k ? Math.max(target, p.k - dt / (1.2 + (p.obj.id % 8) * 0.25)) : Math.min(target, p.k + dt / 2);
+      setPine(p, k);
+      if (target === 0 && k === 0) emit(chipMat, p.obj.position.x, p.obj.position.y + 0.4, p.obj.position.z, 4, 1, 0.06);
+    }
+    // Hornos de la fundición: brillan más cuando se avivan los fuelles
+    if (bronzeBuilt) {
+      furnaceGlows.forEach((m, k) => {
+        furnaceHeat[k] = Math.max(0, furnaceHeat[k] - dt * 0.5);
+        const heat = 0.45 + furnaceHeat[k] * 0.55 + Math.sin(t * 9 + k) * 0.05;
+        m.color.setRGB(1, 0.35 + heat * 0.35, 0.1 + heat * 0.1);
+        if (fx() < dt * (0.8 + furnaceHeat[k] * 2)) {
+          const f = FURNACES[k];
+          puff(f.x, f.z, heightAt(f.x, f.z) + 1.7, 1.6);
+        }
+      });
+      if (foundryLight) foundryLight.intensity = (people.smelter.length ? 18 : 6) * (1 + (furnaceHeat[0] + furnaceHeat[1]) * 0.4) * (0.6 + (1 - day) * 0.4);
+      // Las carboneras humean siempre un poco
+      if (fx() < dt * 1.2) {
+        const m = MOUNDS[Math.floor(fx() * MOUNDS.length)];
+        puff(m.x + (fx() - 0.5) * 0.6, m.z + (fx() - 0.5) * 0.6, heightAt(m.x, m.z) + 0.9, 0.8);
+      }
+    }
+    for (const p of puffs) {
+      if (p.age >= 1) continue;
+      p.age = Math.min(1, p.age + (dt / 4.5) * p.speed);
+      const a = p.age;
+      p.m.position.set(p.x + a * a * 2 * wind, p.y + a * 4.5, p.z + a * 0.5);
+      p.m.scale.setScalar(0.3 + a * 1.3);
+      p.m.rotation.set(a * 2, a * 3, 0);
+      (p.m.material as THREE.MeshStandardMaterial).opacity = Math.sin(Math.PI * a) * 0.32;
     }
     // Plantones del vivero: crecen poco a poco y más rápido cuando los riegan
     for (const sp of saplings) {
@@ -2403,8 +3137,13 @@ export function createVillage(container: HTMLElement): Village {
     if (!visible || document.hidden) return;
     const t = clock.getElapsedTime();
     if (!reduceMotion && dragX === null) angle += 0.09 * dt;
-    // En el Neolítico la aldea es más grande: la cámara se aleja un poco.
-    const camR = 21 + day * 3, camY = 9.5 + day * 2;
+    // Con cada era la aldea ocupa más: la cámara se aleja y la niebla se va más lejos.
+    if (zoom !== zoomTarget) zoom = zoomTarget > zoom ? Math.min(zoomTarget, zoom + dt / 3) : Math.max(zoomTarget, zoom - dt / 3);
+    const z0 = Math.floor(zoom), zk = zoom - z0, z1 = Math.min(3, z0 + 1), zs = zk * zk * (3 - 2 * zk);
+    const camR = THREE.MathUtils.lerp(CAMERA[z0].r, CAMERA[z1].r, zs), camY = THREE.MathUtils.lerp(CAMERA[z0].y, CAMERA[z1].y, zs);
+    const fog = scene.fog as THREE.Fog;
+    fog.near = THREE.MathUtils.lerp(FOG[z0][0], FOG[z1][0], zs);
+    fog.far = THREE.MathUtils.lerp(FOG[z0][1], FOG[z1][1], zs);
     camera.position.set(Math.cos(angle) * camR, camY, Math.sin(angle) * camR);
     camera.lookAt(0, 1.2, 0);
 
@@ -2417,9 +3156,10 @@ export function createVillage(container: HTMLElement): Village {
       f.position.y = 0.3 + (f.userData.h * s) / 2;
     });
     // De día el fuego alumbra menos: manda el sol.
-    if (day !== dayTarget) {
+    if (day !== dayTarget || warm !== warmTarget) {
       day = dayTarget > day ? Math.min(dayTarget, day + dt / 4) : Math.max(dayTarget, day - dt / 4);
-      applyDay(day);
+      warm = warmTarget > warm ? Math.min(warmTarget, warm + dt / 4) : Math.max(warmTarget, warm - dt / 4);
+      applyDay(day, warm);
     }
     fireLight.intensity = (55 + Math.sin(t * 11) * 6 + Math.sin(t * 27) * 4) * big * (1 + flash) * (1 - day * 0.65);
     if (wheatInst.visible) updateWheat(reduceMotion ? 0 : t, reduceMotion ? 0 : dt);
@@ -2437,6 +3177,10 @@ export function createVillage(container: HTMLElement): Village {
           else if (kind === 'herder') updateHerder(p, dt, t);
           else if (kind === 'forester') updateForester(p, dt, t);
           else if (kind === 'miner') updateMiner(p, dt, t);
+          else if (kind === 'smelter' || kind === 'mason') updateCrafter(p, dt, t);
+          else if (kind === 'charcoaler') updateCharcoaler(p, dt, t);
+          else if (kind === 'copperMiner') updateCopperMiner(p, dt, t);
+          else if (kind === 'plowman') updatePlowman(p, dt, t);
           else updateStriker(p, dt, t);
           if (p.rig.tool) p.rig.tool.rotation.x = -p.rig.armR.rotation.x;
           p.rig.root.position.set(p.x, p.raft ? p.raft.position.y + 0.12 : heightAt(p.x, p.z) + p.bob + (p.depth ?? 0), p.z);
@@ -2480,7 +3224,12 @@ export function createVillage(container: HTMLElement): Village {
     update,
     pulse() {
       flash = 1;
-      if (shownEra >= 2 && neoBuilt) emit(chaffMat, SHEAF_STACK.x, heightAt(SHEAF_STACK.x, SHEAF_STACK.z) + 1.1, SHEAF_STACK.z, 5, 1.2, 0.06);
+      if (shownEra >= 3 && bronzeBuilt) {
+        // Hornear pan: sale una bocanada del horno de la fundición
+        const f = FURNACES[0];
+        emit(sparkMat, f.x, heightAt(f.x, f.z) + 1.6, f.z, 5, 1.6, 0.04, 1.5, false);
+        furnaceHeat[0] = 1;
+      } else if (shownEra >= 2 && neoBuilt) emit(chaffMat, SHEAF_STACK.x, heightAt(SHEAF_STACK.x, SHEAF_STACK.z) + 1.1, SHEAF_STACK.z, 5, 1.2, 0.06);
       else emit(berryBurstMat, FOOD_PILE.x, 0.8, FOOD_PILE.z, 4, 1.2, 0.08);
     },
     celebrate() {

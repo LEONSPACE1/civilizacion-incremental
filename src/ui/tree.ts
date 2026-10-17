@@ -1,6 +1,7 @@
 import { BUILDING_BY_ID, BUILDING_DEFS, ERA_BY_N, ERA_DEFS, GOALS, RESOURCE_DEFS, UPGRADE_DEFS, requirementProgress, type UpgradeDef } from '../game/content';
 import { canAfford, upgradeAvailable } from '../game/logic';
 import { formatNumber } from '../game/format';
+import { BUILDING_CAP } from '../game/balance';
 import { RESOURCES, type BuildingId, type Cost, type GameState } from '../game/state';
 import { BUILDING_ICONS, ERA_ICONS, ICONS, UPGRADE_ICONS, type IconId } from './icons';
 
@@ -114,17 +115,23 @@ export function createUpgradeTree(options: TreeOptions) {
     delete detail.dataset.html;
   }
 
+  const ROOT_SUB: Record<number, string> = { 1: 'El origen de tu tribu', 2: 'Tu tribu se asienta', 3: 'El poder del metal' };
+  const ROOT_TEXT: Record<number, string> = {
+    1: 'Desde este fuego crece todo lo demás.',
+    2: 'La aldea del Neolítico: campos, rebaños y casas de barro.',
+    3: 'La aldea de la Edad del Bronce: hornos de fundición, bueyes, minas de cobre y casas de piedra.',
+  };
   function describe(n: TreeNode, s: GameState): { state: NodeState; icon: IconId; label: string; sub: string } {
     const ref = n.ref;
     switch (ref.kind) {
       case 'root':
-        return { state: 'owned', icon: ERA_ICONS[era].root, label: `Era ${era} · ${ERA_BY_N[era].name}`, sub: era === 1 ? 'El origen de tu tribu' : 'Tu tribu se asienta' };
+        return { state: 'owned', icon: ERA_ICONS[era].root, label: `Era ${era} · ${ERA_BY_N[era].name}`, sub: ROOT_SUB[era] ?? '' };
       case 'tribe':
         return { state: 'owned', icon: 'person', label: 'Toda la tribu', sub: 'Mejoras generales' };
       case 'building': {
         const def = BUILDING_BY_ID[ref.id];
         if (!def.unlocked(s)) return { state: 'locked', icon: BUILDING_ICONS[ref.id], label: '???', sub: 'Oficio por descubrir' };
-        return { state: 'owned', icon: BUILDING_ICONS[ref.id], label: def.name, sub: `${s.buildings[ref.id]} en la tribu` };
+        return { state: 'owned', icon: BUILDING_ICONS[ref.id], label: def.name, sub: `${s.buildings[ref.id]} de ${BUILDING_CAP} en la tribu` };
       }
       case 'upgrade': {
         const icon = UPGRADE_ICONS[ref.def.id] ?? 'fire';
@@ -146,9 +153,7 @@ export function createUpgradeTree(options: TreeOptions) {
     const ref = n.ref;
     let title = d.label, text = '', extra = '', button = '';
     if (ref.kind === 'root') {
-      text = era === 1
-        ? 'Desde este fuego crece todo lo demás. Cada rama es un oficio y debajo están sus mejoras.'
-        : 'La aldea del Neolítico: campos, rebaños y casas de barro. Cada rama es un oficio y debajo están sus mejoras.';
+      text = `${ROOT_TEXT[era] ?? ''} Cada rama es un oficio y debajo están sus mejoras.`;
     }
     else if (ref.kind === 'tribe') text = 'Mejoras que ayudan a toda la tribu a la vez, no a un solo oficio.';
     else if (ref.kind === 'building') {
@@ -156,7 +161,7 @@ export function createUpgradeTree(options: TreeOptions) {
       if (d.state === 'locked') {
         title = 'Oficio por descubrir';
         text = `Se desbloquea: ${def.unlockHint.toLowerCase()}.`;
-      } else text = `${def.description} Produce ${resourceName(def.produces)}.`;
+      } else text = `${def.description} Produce ${resourceName(def.produces)}. Admite hasta ${BUILDING_CAP} personas.`;
     } else if (ref.kind === 'upgrade') {
       if (d.state === 'locked') {
         title = 'Mejora por descubrir';
