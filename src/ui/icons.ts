@@ -52,6 +52,21 @@ export const ICONS = {
   sledgeThresh: svg('<path d="M4 20h36l4 8H8z" stroke="none"/><path d="M10 30l2 4M18 30l2 4M26 30l2 4M34 30l2 4" fill="none" stroke-width="2.5"/>' + '<path d="M8 40c4-2 8 2 12 0s8 2 12 0 8 2 12 0" fill="none" stroke-width="2.5" opacity=".7"/>'),
   timber: svg(line('M10 44V12M38 44V12', 4.5) + line('M6 12h36', 5) + '<path d="M16 44l4-10 6 4 6-6 2 12z" stroke="none" opacity=".7"/>'),
   skyDisk: svg('<circle cx="24" cy="24" r="19" fill="none" stroke-width="3"/><circle cx="17" cy="19" r="5" stroke="none"/><path d="M32 15a8 8 0 1 0 2 12 6 6 0 1 1-2-12z" stroke="none"/><path d="M9 31c3 5 7 8 12 9" fill="none" stroke-width="3"/><circle cx="26" cy="32" r="1.6" stroke="none"/><circle cx="14" cy="28" r="1.6" stroke="none"/><circle cx="24" cy="11" r="1.6" stroke="none"/><circle cx="35" cy="34" r="1.6" stroke="none"/>'),
+  // Era 4: Antigüedad
+  anvil: svg('<path d="M4 14h30c0 6 5 9 10 9v3c-6 0-10 2-12 5H18c-2-4-6-7-12-7z" stroke="none"/><path d="M16 31h16l4 11H12z" stroke="none" opacity=".75"/>' + line('M38 4l-4 6M43 9l-6 3', 2.5)),
+  olive: svg(line('M8 40C16 30 26 18 42 8', 3) + '<path d="M18 30c-8 1-12-3-12-8 7-1 12 2 12 8zM28 20c-1-8 3-12 8-13 1 7-2 12-8 13z" stroke="none" opacity=".75"/><ellipse cx="25" cy="34" rx="6" ry="8" stroke="none"/><ellipse cx="36" cy="26" rx="5" ry="7" stroke="none"/>'),
+  saw: svg('<path d="M4 18h34l-2 12H4z" stroke="none"/><path d="M4 30l3 5 3-5 3 5 3-5 3 5 3-5 3 5 3-5 3 5 3-5" fill="none" stroke-width="2.5"/>' + '<path d="M38 14h7v20h-7z" stroke="none" opacity=".75"/>'),
+  column: svg('<path d="M8 6h32v6H8zM6 40h36v6H6z" stroke="none"/><path d="M12 12h24v28H12z" stroke="none" opacity=".75"/>' + '<path d="M18 14v24M24 14v24M30 14v24" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/>'),
+  amphora: svg('<path d="M19 4h10v6c7 4 11 12 9 21-2 7-7 11-14 15-7-4-12-8-14-15-2-9 2-17 9-21z" stroke="none"/>' + line('M19 10c-6 0-8 5-6 10M29 10c6 0 8 5 6 10', 3) + '<path d="M13 24h22" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2.5"/>'),
+  ironOre: svg('<path d="M6 42l5-16 11-6 9 7 9-5 3 20z" stroke="none" opacity=".75"/><path d="M14 32l5-3 3 4-4 3zM28 36l4-4 4 3-3 4z" stroke="none"/>' + line('M30 4v16', 3.5) + '<path d="M22 6c5-3 11-3 16 0-5 2-11 2-16 0z" stroke="none"/>'),
+  waterMill: svg('<circle cx="22" cy="24" r="15" fill="none" stroke-width="3.5"/><circle cx="22" cy="24" r="3.5" stroke="none"/>' + line('M22 9v30M7 24h30M11 13l22 22M33 13L11 35', 2.4) + '<path d="M30 40c4-2 6 1 9 0s4-2 7 0" fill="none" stroke-width="3"/>'),
+  ironBar: svg('<path d="M6 30l8-12h28l-8 12z" stroke="none" opacity=".75"/><path d="M6 30h28v8H6zM34 30l8-12v8l-8 12z" stroke="none"/>'),
+  coin: svg('<circle cx="20" cy="22" r="14" stroke="none"/><circle cx="20" cy="22" r="9.5" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/><path d="M17 17c3-2 7 0 6 3s-5 2-5 5 4 4 6 2" fill="none" stroke="#000" stroke-opacity=".4" stroke-width="2.4"/><circle cx="33" cy="34" r="10" stroke="none" opacity=".7"/>'),
+  screw: svg('<path d="M8 40L38 10" fill="none" stroke-width="10" opacity=".45"/>' + line('M10 32l6 6M16 26l6 6M22 20l6 6M28 14l6 6', 3.5) + '<path d="M2 44c4-2 8 2 12 0" fill="none" stroke-width="2.5"/>'),
+  crane: svg(line('M10 44L22 6l14 30', 3.5) + line('M22 6l18 4', 3) + line('M40 10v18', 2) + '<path d="M34 28h12v8H34z" stroke="none"/><circle cx="12" cy="38" r="5" fill="none" stroke-width="3"/>'),
+  aqueduct: svg('<path d="M2 8h44v8H2z" stroke="none"/><path d="M2 16h44v28h-6V28a6 6 0 0 0-12 0v16h-8V28a6 6 0 0 0-12 0v16H2z" stroke="none" opacity=".8"/>'),
+  castle: svg('<path d="M4 44V14h6v5h5v-5h6v5h6v-5h6v5h5v-5h6v30z" stroke="none"/><path d="M19 44V33a5 5 0 0 1 10 0v11z" fill="#000" fill-opacity=".4" stroke="none"/><path d="M24 14V2l9 3-9 3" stroke-width="2" fill="currentColor"/>'),
+  temple: svg('<path d="M24 3L4 14h40z" stroke="none"/><path d="M4 16h40v4H4zM3 40h42v6H3z" stroke="none"/><path d="M8 21h5v19H8zM17 21h5v19h-5zM26 21h5v19h-5zM35 21h5v19h-5z" stroke="none" opacity=".75"/>'),
   close: svg(line('M12 12l24 24M36 12L12 36', 4.5)),
   chevron: svg(line('M18 12l12 12-12 12', 5)),
 };
@@ -62,6 +77,7 @@ export const BUILDING_ICONS: Record<string, IconId> = {
   gatherer: 'berry', woodcutter: 'axe', hunter: 'spear', feller: 'tree', fisher: 'fish', rafter: 'raft',
   quarrier: 'hammer', farmer: 'wheat', forester: 'sapling', herder: 'sheep', carpenter: 'adze', miner: 'pick',
   smelter: 'furnace', mason: 'chisel', plowman: 'plough', charcoaler: 'charcoal', copperMiner: 'ore',
+  blacksmith: 'anvil', oliveGrower: 'olive', sawyer: 'saw', marbler: 'column', bronzesmith: 'amphora', ironMiner: 'ironOre',
 };
 export const UPGRADE_ICONS: Record<string, IconId> = {
   fire: 'fire',
@@ -89,11 +105,21 @@ export const UPGRADE_ICONS: Record<string, IconId> = {
   kilns: 'charcoal',
   chisels: 'chisel',
   'sky-disk': 'skyDisk',
+  'water-mill': 'waterMill',
+  tongs: 'anvil',
+  coins: 'coin',
+  'archimedes-screw': 'screw',
+  'olive-press': 'olive',
+  crane: 'crane',
+  'iron-saw': 'saw',
+  'lost-wax': 'amphora',
+  aqueduct: 'aqueduct',
 };
 /** Icono del botón de recolectar y de la meta de cada era. */
 export const ERA_ICONS: Record<number, { gather: IconId; goal: IconId; root: IconId }> = {
   1: { gather: 'berry', goal: 'sprout', root: 'fire' },
   2: { gather: 'wheat', goal: 'copper', root: 'hut' },
   3: { gather: 'bread', goal: 'tablet', root: 'furnace' },
+  4: { gather: 'olive', goal: 'castle', root: 'temple' },
 };
-export const RESOURCE_ICONS: Record<string, IconId> = { food: 'berry', wood: 'log', stone: 'stone', metal: 'ingot' };
+export const RESOURCE_ICONS: Record<string, IconId> = { food: 'berry', wood: 'log', stone: 'stone', metal: 'ingot', iron: 'ironBar' };

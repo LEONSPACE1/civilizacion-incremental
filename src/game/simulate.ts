@@ -47,7 +47,7 @@ export interface SimOptions {
   onSecond?: (t: number, s: GameState) => void;
 }
 
-let bias: Record<ResourceId, number> = { food: 1, wood: 1, stone: 1, metal: 1 };
+let bias: Record<ResourceId, number> = { food: 1, wood: 1, stone: 1, metal: 1, iron: 1 };
 const value = (c: Cost) => RESOURCES.reduce((sum, r) => sum + (c[r] ?? 0) * bias[r], 0);
 
 /** Un jugador razonable: compra mejoras en cuanto puede y, si no, el edificio más rentable. */
@@ -99,16 +99,23 @@ export function simulateEra3(options: SimOptions = {}): SimResult {
   return simulateEra(s, { earlyClickSeconds: 0, ...options });
 }
 
+/** La era 4 sigue a la era 3 del mismo jugador. */
+export function simulateEra4(options: SimOptions = {}): SimResult {
+  const s = simulateEra3(options).state;
+  advanceEra(s);
+  return simulateEra(s, { earlyClickSeconds: 0, ...options });
+}
+
 /** Juega la era en la que está la partida hasta pagar su meta. */
 export function simulateEra(s: GameState, options: SimOptions = {}): SimResult {
   const { earlyClicksPerSecond = 3, earlyClickSeconds = 180, maxSeconds = 4 * 3600 } = options;
-  bias = { food: 1, wood: 1, stone: 1, metal: 1, ...options.bias };
+  bias = { food: 1, wood: 1, stone: 1, metal: 1, iron: 1, ...options.bias };
   const events: SimEvent[] = [];
   let lastBuy = 0;
   let longestWait = 0;
   let longestWaitBefore = '';
   let pendingClicks = 0;
-  const blockedBy: Record<ResourceId, number> = { food: 0, wood: 0, stone: 0, metal: 0 };
+  const blockedBy: Record<ResourceId, number> = { food: 0, wood: 0, stone: 0, metal: 0, iron: 0 };
   for (let t = 0; t < maxSeconds; t++) {
     pendingClicks += t < earlyClickSeconds ? earlyClicksPerSecond : 0.2;
     for (; pendingClicks >= 1; pendingClicks--) gather(s);

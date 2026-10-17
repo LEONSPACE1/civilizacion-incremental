@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <!-- Motivos de la Antigüedad, muy tenues: una greca, columnas, un ánfora, una rama de olivo,
+       una corona de laurel, una moneda con la lechuza y un templo -->
+  <g opacity=".13" fill="none" stroke="#2f5d8f" stroke-linecap="square" stroke-linejoin="miter">
+    <!-- Greca (meandro) arriba y abajo -->
+    <path stroke-width="4" d="M0 20h20v20h-12v-10h6M30 40V20h20v20h-12v-10h6M60 40V20h20v20h-12v-10h6M90 40V20h20v20h-12v-10h6M120 40V20h20v20h-12v-10h6M150 40V20h20v20h-12v-10h6M180 40V20h20v20h-12v-10h6M210 40V20h20v20h-12v-10h6"/>
+    <path stroke-width="4" d="M400 610V590h20v20h-12v-10h6M430 610V590h20v20h-12v-10h6M460 610V590h20v20h-12v-10h6M490 610V590h20v20h-12v-10h6M520 610V590h20v20h-12v-10h6M550 610V590h20v20h-12v-10h6M580 610V590h20v20h-12v-10h6M610 610V590h20v20h-12v-10h6"/>
+
+    <!-- Templo con frontón -->
+    <g transform="translate(470 150)" stroke-width="4" stroke-linecap="round">
+      <path d="M-90-20L0-70 90-20z"/>
+      <path d="M-96-20h192M-96-12h192M-100 80h200M-104 90h208"/>
+      <path d="M-78-12v92M-48-12v92M-18-12v92M18-12v92M48-12v92M78-12v92"/>
+    </g>
+
+    <!-- Ánfora -->
+    <g transform="translate(120 330)" stroke-width="4" stroke-linecap="round">
+      <path d="M-12-80h24v14c22 12 30 38 24 66-5 24-18 40-36 54-18-14-31-30-36-54-6-28 2-54 24-66z"/>
+      <path d="M-12-66c-22 0-26 18-18 34M12-66c22 0 26 18 18 34M-28 0h56M-24 18h48"/>
+    </g>
+
+    <!-- Rama de olivo -->
+    <g transform="translate(320 360) rotate(-25)" stroke-width="3.5" stroke-linecap="round">
+      <path d="M-90 0C-40-6 30-6 90 0"/>
+      <path d="M-60-2c-10-14-26-16-36-12 8 12 22 16 36 12zM-30-4c-6-16-20-22-32-20 6 14 18 20 32 20zM0-4c-4-16-16-24-28-24 4 14 14 22 28 24zM30-3c-2-16-12-26-24-28 2 14 10 24 24 28z"/>
+      <path d="M-46 2c-6 14-20 20-32 18 6-12 18-18 32-18zM-14 3c-4 16-16 24-28 24 4-14 14-22 28-24zM16 3c-2 16-12 26-24 28 2-14 10-24 24-28z"/>
+      <ellipse cx="54" cy="12" rx="8" ry="11" fill="#2f5d8f" fill-opacity=".5"/><ellipse cx="72" cy="-12" rx="7" ry="10" fill="#2f5d8f" fill-opacity=".5"/>
+    </g>
+
+    <!-- Corona de laurel -->
+    <g transform="translate(150 520)" stroke-width="3.5" stroke-linecap="round">
+      <path d="M-10 50C-60 40-70-20-40-50M10 50C60 40 70-20 40-50"/>
+      <path d="M-52 26c-14-2-20 6-20 6 10 6 18 4 20-6zM-62-4c-12-6-20 0-20 0 8 10 16 10 20 0zM-56-32c-10-8-20-4-20-4 6 10 14 12 20 4zM52 26c14-2 20 6 20 6-10 6-18 4-20-6zM62-4c12-6 20 0 20 0-8 10-16 10-20 0zM56-32c10-8 20-4 20-4-6 10-14 12-20 4z"/>
+    </g>
+
+    <!-- Moneda con la lechuza -->
+    <g transform="translate(470 420)" stroke-width="4" stroke-linecap="round">
+      <circle r="56"/><circle r="46" stroke-width="2"/>
+      <path d="M-18-24c6-8 30-8 36 0 6 14 4 34-4 48h-28c-8-14-10-34-4-48z"/>
+      <circle cx="-9" cy="-14" r="7"/><circle cx="9" cy="-14" r="7"/><path d="M0-6l-3 6h6z"/>
+    </g>
+
+    <!-- Columna jónica suelta -->
+    <g transform="translate(300 560)" stroke-width="4" stroke-linecap="round">
+      <path d="M-30-60c-10 0-14 10-6 14M30-60c10 0 14 10 6 14M-34-60h68M-20-50v100M-8-50v100M8-50v100M20-50v100M-28 50h56"/>
+    </g>
+  </g>
+</svg>

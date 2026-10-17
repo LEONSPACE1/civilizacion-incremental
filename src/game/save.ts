@@ -40,6 +40,7 @@ export function deserialize(text: string): GameState | null {
   for (const b of BUILDINGS) state.buildings[b] = Math.min(BUILDING_CAP, Math.floor(num(buildings[b]) ?? 0));
   if (Array.isArray(data.upgrades)) state.upgrades = data.upgrades.filter((u): u is string => typeof u === 'string' && u in UPGRADE_BY_ID);
   state.goalReached = data.goalReached === true;
+  state.awaySince = num(data.awaySince) ?? null;
   // Las partidas de la versión 2 no guardaban la era: todas eran del Paleolítico.
   state.era = Math.min(LAST_ERA, Math.max(1, Math.floor(num(data.era) ?? 1)));
   state.version = SAVE_VERSION;

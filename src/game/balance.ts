@@ -5,5 +5,6 @@ export const MILESTONES = [10, 25, 50];
 // Tope de personas por oficio. Coincide con el último hito: al llegar, el oficio está completo
 // y el avance pasa a las mejoras y a los oficios de la era siguiente.
 export const BUILDING_CAP = 50;
-// El progreso fuera de línea se limita para que una ausencia larga no rompa el balance.
-export const MAX_OFFLINE_SECONDS = 8 * 60 * 60;
+// Fuera del juego (pestaña oculta o cerrada) la tribu solo trabaja los primeros 10 minutos:
+// así jugar activo siempre compensa más que dejar la partida abierta o volver horas después.
+export const MAX_OFFLINE_SECONDS = 10 * 60;
