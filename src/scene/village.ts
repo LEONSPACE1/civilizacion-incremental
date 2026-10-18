@@ -17,21 +17,26 @@ import { DEFAULT_FPS, DEFAULT_QUALITY, frameIntervals, pixelRatioFor, QUALITY_PR
 
 const POND = new THREE.Vector2(11, -7);
 const POND_R = 5.2;
+// En el Neolítico la charca crece hasta ser un lago para las balsas.
+const LAKE = new THREE.Vector2(12.5, -8);
+const LAKE_R = 7.5;
 const MAX_SHOWN: Record<BuildingId, number> = {
   gatherer: 10, woodcutter: 10, hunter: 8, feller: 8, fisher: 6, rafter: 4,
   quarrier: 4, farmer: 6, forester: 4, herder: 3, carpenter: 4, miner: 3,
   smelter: 4, mason: 4, plowman: 3, charcoaler: 4, copperMiner: 4,
   blacksmith: 4, oliveGrower: 4, sawyer: 3, marbler: 4, bronzesmith: 3, ironMiner: 4,
   merchant: 4, miller: 3, ranger: 3, bricklayer: 4, bellfounder: 3, armorer: 3, goldMiner: 4,
+  printer: 4, vintner: 4, shipwright: 4, sculptor: 3, clockmaker: 3, gunsmith: 3, banker: 3, bookbinder: 4,
 };
 // Radio del claro de la aldea en cada era: más allá empieza el bosque. Al pasar de era se talan
 // los árboles que quedan dentro y la cámara se aleja para que se note el crecimiento.
-const CLEARING: Record<number, number> = { 1: 24, 2: 31, 3: 40, 4: 48, 5: 58 };
-const CAMERA: Record<number, { r: number; y: number }> = { 1: { r: 21, y: 9.5 }, 2: { r: 29, y: 15 }, 3: { r: 39, y: 23 }, 4: { r: 47, y: 30 }, 5: { r: 58, y: 38 } };
-const FOG: Record<number, [number, number]> = { 1: [28, 85], 2: [36, 110], 3: [48, 140], 4: [60, 175], 5: [74, 215] };
+const CLEARING: Record<number, number> = { 1: 24, 2: 31, 3: 40, 4: 48, 5: 58, 6: 72 };
+const CAMERA: Record<number, { r: number; y: number }> = { 1: { r: 21, y: 9.5 }, 2: { r: 29, y: 15 }, 3: { r: 39, y: 23 }, 4: { r: 47, y: 30 }, 5: { r: 58, y: 38 }, 6: { r: 70, y: 47 } };
+const FOG: Record<number, [number, number]> = { 1: [28, 85], 2: [36, 110], 3: [48, 140], 4: [60, 175], 5: [74, 215], 6: [88, 255] };
 const MAX_ZOOM = Math.max(...Object.keys(CAMERA).map(Number));
-// Las colinas empiezan detrás del claro de la última era.
-const HILLS_R = 64;
+// Las colinas empiezan detrás del claro de la última era. En el Renacimiento la ciudad llega más
+// lejos y las colinas se apartan (el terreno se rehace al cambiar de era, ver shapeTerrain()).
+let hillsR = 64;
 const JOB_ERA = Object.fromEntries(BUILDING_DEFS.map((b) => [b.id, b.era])) as Record<BuildingId, number>;
 // Las viviendas de cada era crecen con sus propios oficios. En el Paleolítico cuentan solo los
 // que viven junto al fuego.
@@ -41,6 +46,7 @@ const BUILDINGS_OF: Record<number, BuildingId[]> = {
   3: BUILDING_DEFS.filter((b) => b.era === 3).map((b) => b.id),
   4: BUILDING_DEFS.filter((b) => b.era === 4).map((b) => b.id),
   5: BUILDING_DEFS.filter((b) => b.era === 5).map((b) => b.id),
+  6: BUILDING_DEFS.filter((b) => b.era === 6).map((b) => b.id),
 };
 // Pasillos de trabajo: hacia los arbustos y hacia la arboleda. Ahí no se levantan tiendas.
 const GATHER_ANGLE = -2.3;
@@ -66,11 +72,79 @@ const polar = (a: number, d: number) => ({ x: Math.cos(a) * d, z: Math.sin(a) * 
 const angDist = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 const lerpAngle = (a: number, b: number, k: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
+// ---------- Agua ----------
+// Paleolítico: una charca. Neolítico: un lago más grande para las balsas. Desde la Edad del Bronce
+// el lago se seca en un prado y un río rodea la ciudad por el oeste: en él navegan las balsas y,
+// en el Renacimiento, las carabelas del astillero. El terreno se rehace al cambiar (shapeTerrain()).
+let waterStage = 1;
+const RIVER_W = 3; // media anchura del agua
+const RIVER_CTRL = [[-130, -75], [-85, -48], [-55, -20], [-38, 2], [-37, 17], [-43, 28], [-62, 37], [-90, 47], [-130, 62]];
+/** Puntos del cauce (curva Catmull-Rom por los puntos de control) y distancia recorrida en cada uno. */
+const RIVER: { x: number; z: number }[] = [];
+for (let i = 0; i < RIVER_CTRL.length - 1; i++) {
+  const p0 = RIVER_CTRL[Math.max(0, i - 1)], p1 = RIVER_CTRL[i], p2 = RIVER_CTRL[i + 1], p3 = RIVER_CTRL[Math.min(RIVER_CTRL.length - 1, i + 2)];
+  for (let k = 0; k < 20; k++) {
+    const t = k / 20, t2 = t * t, t3 = t2 * t;
+    const c = (j: number) => 0.5 * (2 * p1[j] + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3);
+    RIVER.push({ x: c(0), z: c(1) });
+  }
+}
+RIVER.push({ x: RIVER_CTRL[RIVER_CTRL.length - 1][0], z: RIVER_CTRL[RIVER_CTRL.length - 1][1] });
+const RIVER_S = RIVER.map(() => 0);
+for (let k = 1; k < RIVER.length; k++) RIVER_S[k] = RIVER_S[k - 1] + Math.hypot(RIVER[k].x - RIVER[k - 1].x, RIVER[k].z - RIVER[k - 1].z);
+const RIVER_MAX_X = Math.max(...RIVER.map((p) => p.x));
+/** Punto del cauce más cercano: distancia, distancia recorrida a lo largo del río y lado. */
+function riverNear(x: number, z: number): { d: number; s: number; side: number } {
+  let best = Infinity, bs = 0, side = 1;
+  for (let k = 0; k < RIVER.length - 1; k++) {
+    const a = RIVER[k], b = RIVER[k + 1], ux = b.x - a.x, uz = b.z - a.z, len2 = ux * ux + uz * uz;
+    const t = Math.max(0, Math.min(1, ((x - a.x) * ux + (z - a.z) * uz) / len2));
+    const px = a.x + ux * t, pz = a.z + uz * t, d = Math.hypot(x - px, z - pz);
+    if (d < best) [best, bs, side] = [d, RIVER_S[k] + t * Math.sqrt(len2), Math.sign(ux * (z - a.z) - uz * (x - a.x)) || 1];
+  }
+  return { d: best, s: bs, side };
+}
+/** Distancia al centro del río (o una cota inferior si está claramente lejos). */
+function riverDist(x: number, z: number): number {
+  if (x > RIVER_MAX_X + 8) return x - RIVER_MAX_X;
+  return riverNear(x, z).d;
+}
+/** Punto del río a una distancia `s` de su nacimiento, con su dirección. */
+function riverAt(s: number): { x: number; z: number; tx: number; tz: number } {
+  let k = 0;
+  while (k < RIVER.length - 2 && RIVER_S[k + 1] < s) k++;
+  const a = RIVER[k], b = RIVER[k + 1], len = RIVER_S[k + 1] - RIVER_S[k], f = Math.max(0, Math.min(1, (s - RIVER_S[k]) / len));
+  return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, tx: (b.x - a.x) / len, tz: (b.z - a.z) / len };
+}
+/** Lado del río en el que está la ciudad (el del fuego central). */
+const TOWN_SIDE = riverNear(0, 0).side;
+/** Tramo del río más cercano a la ciudad: allí está el puente. */
+const RIVER_NEAR_S = riverNear(0, 0).s;
+/** Normal del río que apunta hacia la ciudad en el punto `s`. */
+function townNormal(s: number): { x: number; z: number } {
+  // El lado de un punto no cambia a lo largo del río: la normal izquierda (-tz, tx) es el lado +1.
+  const p = riverAt(s);
+  return { x: -p.tz * TOWN_SIDE, z: p.tx * TOWN_SIDE };
+}
+/** Punto a `off` del centro del río, hacia la ciudad (negativo: hacia la otra orilla). */
+const riverBank = (s: number, off: number) => {
+  const p = riverAt(s), n = townNormal(s);
+  return { x: p.x + n.x * off, z: p.z + n.z * off };
+};
+/** En qué lado del río queda un punto (1 = el de la ciudad). Antes de que haya río, todo es ciudad. */
+const sideOf = (x: number, z: number) => (waterStage < 3 || x > RIVER_MAX_X + 2 ? 1 : riverNear(x, z).side === TOWN_SIDE ? 1 : -1);
+/** ¿Hay agua en este punto? */
+function inWater(x: number, z: number, margin = 0): boolean {
+  if (waterStage === 1) return Math.hypot(x - POND.x, z - POND.y) < POND_R - 1.6 + margin;
+  if (waterStage === 2) return Math.hypot(x - LAKE.x, z - LAKE.y) < LAKE_R + margin;
+  return riverDist(x, z) < RIVER_W + margin;
+}
+
 function heightAt(x: number, z: number): number {
   const r = Math.hypot(x, z);
   let h = Math.sin(x * 0.21 + 1.3) * Math.cos(z * 0.17 + 0.4) * 1.4 + Math.sin((x + z) * 0.09) * 1.6 + Math.cos(x * 0.5 - z * 0.3) * 0.35;
   h *= THREE.MathUtils.smoothstep(r, 5, 15);
-  h += Math.max(0, r - HILLS_R) * 0.35;
+  h += Math.max(0, r - hillsR) * 0.35;
   // La colina de la mina de cobre
   const md = Math.hypot(x - COPPER_HILL.x, z - COPPER_HILL.z);
   if (md < 7) h += Math.cos((md / 7) * Math.PI * 0.5) ** 2 * 3.2;
@@ -82,8 +156,18 @@ function heightAt(x: number, z: number): number {
   if (cd < 13) h += 3.2 * (1 - THREE.MathUtils.smoothstep(cd, 8.5, 13));
   const gd = Math.hypot(x - GOLD_HILL.x, z - GOLD_HILL.z);
   if (gd < 10) h += Math.cos((gd / 10) * Math.PI * 0.5) ** 2 * 7;
-  const pd = Math.hypot(x - POND.x, z - POND.y);
-  if (pd < 5.5) h = Math.min(h, -0.6 + (pd / 5.5) * 0.6);
+  if (waterStage === 1) {
+    const pd = Math.hypot(x - POND.x, z - POND.y);
+    if (pd < 5.5) h = Math.min(h, -0.6 + (pd / 5.5) * 0.6);
+  } else if (waterStage === 2) {
+    // Orilla justo a la altura del agua (-0.25) en el borde del lago
+    const ld = Math.hypot(x - LAKE.x, z - LAKE.y);
+    if (ld < LAKE_R + 4) h = Math.min(h, ld < LAKE_R ? -0.25 - 0.75 * (1 - (ld / LAKE_R) ** 2) : -0.25 + (ld - LAKE_R) * 0.35);
+  } else if (x < RIVER_MAX_X + 16) {
+    // El cauce del río; fuera del claro cruza las colinas por un valle
+    const rd = riverDist(x, z);
+    if (rd < 40) h = Math.min(h, rd < RIVER_W ? -0.25 - 0.75 * (1 - (rd / RIVER_W) ** 2) : -0.25 + (rd - RIVER_W) * 0.4);
+  }
   return h;
 }
 
@@ -140,6 +224,19 @@ const CATHEDRAL = polar(1.85, 55);
 const LODGE = polar(2.75, 52.5);
 const GOLD_HILL = polar(2.3, 61.5);
 const GOLD_MOUTH = polar(2.3, 55.4);
+// Renacimiento: imprenta, viñedo, astillero en el río, escultores, torre del reloj, armero, banco y
+// encuadernadores, en el anillo que se gana a las antiguas colinas
+const PRINTING = polar(-1.35, 64);
+const VINEYARD = polar(0.02, 66.5);
+const CLOCKTOWER = polar(-0.66, 67.5);
+const SCULPTOR = polar(0.6, 65);
+const GUNSMITH = polar(-1.95, 63.5);
+const BANK = polar(1.12, 65);
+const BINDERY = polar(1.62, 64);
+const DOME = polar(-2.5, 63);
+// El astillero, aguas arriba del puente: de ahí salen las carabelas río arriba
+const SHIPYARD_S = RIVER_NEAR_S - 30;
+const SHIPYARD = riverBank(SHIPYARD_S, RIVER_W + 4);
 const AQUEDUCT_ANGLE = -2.65;
 const FOUNTAIN = polar(AQUEDUCT_ANGLE, 34.5);
 const CART = polar(-2.75, 13.5);
@@ -190,9 +287,76 @@ const blockers: { x: number; z: number; r: number }[] = [
   { ...LODGE, r: 5.5 },
   { ...GOLD_HILL, r: 8 },
   { ...GOLD_MOUTH, r: 3.5 },
+  { ...PRINTING, r: 5.5 },
+  { ...VINEYARD, r: 7 },
+  { ...CLOCKTOWER, r: 4.5 },
+  { ...SCULPTOR, r: 5 },
+  { ...GUNSMITH, r: 4.5 },
+  { ...BANK, r: 5.5 },
+  { ...BINDERY, r: 4.5 },
+  { ...DOME, r: 8.5 },
+  { ...SHIPYARD, r: 4.5 },
 ];
+/** Libre de lo construido, del lago del Neolítico y del río. */
 const isFree = (x: number, z: number, r: number) =>
-  Math.hypot(x - POND.x, z - POND.y) > POND_R + 0.8 + r && blockers.every((b) => Math.hypot(x - b.x, z - b.z) > b.r + r);
+  Math.hypot(x - LAKE.x, z - LAKE.y) > LAKE_R + 0.8 + r && riverDist(x, z) > RIVER_W + 2 + r && blockers.every((b) => Math.hypot(x - b.x, z - b.z) > b.r + r);
+
+/** Primer hueco libre de radio `r` cerca de un ángulo y una distancia. */
+function findFree(a: number, d: number, r: number): { x: number; z: number } | null {
+  for (const dd of [0, 2.5, -2.5, 5, -5, 7.5, -7.5]) {
+    for (let k = 0; k <= 24; k++) {
+      const p = polar(a + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.03, d + dd);
+      if (isFree(p.x, p.z, r)) return p;
+    }
+  }
+  return null;
+}
+
+// ---------- Plazas de la vida diaria ----------
+// A mediodía hay mercado o fiesta y al anochecer velada con hoguera: cada uno va a la plaza más
+// cercana de su lado del río. La primera es el fuego del campamento; el lago seco del Neolítico
+// se convierte en un prado de fiestas y cada era abre plazas nuevas en los barrios de fuera.
+interface Plaza { x: number; z: number; era: number; pit: boolean }
+const PLAZA_R = 6.2;
+const PLAZAS: Plaza[] = [{ x: 0, z: 0, era: 1, pit: false }, { x: LAKE.x, z: LAKE.y, era: 3, pit: true }];
+for (const [era, a, d] of [[4, -2.25, 33], [4, 0.55, 33], [5, -2.0, 45], [5, 1.0, 45], [6, -1.0, 59], [6, 0.85, 59], [6, -2.35, 52]]) {
+  const p = findFree(a, d, PLAZA_R);
+  if (!p) continue;
+  PLAZAS.push({ ...p, era, pit: true });
+  blockers.push({ ...p, r: PLAZA_R });
+}
+
+// ---------- Afueras: aldeas, campos, prados, arboledas, rebaños y monumentos ----------
+// Cada era llena el anillo que gana al bosque, para que las afueras no queden vacías. Se reservan
+// aquí, antes que las viviendas, y se construyen al llegar su era (ver buildOutskirts()).
+type OutType = 'hamlet' | 'field' | 'meadow' | 'grove' | 'monument' | 'herd';
+interface Outskirt { era: number; type: OutType; x: number; z: number; r: number; seed: number }
+const OUT_R: Record<OutType, number> = { hamlet: 4.4, field: 3.8, meadow: 3.2, grove: 3.4, monument: 2.4, herd: 3.6 };
+const OUT_MIX: Record<number, OutType[]> = {
+  2: ['grove', 'meadow', 'monument', 'field', 'grove', 'meadow', 'herd'],
+  3: ['hamlet', 'field', 'grove', 'meadow', 'monument', 'herd', 'field', 'grove', 'hamlet'],
+  4: ['hamlet', 'field', 'grove', 'meadow', 'monument', 'herd', 'hamlet', 'field', 'grove', 'meadow', 'monument'],
+  5: ['hamlet', 'field', 'grove', 'meadow', 'monument', 'herd', 'hamlet', 'field', 'grove', 'meadow', 'hamlet', 'field', 'monument'],
+  6: ['hamlet', 'field', 'grove', 'meadow', 'monument', 'herd', 'hamlet', 'field', 'grove', 'meadow', 'hamlet', 'field', 'monument', 'grove', 'herd', 'meadow', 'hamlet'],
+};
+const OUTSKIRTS: Outskirt[] = [];
+for (const era of [2, 3, 4, 5, 6]) {
+  const rnd = mulberry32(900 + era);
+  const inner = CLEARING[era - 1] + (era === 2 ? 1 : -2), outer = CLEARING[era] - 2.5;
+  const mix = OUT_MIX[era];
+  // Si un tipo no cabe en ningún sitio tras muchos intentos, se pasa al siguiente.
+  for (let tries = 0, k = 0; tries < 2000 && k < mix.length; tries++) {
+    const type = mix[k], r = OUT_R[type];
+    const a = rnd() * Math.PI * 2, d = inner + r + rnd() * Math.max(0, outer - inner - 2 * r);
+    const { x, z } = polar(a, d);
+    if (tries % 120 === 119) k++;
+    if (inCorridor(x, z, 0.25) || !isFree(x, z, r + 0.8)) continue;
+    OUTSKIRTS.push({ era, type, x, z, r, seed: Math.floor(rnd() * 1e9) });
+    blockers.push({ x, z, r });
+    k++;
+    tries = Math.ceil((tries + 1) / 120) * 120 - 1;
+  }
+}
 
 type Slot = { x: number; z: number; s: number; tone: number };
 /** Huecos para viviendas en anillos de dentro hacia fuera: las primeras quedan cerca del fuego. */
@@ -215,6 +379,8 @@ const HOUSE_SLOTS = dwellingSlots([9.4, 11.8, 14.2, 16.6, 19.2, 21.8], 26, 1.35,
 const VILLA_SLOTS = dwellingSlots([9.4, 11.8, 14.2, 16.6, 19.2, 21.8, 24.4, 27], 36, 1.35, false);
 // Casas con entramado de la Edad Media: llegan hasta el anillo de la Edad del Bronce
 const TIMBER_SLOTS = dwellingSlots([9.4, 11.8, 14.2, 16.6, 19.2, 21.8, 24.4, 27, 29.6, 32.2, 34.8], 48, 1.35, false);
+// Casas del Renacimiento: fachadas de colores con tejado de tejas, hasta la orilla del río
+const REN_SLOTS = dwellingSlots([9.4, 11.8, 14.2, 16.6, 19.2, 21.8, 24.4, 27, 29.6, 32.2, 34.8, 37.4, 40, 42.6], 64, 1.4, false);
 const TENT_SLOTS = dwellingSlots([6.2, 8, 9.8], 10, 1.45, true);
 const BUSHES = Array.from({ length: 8 }, (_, k) => polar(GATHER_ANGLE + (k - 3.5) * 0.15, 11 + (k % 2) * 1.4));
 const GROVE = Array.from({ length: MAX_SHOWN.woodcutter }, (_, k) => polar(WOOD_ANGLE + (k - 4.5) * 0.12, 11 + (k % 2) * 1.7));
@@ -262,6 +428,9 @@ interface Rig {
   heads: THREE.Mesh[];
   /** Cinturón, capa, sombrero y demás: una sola malla con colores por vértice. */
   outfit?: THREE.Mesh;
+  /** Antorcha para andar de noche e instrumento para tocar en las fiestas (se crean al usarse). */
+  torch?: THREE.Object3D;
+  instrument?: THREE.Object3D;
   kind: BuildingId;
   i: number;
   era: number;
@@ -288,6 +457,36 @@ interface Person {
   target?: number;
   /** Profundidad dentro del pozo de sílex (negativa = bajo tierra). */
   depth?: number;
+  /** Fuera del trabajo: de fiesta, de camino a casa o durmiendo (ver la vida diaria). */
+  life?: Life;
+}
+
+/** Lo que se hace en una plaza: bailar, sentarse junto al fuego, tocar, charlar o comerciar. */
+type Act = 'dance' | 'sit' | 'music' | 'chat' | 'trade';
+interface Spot {
+  plaza: Plaza;
+  act: Act;
+  x: number;
+  z: number;
+  /** Hacia dónde mira: el fuego, el corro o la pareja con la que comercia. */
+  fx: number;
+  fz: number;
+  /** Ángulo y radio en el corro de baile, que gira. */
+  a: number;
+  r: number;
+  taken: Person | null;
+  /** La mercancía que pasa de mano en mano entre los dos de un trato. */
+  item?: THREE.Object3D;
+  partner?: Spot;
+}
+interface Life {
+  mode: 'toEvent' | 'event' | 'toHome' | 'home' | 'back';
+  spot?: Spot;
+  home?: { x: number; z: number };
+  /** Lo que hacía en su oficio, para retomarlo al volver. */
+  saved: { x: number; z: number; state: string; timer: number; heading: number; target?: number; carry: boolean };
+  best: number;
+  stuck: number;
 }
 
 interface Tree {
@@ -310,6 +509,8 @@ export interface Village {
   setPaused(paused: boolean): void;
   /** Nivel de calidad gráfica (1 = máximo rendimiento, 5 = máxima calidad) y tope de fps. */
   setGraphics(quality: QualityLevel, fps: FpsLimit): void;
+  /** Cuánta luz de día hay ahora: 0 de noche cerrada, 1 a pleno sol. */
+  daylight(): number;
   dispose(): void;
 }
 
@@ -325,7 +526,7 @@ export function createVillage(container: HTMLElement): Village {
   } catch {
     canvas.remove();
     container.classList.add('no-3d');
-    return { update() {}, pulse() {}, celebrate() {}, setPaused() {}, setGraphics() {}, dispose() {} };
+    return { update() {}, pulse() {}, celebrate() {}, setPaused() {}, setGraphics() {}, daylight: () => 1, dispose() {} };
   }
   renderer.setPixelRatio(pixelRatioFor(DEFAULT_QUALITY, window.devicePixelRatio));
   renderer.shadowMap.enabled = true;
@@ -374,7 +575,7 @@ export function createVillage(container: HTMLElement): Village {
   const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xe8e0ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true }));
   scene.add(stars);
   const moonMat = new THREE.MeshBasicMaterial({ color: 0xf3e9cc, fog: false, transparent: true });
-  add(new THREE.Mesh(new THREE.IcosahedronGeometry(7, 1), moonMat), -70, 60, -110, false);
+  const moon = add(new THREE.Mesh(new THREE.IcosahedronGeometry(7, 1), moonMat), -70, 60, -110, false);
   const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff1b8, fog: false, transparent: true, opacity: 0 });
   const sun = add(new THREE.Mesh(new THREE.IcosahedronGeometry(9, 2), sunMat), 90, 80, 60, false);
   const sunHalo = new THREE.Mesh(new THREE.IcosahedronGeometry(15, 2), new THREE.MeshBasicMaterial({ color: 0xffe7a0, fog: false, transparent: true, opacity: 0, depthWrite: false }));
@@ -415,51 +616,108 @@ export function createVillage(container: HTMLElement): Village {
   fireLight.shadow.autoUpdate = false;
   scene.add(fireLight);
 
-  // Terreno
-  let tg: THREE.BufferGeometry = new THREE.PlaneGeometry(250, 250, 112, 112);
-  tg.rotateX(-Math.PI / 2);
-  const tp = tg.attributes.position;
-  for (let i = 0; i < tp.count; i++) tp.setY(i, heightAt(tp.getX(i), tp.getZ(i)) + (rng() - 0.5) * 0.25);
-  tg = tg.toNonIndexed();
-  const tpos = tg.attributes.position, tcol: number[] = [];
+  // Terreno. Se rehace (alturas y colores) cuando el agua cambia o las colinas se apartan: el ruido
+  // sale de un hash de la posición, así el relieve y los tonos son los mismos cada vez.
+  const hash = (x: number, z: number) => {
+    const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const tBase = new THREE.PlaneGeometry(300, 300, 128, 128);
+  tBase.rotateX(-Math.PI / 2);
+  const tIndex = tBase.index!.array, gridPos = tBase.attributes.position;
+  const gridH = new Float32Array(gridPos.count);
+  const tg = tBase.toNonIndexed();
+  const tpos = tg.attributes.position as THREE.BufferAttribute;
+  tg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(tpos.count * 3), 3));
   const grassA = new THREE.Color(0x3f5a2e), grassB = new THREE.Color(0x4d6b35), dirt = new THREE.Color(0x6b4a32);
-  const rockC = new THREE.Color(0x5e5868), sand = new THREE.Color(0x8a7a52);
-  for (let i = 0; i < tpos.count; i += 3) {
-    const cx = (tpos.getX(i) + tpos.getX(i + 1) + tpos.getX(i + 2)) / 3;
-    const cz = (tpos.getZ(i) + tpos.getZ(i + 1) + tpos.getZ(i + 2)) / 3;
-    const cy = (tpos.getY(i) + tpos.getY(i + 1) + tpos.getY(i + 2)) / 3;
-    const r = Math.hypot(cx, cz), pd = Math.hypot(cx - POND.x, cz - POND.y);
-    let c = grassA.clone().lerp(grassB, rng());
-    if (r < 4.5 + rng()) c = dirt.clone().offsetHSL(0, 0, (rng() - 0.5) * 0.04);
-    else if (pd < 6.5) c = sand.clone().offsetHSL(0, 0, (rng() - 0.5) * 0.05);
-    else if (cy > 4 && Math.hypot(cx - COPPER_HILL.x, cz - COPPER_HILL.z) > 7) c = rockC.clone().lerp(new THREE.Color(0x8a8296), Math.min(1, (cy - 4) / 8));
-    // Senderos pisados hacia los arbustos y la arboleda
-    else if (r < 11 && (angDist(Math.atan2(cz, cx), GATHER_ANGLE) < 0.12 || angDist(Math.atan2(cz, cx), WOOD_ANGLE) < 0.12)) c = c.lerp(dirt, 0.55);
-    for (let k = 0; k < 3; k++) tcol.push(c.r, c.g, c.b);
+  const rockC = new THREE.Color(0x5e5868), rockHi = new THREE.Color(0x8a8296), sand = new THREE.Color(0x8a7a52), tc = new THREE.Color();
+  const shore = (x: number, z: number) =>
+    waterStage === 1 ? Math.hypot(x - POND.x, z - POND.y) < 6.5
+    : waterStage === 2 ? Math.hypot(x - LAKE.x, z - LAKE.y) < LAKE_R + 1.4
+    : riverDist(x, z) < RIVER_W + 1.5;
+  function shapeTerrain(): void {
+    for (let i = 0; i < gridPos.count; i++) {
+      const x = gridPos.getX(i), z = gridPos.getZ(i);
+      gridH[i] = heightAt(x, z) + (hash(x, z) - 0.5) * 0.25;
+    }
+    for (let j = 0; j < tpos.count; j++) tpos.setY(j, gridH[tIndex[j]]);
+    const col = tg.attributes.color as THREE.BufferAttribute;
+    for (let i = 0; i < tpos.count; i += 3) {
+      const cx = (tpos.getX(i) + tpos.getX(i + 1) + tpos.getX(i + 2)) / 3;
+      const cz = (tpos.getZ(i) + tpos.getZ(i + 1) + tpos.getZ(i + 2)) / 3;
+      const cy = (tpos.getY(i) + tpos.getY(i + 1) + tpos.getY(i + 2)) / 3;
+      const r = Math.hypot(cx, cz), n = hash(cx * 1.7, cz * 1.3), n2 = hash(cz + 3.1, cx);
+      tc.copy(grassA).lerp(grassB, n);
+      if (r < 4.5 + n2) tc.copy(dirt).offsetHSL(0, 0, (n - 0.5) * 0.04);
+      else if (shore(cx, cz)) tc.copy(sand).offsetHSL(0, 0, (n - 0.5) * 0.05);
+      else if (cy > 4 && Math.hypot(cx - COPPER_HILL.x, cz - COPPER_HILL.z) > 7) tc.copy(rockC).lerp(rockHi, Math.min(1, (cy - 4) / 8));
+      // Senderos pisados hacia los arbustos y la arboleda
+      else if (r < 11 && (angDist(Math.atan2(cz, cx), GATHER_ANGLE) < 0.12 || angDist(Math.atan2(cz, cx), WOOD_ANGLE) < 0.12)) tc.lerp(dirt, 0.55);
+      for (let k = 0; k < 3; k++) col.setXYZ(i + k, tc.r, tc.g, tc.b);
+    }
+    col.needsUpdate = true;
+    tpos.needsUpdate = true;
+    tg.computeVertexNormals();
+    tg.computeBoundingSphere();
   }
-  tg.setAttribute('color', new THREE.Float32BufferAttribute(tcol, 3));
-  tg.computeVertexNormals();
+  shapeTerrain();
   const terrain = new THREE.Mesh(tg, mat(0xffffff, { vertexColors: true }));
   terrain.receiveShadow = true;
   scene.add(terrain);
 
-  // Lago con oleaje suave
+  // Charca del Paleolítico con oleaje suave; en el Neolítico es la misma malla, más grande
+  const waterMat = mat(0x2e5a8a, { roughness: 0.15, metalness: 0.2, transparent: true, opacity: 0.88 });
   const pondGeo = new THREE.RingGeometry(0.01, POND_R, 20, 5);
   const pondBase = Float32Array.from(pondGeo.attributes.position.array);
-  const pond = new THREE.Mesh(pondGeo, mat(0x2e5a8a, { roughness: 0.15, metalness: 0.2, transparent: true, opacity: 0.88 }));
+  const pond = new THREE.Mesh(pondGeo, waterMat);
   pond.rotation.x = -Math.PI / 2;
   add(pond, POND.x, -0.25, POND.y, false);
   pond.receiveShadow = true;
+  // El río: una cinta de agua a lo largo del cauce, con cuatro hileras de vértices para el oleaje
+  const RIVER_LANES = [-1, -0.35, 0.35, 1];
+  const riverGeo = new THREE.BufferGeometry();
+  {
+    const v: number[] = [], idx: number[] = [];
+    RIVER.forEach((p, k) => {
+      const a = RIVER[Math.max(0, k - 1)], b = RIVER[Math.min(RIVER.length - 1, k + 1)];
+      const len = Math.hypot(b.x - a.x, b.z - a.z), nx = -(b.z - a.z) / len, nz = (b.x - a.x) / len;
+      for (const j of RIVER_LANES) v.push(p.x + nx * (RIVER_W + 0.8) * j, 0, p.z + nz * (RIVER_W + 0.8) * j);
+      if (k) for (let j = 0; j < 3; j++) {
+        const q = k * 4 + j, o = q - 4;
+        idx.push(o, o + 1, q, o + 1, q + 1, q);
+      }
+    });
+    riverGeo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    riverGeo.setIndex(idx);
+    riverGeo.computeVertexNormals();
+  }
+  const river = new THREE.Mesh(riverGeo, waterMat);
+  river.position.y = -0.25;
+  river.receiveShadow = true;
+  river.visible = false;
+  river.frustumCulled = false;
+  scene.add(river);
 
-  // Montañas (de noche se ven violetas; de día, azuladas por la distancia)
-  const mountainMat = mat(0x4a4066);
+  // Montañas (de noche se ven violetas; de día, azuladas por la distancia). Por donde sale el río no
+  // hay montaña, y en el Renacimiento se apartan con las colinas.
+  const mountainMat = mat(0x4a4066), snowMat = mat(0xe9e6f4);
+  const mountains: { peak: THREE.Mesh; snow: THREE.Mesh; a: number; d: number }[] = [];
+  const riverMouths = [Math.atan2(RIVER[0].z, RIVER[0].x), Math.atan2(RIVER[RIVER.length - 1].z, RIVER[RIVER.length - 1].x)];
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2 + rng() * 0.2, d = 92 + rng() * 16, r = 14 + rng() * 12, h = 22 + rng() * 22, rot = rng() * Math.PI;
-    const mx = Math.cos(a) * d, mz = Math.sin(a) * d;
-    add(new THREE.Mesh(new THREE.ConeGeometry(r, h, 5), mountainMat), mx, h / 2 - 1, mz, false).rotation.y = rot;
+    if (riverMouths.some((m) => angDist(a, m) < 0.3)) continue;
+    const peak = add(new THREE.Mesh(new THREE.ConeGeometry(r, h, 5), mountainMat), 0, h / 2 - 1, 0, false);
+    peak.rotation.y = rot;
     const sh = h * 0.3;
-    add(new THREE.Mesh(new THREE.ConeGeometry(r * 0.3 + 0.05, sh, 5), mat(0xe9e6f4)), mx, h - 1 - sh / 2 + 0.02, mz, false).rotation.y = rot;
+    const snow = add(new THREE.Mesh(new THREE.ConeGeometry(r * 0.3 + 0.05, sh, 5), snowMat), 0, h - 1 - sh / 2 + 0.02, 0, false);
+    snow.rotation.y = rot;
+    mountains.push({ peak, snow, a, d });
   }
+  function placeMountains(): void {
+    const k = hillsR > 64 ? 1.22 : 1;
+    for (const m of mountains) for (const o of [m.peak, m.snow]) o.position.set(Math.cos(m.a) * m.d * k, o.position.y, Math.sin(m.a) * m.d * k);
+  }
+  placeMountains();
 
   // Bosque que se mece con el viento
   const pineMats = [mat(0x2a5034), mat(0x2f5a3a), mat(0x356640)], trunkMat = mat(0x5a3a22);
@@ -488,14 +746,14 @@ export function createVillage(container: HTMLElement): Village {
   };
   // Bosque: un anillo cerca del fuego (solo en el Paleolítico) y uno ancho alrededor del claro.
   // Cada pino recuerda en qué era se tala: entonces se encoge y deja un tocón.
-  interface Pine { obj: THREE.Group; clearedIn: number; k: number }
+  interface Pine { obj: THREE.Group; clearedIn: number; k: number; river: boolean }
   const pines: Pine[] = [];
   const stumpMat = mat(0x8a6440);
   for (let i = 0, near = 0, far = 0; i < 1800 && far < 290; i++) {
     const isNear = near < 14;
     const a = rng() * Math.PI * 2, d = isNear ? 9 + rng() * 4 : 25 + Math.pow(rng(), 0.85) * 48;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
-    if (Math.hypot(x - POND.x, z - POND.y) < 7.5) continue;
+    if (Math.hypot(x - LAKE.x, z - LAKE.y) < LAKE_R + 1.5) continue;
     if (isNear && (inCorridor(x, z, 0.75) || !isFree(x, z, 1.2))) continue;
     // Los pinos del bosque lejano no crecen encima de lo que se construirá en su era.
     if (!isNear && blockers.some((b) => Math.hypot(x - b.x, z - b.z) < b.r + 0.6)) continue;
@@ -505,12 +763,50 @@ export function createVillage(container: HTMLElement): Village {
     // Fuera del alcance de la sombra del sol no hace falta que proyecten sombra
     if (d > 44) g.traverse((c) => (c.castShadow = false));
     swaying.push({ obj: g, phase: rng() * 6, amp: 0.02 + rng() * 0.025 });
-    const clearedIn = isNear ? 2 : d < CLEARING[2] ? 2 : d < CLEARING[3] ? 3 : d < CLEARING[4] ? 4 : d < CLEARING[5] ? 5 : 99;
-    pines.push({ obj: g, clearedIn, k: 1 });
+    const clearedIn = isNear ? 2 : d < CLEARING[2] ? 2 : d < CLEARING[3] ? 3 : d < CLEARING[4] ? 4 : d < CLEARING[5] ? 5 : d < CLEARING[6] ? 6 : 99;
+    // Los que quedan en el cauce del río desaparecen del todo cuando llega el agua
+    pines.push({ obj: g, clearedIn, k: 1, river: riverDist(x, z) < RIVER_W + 2.5 });
   }
+  // Bosque lejano, más allá del claro del Renacimiento: muchos pinos dibujados de una vez
+  // (instancias), sin viento ni sombra, sobre las colinas.
+  const outerCrownGeo = (() => {
+    const cones = [0, 1, 2].map((k) => {
+      const c = new THREE.ConeGeometry(1.15 - k * 0.28, 1.4, 7);
+      const col = pineColors[k];
+      c.translate(0, 1.2 + k * 0.75, 0);
+      c.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: c.attributes.position.count }, () => [col.r, col.g, col.b]).flat(), 3));
+      return c;
+    });
+    return mergeGeometries(cones)!;
+  })();
+  const outerTrunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 0.9, 5).translate(0, 0.45, 0);
+  const outerSpots: { x: number; z: number; s: number; rot: number }[] = [];
+  for (let i = 0; i < 4000 && outerSpots.length < 520; i++) {
+    const a = rng() * Math.PI * 2, d = 74 + rng() * 52, x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (riverDist(x, z) < RIVER_W + 5 || Math.abs(x) > 148 || Math.abs(z) > 148) continue;
+    outerSpots.push({ x, z, s: 0.9 + rng() * 1.1, rot: rng() * 6 });
+  }
+  const outerCrowns = new THREE.InstancedMesh(outerCrownGeo, pineCrownMat, outerSpots.length);
+  const outerTrunks = new THREE.InstancedMesh(outerTrunkGeo, trunkMat, outerSpots.length);
+  outerSpots.forEach((_, k) => outerCrowns.setColorAt(k, new THREE.Color().setHSL(0.3, 0.2, 0.85 + ((k * 37) % 10) / 60)));
+  scene.add(outerCrowns, outerTrunks);
+  /** Coloca los pinos lejanos sobre el terreno (se llama cada vez que el terreno cambia). */
+  function placeOuterForest(): void {
+    outerSpots.forEach((o, k) => {
+      tmpM4.compose(tmpV3.set(o.x, heightAt(o.x, o.z) - 0.1, o.z), tmpQ4.setFromAxisAngle(tmpUp, o.rot), tmpS3.setScalar(o.s));
+      outerCrowns.setMatrixAt(k, tmpM4);
+      outerTrunks.setMatrixAt(k, tmpM4);
+    });
+    outerCrowns.instanceMatrix.needsUpdate = outerTrunks.instanceMatrix.needsUpdate = true;
+    outerCrowns.computeBoundingSphere();
+    outerTrunks.computeBoundingSphere();
+  }
+  const tmpM4 = new THREE.Matrix4(), tmpV3 = new THREE.Vector3(), tmpQ4 = new THREE.Quaternion(), tmpS3 = new THREE.Vector3(), tmpUp = new THREE.Vector3(0, 1, 0);
+  placeOuterForest();
   /** Tala (o vuelve a plantar) los pinos del claro de la era. Con `animate`, se encogen poco a poco. */
   function clearForest(era: number, animate: boolean): void {
     for (const p of pines) {
+      p.obj.visible = !(p.river && era >= 3);
       const target = era >= p.clearedIn ? 0 : 1;
       if (!animate) setPine(p, target);
       p.obj.userData.target = target;
@@ -618,6 +914,12 @@ export function createVillage(container: HTMLElement): Village {
     solids.push({ obj, x: (solidBox.min.x + solidBox.max.x) / 2, z: (solidBox.min.z + solidBox.max.z) / 2, r });
   }
 
+  /** Vuelve a calcular el obstáculo de algo fijo que se ha movido de sitio. */
+  function moveSolid(obj: THREE.Object3D): void {
+    for (let k = solids.length - 1; k >= 0; k--) if (solids[k].obj === obj) solids.splice(k, 1);
+    addSolid(obj);
+  }
+
   const spawn = <T extends THREE.Object3D>(obj: T, scale = 1, dynamic = false): T => {
     obj.scale.setScalar(scale);
     if (!dynamic) addSolid(obj);
@@ -668,6 +970,18 @@ export function createVillage(container: HTMLElement): Village {
     m.userData.age = 0;
     m.userData.size = size;
   }
+
+  /** Un punto al azar en el agua de la era, cerca de la ciudad. */
+  function waterSpot(): { x: number; z: number } {
+    if (waterStage === 3) return riverBank(RIVER_NEAR_S + (fx() - 0.5) * 56, (fx() - 0.5) * RIVER_W * 1.3);
+    const c = waterStage === 2 ? LAKE : POND, a = fx() * Math.PI * 2, d = fx() * (waterStage === 2 ? LAKE_R - 1.8 : 3.4);
+    return { x: c.x + Math.cos(a) * d, z: c.y + Math.sin(a) * d };
+  }
+  /** Las redes tendidas en la orilla: junto a la charca, al lago o al río, según la era. */
+  const netsSpot = () =>
+    waterStage === 3 ? riverBank(RIVER_NEAR_S + 3.4, RIVER_W + 1.9)
+    : waterStage === 2 ? { x: LAKE.x + Math.cos(2.2) * (LAKE_R + 1.5), z: LAKE.y + Math.sin(2.2) * (LAKE_R + 1.5) }
+    : { x: POND.x - 5.8, z: POND.y + 2.5 };
 
   // Peces que saltan del lago
   const fishMat = mat(0x9fb8c8, { metalness: 0.3, roughness: 0.5 });
@@ -752,6 +1066,7 @@ export function createVillage(container: HTMLElement): Village {
       const a = fromAngle + (fx() - 0.5) * 1.2, d = deerRing() + fx() * 3;
       if (angDist(a, Math.atan2(POND.y, POND.x)) < 0.55 || angDist(a, WOOD_ANGLE) < 0.75) continue;
       const p = polar(a, d);
+      if (inWater(p.x, p.z, 3) || sideOf(p.x, p.z) !== 1) continue;
       if (shownEra >= 2 && deerZones().some((z) => Math.hypot(p.x - z.x, p.z - z.z) < z.r + 0.8)) continue;
       return p;
     }
@@ -788,8 +1103,23 @@ export function createVillage(container: HTMLElement): Village {
   // ---------- Elementos que dependen del progreso ----------
   const hideA = mat(0xa06e44), hideB = mat(0x8a5c38), pole = mat(0x4e3420), dark = mat(0x1a100b);
   const tents: THREE.Object3D[] = [];
+  // Ventanas: de día oscuras; al caer la noche se encienden con la luz cálida de dentro.
+  const windowMat = new THREE.MeshBasicMaterial({ color: 0x2a2018 });
+  const windowDark = new THREE.Color(0x2a2018), windowLit = new THREE.Color(0xffc46a);
+  /** Una ventana pegada a la pared, con el frente hacia +z girado rotY. */
+  function pane(g: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, rotY = 0): void {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.05), windowMat);
+    m.position.set(x, y, z);
+    m.rotation.y = rotY;
+    g.add(m);
+  }
+
   function makeTent(x: number, z: number, s: number, tone: number) {
     const g = new THREE.Group();
+    // La punta, tiznada de humo, deja ver de noche el fuego de dentro
+    const glow = new THREE.Mesh(new THREE.ConeGeometry(0.31 * s, 0.52 * s, 8), windowMat);
+    glow.position.y = 2.76 * s;
+    g.add(glow);
     const cone = new THREE.Mesh(new THREE.ConeGeometry(1.7 * s, 3 * s, 8), tone ? hideB : hideA);
     cone.position.y = 1.5 * s;
     g.add(cone);
@@ -830,6 +1160,8 @@ export function createVillage(container: HTMLElement): Village {
     blacksmith: 0x5a4a44, oliveGrower: 0xe8e2d2, sawyer: 0x8a6a48, marbler: 0xd8d4ca, bronzesmith: 0x7a3a5a, ironMiner: 0x6a4a3a,
     // Edad Media: paños teñidos de colores vivos
     merchant: 0x7a2a3a, miller: 0xd8cfb8, ranger: 0x3e5a2e, bricklayer: 0x8a7a62, bellfounder: 0x5a4a6a, armorer: 0x4a4a52, goldMiner: 0x6a5232,
+    // Renacimiento: jubones de terciopelo y paño fino
+    printer: 0x2e3440, vintner: 0x6a2a4a, shipwright: 0x2f4f6e, sculptor: 0xcfc6b4, clockmaker: 0x5e4a2a, gunsmith: 0x3f4248, banker: 0x8a1a22, bookbinder: 0x4a5a32,
   };
   const wheatMat = mat(0xe2b64a), flintMat = mat(0x2e2a30, { roughness: 0.6 }), blockMat = mat(0xa8a3a0), clayMat = mat(0xb5683a);
   const wrapMat = mat(0x3d2a1c), stoneMat = mat(0x9a9aa8), berryMat = mat(0xc23a3a);
@@ -837,7 +1169,9 @@ export function createVillage(container: HTMLElement): Village {
   const ironMat = mat(0x4a4c55, { metalness: 0.6, roughness: 0.4 }), ironOreMat = mat(0x9a3e2a), marbleMat = mat(0xf2efe6);
   const plankMat = mat(0xc89a62), oliveMat = mat(0x4a5a2a);
   const MEDIEVAL_GEAR = new Set<BuildingId>(['merchant', 'miller', 'ranger', 'bricklayer', 'bellfounder', 'armorer', 'goldMiner']);
-  const goldOreHeadMat = mat(0xd8a828);
+  const goldOreHeadMat = mat(0xd8a828), goldMatP = mat(0xd8b040, { metalness: 0.6, roughness: 0.35 });
+  const RENAISSANCE_GEAR = new Set<BuildingId>(['printer', 'vintner', 'shipwright', 'sculptor', 'clockmaker', 'gunsmith', 'banker', 'bookbinder']);
+  const BOOK_COLORS = [0x7a2a24, 0x2a4a6a, 0x3a5a2a, 0x6a4a2a];
   function makePerson(kind: BuildingId, i: number): Rig {
     const root = new THREE.Group();
     const skin = mat(skins[i % skins.length]);
@@ -1189,6 +1523,55 @@ export function createVillage(container: HTMLElement): Village {
         torso.add(load);
       }
       rig.carry = load;
+    } else if (RENAISSANCE_GEAR.has(kind)) {
+      // Renacimiento: mazo, azuela o cuchillo de vendimiar en la mano, y lo que llevan a su sitio
+      if (kind === 'shipwright' || kind === 'sculptor' || kind === 'gunsmith' || kind === 'vintner') {
+        const tool = new THREE.Group();
+        tool.position.set(0, -0.48, 0.02);
+        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, kind === 'vintner' ? 0.2 : 0.55, 4), pole);
+        handle.rotation.x = Math.PI / 2;
+        handle.position.z = kind === 'vintner' ? 0.1 : 0.24;
+        const head = th(new THREE.Mesh(kind === 'vintner' ? new THREE.BoxGeometry(0.03, 0.08, 0.22) : new THREE.BoxGeometry(0.13, 0.13, 0.2), ironMat));
+        head.position.set(0, 0, kind === 'vintner' ? 0.3 : 0.52);
+        tool.add(handle, head);
+        armR.add(tool);
+      }
+      let load: THREE.Object3D;
+      if (kind === 'vintner') {
+        // Cesto de uvas a la espalda
+        const basket = new THREE.Group();
+        basket.position.set(0, 0.35, -0.3);
+        basket.add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.34, 7), mat(0x9a7a42)));
+        load = new THREE.Group();
+        for (let k = 0; k < 6; k++) {
+          const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 0), mat(0x5a2a5a));
+          b.position.set((k % 3 - 1) * 0.1, 0.18 + (k > 2 ? 0.06 : 0), (Math.floor(k / 3) - 0.5) * 0.1);
+          load.add(b);
+        }
+        basket.add(load);
+        torso.add(basket);
+      } else {
+        if (kind === 'bookbinder' || kind === 'printer') {
+          load = new THREE.Group();
+          for (let k = 0; k < 3; k++) {
+            const b = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.26), mat(kind === 'printer' ? 0xf2ecdc : BOOK_COLORS[k]));
+            b.position.y = k * 0.09;
+            b.rotation.y = (k - 1) * 0.15;
+            load.add(b);
+          }
+        } else
+          load =
+            kind === 'shipwright' ? new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 1.1), mat(0x9a6a3a))
+            : kind === 'sculptor' ? new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.3, 0.3), marbleMat)
+            : kind === 'clockmaker' ? new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.05, 4, 10), goldMatP)
+            : kind === 'gunsmith' ? new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.1, 5), ironMat)
+            : new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.26, 0.28), mat(0x6a3a22));
+        if (kind === 'gunsmith') load.rotation.x = Math.PI / 2;
+        if (kind === 'clockmaker') load.rotation.x = Math.PI / 2;
+        load.position.set(0, 0.72, -0.2);
+        torso.add(load);
+      }
+      rig.carry = load;
     } else if (kind === 'plowman') {
       // Vara para guiar a los bueyes, siempre en alto
       const goad = new THREE.Group();
@@ -1228,7 +1611,7 @@ export function createVillage(container: HTMLElement): Village {
   const outfitMat = mat(0xffffff, { vertexColors: true });
   const mix = (a: number, b: number, k: number) => new THREE.Color(a).lerp(new THREE.Color(b), k).getHex();
   const DYES = [0x8a2a24, 0x3a5a8a, 0x4a6a3a, 0xa8803a, 0x6a3a6a, 0x2f5a5a];
-  const FIELD_JOBS = new Set<BuildingId>(['gatherer', 'farmer', 'forester', 'herder', 'plowman', 'oliveGrower', 'fisher', 'rafter']);
+  const FIELD_JOBS = new Set<BuildingId>(['gatherer', 'farmer', 'forester', 'herder', 'plowman', 'oliveGrower', 'fisher', 'rafter', 'vintner']);
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
   /** Pieza de ropa ya colocada y teñida, lista para unir con las demás. */
   function piece(geo: THREE.BufferGeometry, color: number, at: [number, number, number], rot: [number, number, number] = [0, 0, 0], scale: [number, number, number] = [1, 1, 1]) {
@@ -1281,6 +1664,24 @@ export function createVillage(container: HTMLElement): Village {
         parts.push(piece(new THREE.CylinderGeometry(0.36, 0.36, 0.03, 10), 0xc8a868, [0, 0.9, 0]));
         parts.push(piece(new THREE.SphereGeometry(0.2, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2), 0xb89858, [0, 0.9, 0]));
       }
+    } else if (era >= 6) {
+      // Renacimiento: jubón ceñido con mangas abullonadas, cuello de lechuguilla, calzas de color
+      // y, según quién, boina con pluma o sombrero de paja en el campo
+      body = base;
+      arms = clothMat(mix(base, 0x000000, 0.15));
+      legs = clothMat(DYES[(i + 3) % DYES.length]);
+      for (const sx of [-1, 1]) parts.push(piece(new THREE.IcosahedronGeometry(0.11, 1), dye, [sx * 0.27, 0.54, 0], [0, 0, 0], [1, 0.85, 1]));
+      parts.push(piece(new THREE.TorusGeometry(0.15, 0.05, 5, 12), 0xf2eee4, [0, 0.62, 0], [Math.PI / 2, 0, 0]));
+      parts.push(piece(new THREE.CylinderGeometry(0.305, 0.33, 0.14, 9, 1, true), dye, [0, 0.03, 0]));
+      parts.push(piece(new THREE.TorusGeometry(0.262, 0.028, 4, 10), 0x2a1a10, [0, 0.25, 0], [Math.PI / 2, 0, 0]));
+      if (hatted && FIELD_JOBS.has(kind)) {
+        parts.push(piece(new THREE.CylinderGeometry(0.36, 0.36, 0.03, 10), 0xd8b860, [0, 0.9, 0]));
+        parts.push(piece(new THREE.CylinderGeometry(0.15, 0.19, 0.14, 8), 0xc8a850, [0, 0.97, 0]));
+      } else if (hatted || i % 3 === 1) {
+        // Boina de terciopelo, algo ladeada, con una pluma
+        parts.push(piece(new THREE.CylinderGeometry(0.27, 0.25, 0.08, 10), i % 2 ? 0x2a2230 : 0x6a1a22, [0.03, 0.95, 0], [0, 0, 0.12]));
+        parts.push(piece(new THREE.ConeGeometry(0.03, 0.34, 4), 0xf2ecdc, [-0.16, 1.05, -0.06], [0.3, 0, 0.7]));
+      }
     } else {
       // Edad Media: sayo del color del oficio, capucha con esclavina de otro color, calzas, cinturón y zurrón
       body = base;
@@ -1329,9 +1730,35 @@ export function createVillage(container: HTMLElement): Village {
   };
   const hunterSeat = (i: number) => polar((i / MAX_SHOWN.hunter) * Math.PI * 2 + 0.3, 2.3 + (i % 2) * 0.35);
   const fisherSpot = (i: number) => {
+    if (waterStage === 3) {
+      // Repartidos por la orilla de la ciudad, a los dos lados del puente
+      const s = RIVER_NEAR_S + (i % 2 ? 1 : -1) * (7 + Math.floor(i / 2) * 5.5);
+      const st = riverBank(s, RIVER_W + 1.1), b = riverBank(s, RIVER_W - 1.8);
+      return { x: st.x, z: st.z, bob: new THREE.Vector3(b.x, -0.2, b.z) };
+    }
+    const c = waterStage === 2 ? LAKE : POND, R = waterStage === 2 ? LAKE_R + 0.5 : 5.6, B = waterStage === 2 ? LAKE_R - 2.6 : 3.2;
     const a = Math.PI * 0.75 + (i / MAX_SHOWN.fisher) * Math.PI * 1.1;
-    return { x: POND.x + Math.cos(a) * 5.6, z: POND.y + Math.sin(a) * 5.6, bob: new THREE.Vector3(POND.x + Math.cos(a) * 3.2, -0.2, POND.y + Math.sin(a) * 3.2) };
+    return { x: c.x + Math.cos(a) * R, z: c.y + Math.sin(a) * R, bob: new THREE.Vector3(c.x + Math.cos(a) * B, -0.2, c.y + Math.sin(a) * B) };
   };
+  /** Tramo del río por el que van y vienen las balsas, aguas abajo del puente. */
+  const RAFT_LO = RIVER_NEAR_S + 6, RAFT_HI = RIVER_NEAR_S + 34;
+  /** Coloca al pescador o al balsero en su sitio según el agua de la era (charca, lago o río). */
+  function placeOnWater(p: Person): void {
+    if (p.kind === 'fisher') {
+      const spot = fisherSpot(p.i);
+      [p.x, p.z, p.state, p.timer] = [spot.x, spot.z, 'wait', 3 + fx() * 8];
+      p.heading = Math.atan2(spot.bob.x - spot.x, spot.bob.z - spot.z);
+      p.bobberPos = spot.bob.clone();
+    } else if (p.kind === 'rafter') {
+      if (waterStage === 3) {
+        p.timer = RAFT_LO + ((p.i + 0.5) / MAX_SHOWN.rafter) * (RAFT_HI - RAFT_LO);
+        p.target = p.i % 2 ? -1 : 1;
+      } else p.timer = (p.i / MAX_SHOWN.rafter) * Math.PI * 2;
+      const at = raftAt(p);
+      [p.x, p.z] = [at.x, at.z];
+      p.raft?.position.set(p.x, -0.2, p.z);
+    }
+  }
 
   function createPerson(kind: BuildingId, i: number): Person {
     const rig = makePerson(kind, i);
@@ -1386,20 +1813,11 @@ export function createVillage(container: HTMLElement): Village {
       const start = furrow(i, 0);
       [p.x, p.z, p.state] = [start.x, start.z, 'plow'];
     } else if (kind === 'rafter') {
-      // Cada balsero navega en círculo por el lago con su carga de troncos.
-      p.timer = (i / MAX_SHOWN.rafter) * Math.PI * 2;
+      // Cada balsero navega con su carga de troncos: en círculo por el lago o río arriba y abajo.
       p.raft = makeRaft();
-      p.x = POND.x + Math.cos(p.timer) * raftRadius(i);
-      p.z = POND.y + Math.sin(p.timer) * raftRadius(i);
-      p.raft.position.set(p.x, -0.2, p.z);
+      placeOnWater(p);
     } else {
-      const spot = fisherSpot(i);
-      p.x = spot.x;
-      p.z = spot.z;
-      p.heading = Math.atan2(POND.x - spot.x, POND.y - spot.z);
-      p.state = 'wait';
-      p.timer = 3 + fx() * 8;
-      p.bobberPos = spot.bob.clone();
+      placeOnWater(p);
       const lineGeo = new THREE.BufferGeometry();
       lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
       p.line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0xe8dcc0, transparent: true, opacity: 0.7 }));
@@ -1415,6 +1833,7 @@ export function createVillage(container: HTMLElement): Village {
     return p;
   }
   function removePerson(p: Person): void {
+    if (p.life?.spot) p.life.spot.taken = null;
     scene.remove(p.rig.root);
     if (p.line) scene.remove(p.line);
     if (p.bobber) scene.remove(p.bobber);
@@ -1426,7 +1845,13 @@ export function createVillage(container: HTMLElement): Village {
     }
   }
 
-  const raftRadius = (i: number) => 1.5 + (i % 2) * 0.8;
+  const raftRadius = (i: number) => (waterStage === 2 ? 2.6 + (i % 2) * 2.2 : 1.5 + (i % 2) * 0.8);
+  /** Dónde está la balsa ahora: en su círculo del lago o en su carril del río. */
+  function raftAt(p: Person): { x: number; z: number } {
+    if (waterStage === 3) return riverBank(p.timer, (p.i % 2 ? 1 : -1) * 1.2);
+    const c = waterStage === 2 ? LAKE : POND, rad = raftRadius(p.i);
+    return { x: c.x + Math.cos(p.timer) * rad, z: c.y + Math.sin(p.timer) * rad };
+  }
   function makeRaft(): THREE.Group {
     const g = new THREE.Group();
     for (let k = 0; k < 5; k++) {
@@ -1463,12 +1888,21 @@ export function createVillage(container: HTMLElement): Village {
   const sailMat = mat(0xe8dcc0, { side: THREE.DoubleSide });
 
   function updateRafter(p: Person, dt: number, t: number): void {
-    const r = p.rig, rad = raftRadius(p.i), dir = p.i % 2 ? -1 : 1;
-    p.timer += (dt * 0.55 * dir) / rad;
-    const nx = POND.x + Math.cos(p.timer) * rad, nz = POND.y + Math.sin(p.timer) * rad;
-    p.heading = Math.atan2(nx - p.x, nz - p.z) || p.heading;
-    p.x = nx;
-    p.z = nz;
+    const r = p.rig;
+    if (waterStage === 3) {
+      // Río arriba y río abajo por su tramo; al llegar al final da la vuelta
+      p.target ??= 1;
+      p.timer += dt * 0.6 * p.target;
+      if (p.timer > RAFT_HI || p.timer < RAFT_LO) {
+        p.timer = THREE.MathUtils.clamp(p.timer, RAFT_LO, RAFT_HI);
+        p.target = -p.target;
+      }
+    } else p.timer += (dt * 0.55 * (p.i % 2 ? -1 : 1)) / raftRadius(p.i);
+    const at = raftAt(p);
+    const want = Math.atan2(at.x - p.x, at.z - p.z);
+    if (Math.hypot(at.x - p.x, at.z - p.z) > 1e-4) p.heading = lerpAngle(p.heading, want, Math.min(1, dt * 2.5));
+    p.x = at.x;
+    p.z = at.z;
     // Empuja con la pértiga: brazos adelante y atrás
     const push = Math.sin(t * 1.8 + p.phase);
     r.armR.rotation.x = -0.6 + push * 0.5;
@@ -1865,7 +2299,8 @@ export function createVillage(container: HTMLElement): Village {
       netMesh = new THREE.Mesh(netGeo, new THREE.MeshStandardMaterial({ color: 0xd9c9a0, wireframe: true }));
       netMesh.position.set(0.9, 1.45, 0);
       g.add(netMesh);
-      return add(g, POND.x - 5.8, 0, POND.y + 2.5);
+      const at = netsSpot();
+      return add(g, at.x, heightAt(at.x, at.z), at.z);
     },
     // Edad del Bronce
     wheel: () => {
@@ -2452,6 +2887,7 @@ export function createVillage(container: HTMLElement): Village {
     const frame = new THREE.Mesh(new THREE.BoxGeometry(0.75 * s, 1.0 * s, 0.1 * s), dark);
     frame.position.set(0, 0.52 * s, 1.3 * s);
     g.add(frame, door);
+    for (const a of [-1.1, 1.1, Math.PI]) pane(g, Math.sin(a) * 1.36 * s, 0.72 * s, Math.cos(a) * 1.36 * s, 0.3 * s, 0.28 * s, a);
     g.userData.door = door;
     g.userData.poles = poles;
     g.userData.phase = fx() * 6;
@@ -2959,7 +3395,7 @@ export function createVillage(container: HTMLElement): Village {
   const CHIMNEY = around(FORGE, 1.6, 1.6);
 
   /** Puesto y montón de cada artesano, con lo que mira mientras trabaja. */
-  const CRAFTERS = new Set<BuildingId>(['smelter', 'mason', 'blacksmith', 'bronzesmith', 'marbler', 'sawyer', 'merchant', 'miller', 'ranger', 'bricklayer', 'bellfounder', 'armorer']);
+  const CRAFTERS = new Set<BuildingId>(['smelter', 'mason', 'blacksmith', 'bronzesmith', 'marbler', 'sawyer', 'merchant', 'miller', 'ranger', 'bricklayer', 'bellfounder', 'armorer', 'printer', 'vintner', 'shipwright', 'sculptor', 'clockmaker', 'gunsmith', 'banker', 'bookbinder']);
   function craftSpot(kind: BuildingId, i: number): { stand: { x: number; z: number }; face: { x: number; z: number } } {
     if (kind === 'smelter') return furnaceStand(i);
     const at = (list: { x: number; z: number }[], u: number, v: number) => {
@@ -2976,12 +3412,22 @@ export function createVillage(container: HTMLElement): Village {
     if (kind === 'miller') return { stand: around(THRESH[i % 3], 0, -0.6), face: THRESH[i % 3] };
     if (kind === 'ranger') return { stand: around(OAKS[i % 4], 0, -1.05), face: OAKS[i % 4] };
     if (kind === 'bricklayer') return { stand: around(WALL_BLOCKS[i % 4], 0, -0.95), face: WALL_BLOCKS[i % 4] };
+    if (kind === 'printer') return at(PRESSES, 0.35, -0.95);
+    if (kind === 'vintner') return { stand: around(VINES[(i * 5) % VINES.length], 0, -0.55), face: VINES[(i * 5) % VINES.length] };
+    if (kind === 'shipwright') return HULL_SPOTS[i % HULL_SPOTS.length];
+    if (kind === 'sculptor') return { stand: around(STATUE_BLOCKS[i % 3], 0, -0.95), face: STATUE_BLOCKS[i % 3] };
+    if (kind === 'clockmaker') return { stand: around(CLOCK_BENCHES[i % 2], 0, -0.7), face: CLOCK_BENCHES[i % 2] };
+    if (kind === 'gunsmith') return at(GUN_ANVILS, 0.7, -0.75);
+    if (kind === 'banker') return { stand: around(COUNTERS[i % 2], 0, 0.7), face: COUNTERS[i % 2] };
+    if (kind === 'bookbinder') return { stand: around(BIND_TABLES[i % 2], (i >> 1) % 2 ? 0.35 : -0.35, -0.7), face: BIND_TABLES[i % 2] };
     return { stand: around(ROUGH_BLOCKS[i % 4], 0, -0.95), face: ROUGH_BLOCKS[i % 4] };
   }
   const craftPile = (kind: BuildingId) =>
     ({
       smelter: INGOT_PILE, blacksmith: IRON_PILE, bronzesmith: GOODS_PILE, marbler: MARBLE_PILE, sawyer: PLANK_PILE,
       armorer: ARMOR_PILE, bellfounder: BELL_PILE, merchant: CHESTS, miller: MILL_SACKS, ranger: OAK_LOGS, bricklayer: ASHLAR5_PILE,
+      printer: PAPER_PILE, vintner: WINE_PRESS, shipwright: TIMBER_PILE, sculptor: STATUE_PILE, clockmaker: GEAR_PILE, gunsmith: GUN_PILE,
+      banker: COIN_PILE, bookbinder: BOOK_PILE,
     } as Partial<Record<BuildingId, { x: number; z: number }>>)[kind] ?? ASHLAR_PILE;
 
   /** Una pieza colocada en el suelo de la escena, girada hacia la aldea, que cae del cielo al construirse. */
@@ -3825,6 +4271,10 @@ export function createVillage(container: HTMLElement): Village {
     leaf.position.y = -0.47 * s;
     door.add(leaf);
     g.add(door);
+    for (const sx of [-1, 1]) {
+      pane(g, sx * w * 0.3, h * 0.76, d / 2 + 0.08 * s, 0.34 * s, 0.32 * s);
+      pane(g, sx * w * 0.25, h * 0.7, -d / 2 - 0.08 * s, 0.34 * s, 0.32 * s);
+    }
     g.userData.door = door;
     g.userData.poles = poles;
     g.userData.phase = fx() * 6;
@@ -3868,6 +4318,10 @@ export function createVillage(container: HTMLElement): Village {
     curtain.position.y = -0.45 * s;
     door.add(curtain);
     g.add(door);
+    for (const sx of [-1, 1]) {
+      pane(g, sx * w * 0.34, h * 0.58, d / 2 + 0.02, 0.28 * s, 0.34 * s);
+      pane(g, sx * (w / 2 + 0.02), h * 0.58, 0, 0.3 * s, 0.34 * s, Math.PI / 2);
+    }
     g.userData.door = door;
     g.userData.poles = poles;
     g.userData.phase = fx() * 6;
@@ -3953,6 +4407,10 @@ export function createVillage(container: HTMLElement): Village {
     const frame = new THREE.Mesh(new THREE.BoxGeometry(0.75 * s, 1.0 * s, 0.08), timberMat);
     frame.position.set(0, 0.52 * s, d / 2 - 0.02);
     g.add(frame, door);
+    for (const sx of [-1, 1]) {
+      pane(g, sx * w * 0.32, h * 0.62, d / 2 + 0.02, 0.32 * s, 0.3 * s);
+      pane(g, sx * w * 0.25, h * 0.62, -d / 2 - 0.02, 0.32 * s, 0.3 * s);
+    }
     g.userData.door = door;
     g.userData.poles = poles;
     g.userData.phase = fx() * 6;
@@ -4019,6 +4477,29 @@ export function createVillage(container: HTMLElement): Village {
         const b = spot.face;
         emit(chipMat, b.x, heightAt(b.x, b.z) + 0.75, b.z, 1, 0.5, 0.04, 0.4);
       }
+    } else if (p.kind === 'printer') {
+      // Tira de la barra de la prensa con todo el cuerpo y la suelta
+      const pull = Math.max(0, Math.sin(t * 1.8 + p.phase));
+      r.torso.rotation.x = 0.1 - pull * 0.25;
+      r.armR.rotation.x = -1.5 + pull * 0.5;
+      r.armL.rotation.x = -1.2 + pull * 0.3;
+    } else if (p.kind === 'vintner') {
+      // Vendimia: agachado ante la cepa, corta racimos y los echa al cesto
+      const cut = Math.sin(t * 2.2 + p.phase);
+      r.torso.rotation.x = ease(r.torso.rotation.x, 0.55, dt);
+      r.armR.rotation.x = -1.3 + cut * 0.25;
+      r.armL.rotation.x = -1.1 - cut * 0.2;
+      if (fx() < dt * 0.8) {
+        const v = spot.face;
+        emit(grapeMat, v.x, heightAt(v.x, v.z) + 0.6, v.z, 1, 0.4, 0.06, 0.3);
+      }
+    } else if (p.kind === 'banker' || p.kind === 'clockmaker' || p.kind === 'bookbinder') {
+      // Trabajo de mesa: cuenta monedas, lima ruedas o cose pliegos con gestos cortos
+      const k = Math.sin(t * (p.kind === 'banker' ? 3.2 : 4.5) + p.phase);
+      r.torso.rotation.x = ease(r.torso.rotation.x, p.kind === 'banker' ? 0.2 : 0.4, dt);
+      r.armR.rotation.x = -1.1 + k * 0.15;
+      r.armL.rotation.x = -1.0 - k * 0.1;
+      r.armR.rotation.z = 0.12 + Math.max(0, k) * 0.2;
     } else if (p.kind === 'merchant') {
       // Regatea tras el puesto: señala la mercancía y abre los brazos
       const talk = Math.sin(t * 2.4 + p.phase);
@@ -4029,7 +4510,7 @@ export function createVillage(container: HTMLElement): Village {
     } else {
       // Cincel o tenazas en una mano, martillo en la otra: golpes cortos y rápidos.
       // El molinero trilla con el mayal y el guardabosques corta leña con el hacha.
-      const metal = p.kind === 'blacksmith' || p.kind === 'bronzesmith' || p.kind === 'armorer' || p.kind === 'bellfounder';
+      const metal = p.kind === 'blacksmith' || p.kind === 'bronzesmith' || p.kind === 'armorer' || p.kind === 'bellfounder' || p.kind === 'gunsmith';
       const ph = (t * (metal ? 2.2 : 2.6) + p.phase) % 1, raise = ph < 0.6 ? ph / 0.6 : (1 - ph) / 0.4;
       r.torso.rotation.x = 0.55;
       r.armL.rotation.x = -1.2;
@@ -4038,8 +4519,8 @@ export function createVillage(container: HTMLElement): Village {
         const b = spot.face;
         if (metal) emit(sparkMat, b.x, heightAt(b.x, b.z) + 0.85, b.z, 3, 1.3, 0.035, 1.2, false);
         else if (p.kind === 'miller') emit(chaffMat, b.x, heightAt(b.x, b.z) + 0.3, b.z, 3, 0.8, 0.04, 0.6);
-        else if (p.kind === 'ranger') emit(chipMat, b.x, heightAt(b.x, b.z) + 1, b.z, 2, 0.9, 0.05);
-        else emit(p.kind === 'marbler' ? marbleChipMat : stoneChipMat, b.x, heightAt(b.x, b.z) + 0.8, b.z, 2, 0.9, 0.05);
+        else if (p.kind === 'ranger' || p.kind === 'shipwright') emit(chipMat, b.x, heightAt(b.x, b.z) + 1, b.z, 2, 0.9, 0.05);
+        else emit(p.kind === 'marbler' || p.kind === 'sculptor' ? marbleChipMat : stoneChipMat, b.x, heightAt(b.x, b.z) + 0.8, b.z, 2, 0.9, 0.05);
       }
     }
     if (p.timer <= 0) {
@@ -4179,24 +4660,37 @@ export function createVillage(container: HTMLElement): Village {
 
   let flash = 0;
   let lastFood = -1, lastWood = -1;
-  // ---------- Día y noche: el Neolítico amanece ----------
-  let day = 0, dayTarget = 0, warm = 0, warmTarget = 0, med = 0, medTarget = 0, zoom = 1, zoomTarget = 1;
+  // ---------- Día y noche ----------
+  // Cada día dura seis minutos, en todas las eras: amanece, se trabaja, a mediodía hay mercado o
+  // fiesta, al atardecer velada junto al fuego y de noche todos duermen en casa (ver la vida diaria).
+  // El sol y la luna cruzan el cielo y la luz que proyecta las sombras los sigue. Con movimiento
+  // reducido el reloj se para a media mañana.
+  const CYCLE = 360;
+  let tod = 0.3, dayNum = 0;
+  const ramp = (t: number, a: number, b: number) => THREE.MathUtils.smoothstep(t, a, b);
+  /** Luz del día a la hora `t` (0 = noche, 1 = pleno día). */
+  const daylightAt = (t: number) => ramp(t, 0.12, 0.2) * (1 - ramp(t, 0.75, 0.83));
+  /** Tono dorado del amanecer y del atardecer. */
+  const glowAt = (t: number) => Math.max(1 - Math.min(1, Math.abs(t - 0.165) / 0.06), 1 - Math.min(1, Math.abs(t - 0.79) / 0.07));
+  let day = daylightAt(tod), warm = 0, warmTarget = 0, med = 0, medTarget = 0, zoom = 1, zoomTarget = 1;
   const nightFog = new THREE.Color(0x3a2a52), dayFog = new THREE.Color(0xcfdde6);
   const hemiSky = [new THREE.Color(0x8a7ac8), new THREE.Color(0xfff0d8)], hemiGround = [new THREE.Color(0x2a1a10), new THREE.Color(0x6e5a3a)];
   const lightCol = [new THREE.Color(0x9aa8ff), new THREE.Color(0xffefd0)];
   const mountainCol = [new THREE.Color(0x4a4066), new THREE.Color(0x7d8aa6)];
-  const lightPos = [new THREE.Vector3(-25, 35, -20), new THREE.Vector3(28, 42, 18)];
-  // Edad del Bronce: tarde dorada, con el sol más bajo y la luz cálida
+  // Edad del Bronce y atardeceres: luz dorada
   const skyGold = skyGradient(new THREE.Color(0x5a88c4), new THREE.Color(0xf0c890), new THREE.Color(0xffa45a));
   const goldFog = new THREE.Color(0xf0cfa0), goldLight = new THREE.Color(0xffcf94), goldSky = new THREE.Color(0xffe2b8);
-  const goldPos = new THREE.Vector3(40, 26, 30), goldMountain = new THREE.Color(0x9a8aa0);
-  const sunDay = new THREE.Vector3(90, 80, 60), sunGold = new THREE.Vector3(120, 34, 90);
-  // Antigüedad: mediodía claro del Mediterráneo, cielo azul intenso y luz blanca desde lo alto
+  const goldMountain = new THREE.Color(0x9a8aa0);
+  // Antigüedad: mediodía claro del Mediterráneo, cielo azul intenso y luz blanca
   const skyMed = skyGradient(new THREE.Color(0x2a66b8), new THREE.Color(0x7ab4e8), new THREE.Color(0xe6eef0));
   const medFog = new THREE.Color(0xd6e3ec), medLight = new THREE.Color(0xfff8ec), medSky = new THREE.Color(0xf2f6ff);
-  const medPos = new THREE.Vector3(18, 60, 28), medMountain = new THREE.Color(0x7d90b2), sunMed = new THREE.Vector3(55, 120, 45);
+  const medMountain = new THREE.Color(0x7d90b2);
+  const sunDir = new THREE.Vector3(), moonDir = new THREE.Vector3();
+  /** Ventanas encendidas de noche: un solo material para todas las casas. */
   function applyDay(k: number, w = warm, m = med): void {
-    const e = k * k * (3 - 2 * k), g = w * w * (3 - 2 * w), c = m * m * (3 - 2 * m);
+    const e = k * k * (3 - 2 * k);
+    // Los tonos de cada era son de día: de noche manda el azul de la luna.
+    const g = w * w * (3 - 2 * w), c = m * m * (3 - 2 * m), ge = g * e, ce = c * e;
     const colors = skyGeo.attributes.color as THREE.BufferAttribute;
     for (let i = 0; i < skyNight.length; i++) {
       const dayC = skyDay[i] + (skyGold[i] - skyDay[i]) * g;
@@ -4204,21 +4698,1467 @@ export function createVillage(container: HTMLElement): Village {
       (colors.array as Float32Array)[i] = skyNight[i] + (lit - skyNight[i]) * e;
     }
     colors.needsUpdate = true;
-    (scene.fog as THREE.Fog).color.copy(nightFog).lerp(dayFog, e).lerp(goldFog, g).lerp(medFog, c);
-    hemi.color.copy(hemiSky[0]).lerp(hemiSky[1], e).lerp(goldSky, g).lerp(medSky, c);
+    (scene.fog as THREE.Fog).color.copy(nightFog).lerp(dayFog, e).lerp(goldFog, ge).lerp(medFog, ce);
+    hemi.color.copy(hemiSky[0]).lerp(hemiSky[1], e).lerp(goldSky, ge).lerp(medSky, ce);
     hemi.groundColor.copy(hemiGround[0]).lerp(hemiGround[1], e);
-    hemi.intensity = 1.6 + e * 0.2 + c * 0.1;
-    moonLight.color.copy(lightCol[0]).lerp(lightCol[1], e).lerp(goldLight, g).lerp(medLight, c);
-    moonLight.intensity = 1.3 + e * 1.6 - g * 0.2 + c * 0.3;
-    moonLight.position.copy(lightPos[0]).lerp(lightPos[1], e).lerp(goldPos, g).lerp(medPos, c);
-    sun.position.copy(sunDay).lerp(sunGold, g).lerp(sunMed, c);
-    mountainMat.color.copy(mountainCol[0]).lerp(mountainCol[1], e).lerp(goldMountain, g).lerp(medMountain, c);
+    hemi.intensity = 1.6 + e * 0.2 + ce * 0.1;
+    moonLight.color.copy(lightCol[0]).lerp(lightCol[1], e).lerp(goldLight, ge).lerp(medLight, ce);
+    moonLight.intensity = 1.3 + e * 1.6 - ge * 0.2 + ce * 0.3;
+    // El sol sale por el este a media mañana del reloj y se pone al atardecer; de noche la luna
+    const sk = THREE.MathUtils.clamp((tod - 0.12) / 0.72, 0, 1) * Math.PI;
+    sunDir.set(Math.cos(sk) * 0.85, Math.sin(sk) * 0.8 + 0.12, 0.42).normalize();
+    const mk = THREE.MathUtils.clamp((((tod + 0.18) % 1) - 0.0) / 0.32, 0, 1) * Math.PI;
+    moonDir.set(-Math.cos(mk) * 0.7, Math.sin(mk) * 0.55 + 0.35, -0.55).normalize();
+    sun.position.copy(sunDir).multiplyScalar(150);
+    moon.position.copy(moonDir).multiplyScalar(150);
+    moonLight.position.copy(moonDir).lerp(sunDir, e).normalize().multiplyScalar(55);
+    if (moonLight.position.y < 14) moonLight.position.y = 14;
+    mountainMat.color.copy(mountainCol[0]).lerp(mountainCol[1], e).lerp(goldMountain, ge).lerp(medMountain, ce);
     moonMat.opacity = 1 - e;
     sunMat.opacity = e;
     (sunHalo.material as THREE.MeshBasicMaterial).opacity = e * 0.28;
     cloudMat.opacity = e * 0.92;
-    for (const c of clouds) c.visible = e > 0.01;
+    for (const cl of clouds) cl.visible = e > 0.01;
     stars.visible = e < 0.99;
+    windowMat.color.copy(windowDark).lerp(windowLit, 1 - e);
+  }
+
+  // ---------- Vida diaria ----------
+  // Además de su oficio, cada persona sigue el reloj del día. A mediodía hay mercado (un día) o
+  // fiesta (el siguiente) en la plaza más cercana de su lado del río; al atardecer, fiesta con baile
+  // o velada tranquila junto a la hoguera; de noche todos duermen en la casa más cercana y por la
+  // mañana vuelven a lo suyo. Nadie deja el trabajo a medias (dentro de un pozo o de una mina), y al
+  // volver retoma lo que hacía en el mismo sitio. Los balseros y los aradores siguen en lo suyo.
+  type Phase = 'work' | 'market' | 'festival' | 'party' | 'velada' | 'sleep';
+  const phaseAt = (t: number, d: number): Phase =>
+    t >= 0.44 && t < 0.53 ? (d % 2 ? 'festival' : 'market')
+    : t >= 0.79 && t < 0.91 ? (d % 2 ? 'velada' : 'party')
+    : t >= 0.91 || t < 0.13 ? 'sleep' : 'work';
+  const EVENING = new Set<Phase>(['party', 'velada']);
+  // Qué parte de la gente va a cada cosa
+  const TURNOUT: Partial<Record<Phase, number>> = { market: 0.4, festival: 0.65, party: 0.75, velada: 0.6 };
+  const STAYS = new Set<BuildingId>(['rafter', 'plowman']);
+  let phase: Phase = 'work', phaseSpots: Spot[] = [], schedTimer = 0;
+  const failed = new Set<Person>();
+  /** Número fijo entre 0 y 1 para cada persona y cada día (para repartir sin que cambie a cada rato). */
+  const personRnd = (p: Person, salt: number) => hash(p.i * 7.31 + p.kind.length * 3.7 + salt * 0.913, p.kind.charCodeAt(0) * 0.37 + salt * 1.71);
+
+  // Plazas: un círculo de tierra pisada o enlosado que sigue el terreno, con su hoguera en el centro
+  // (que se enciende en las fiestas de la noche) y, en el borde, algo propio de la era.
+  /** Disco plano que se adapta al relieve, para plazas, prados y campos. */
+  function groundDisc(x: number, z: number, r: number, color: number, lift = 0.2): THREE.Mesh {
+    // Con anillos intermedios, para que el disco siga el relieve y el suelo no lo atraviese
+    const g = new THREE.RingGeometry(0.001, r, 24, Math.max(3, Math.round(r / 1.2)));
+    g.rotateX(-Math.PI / 2);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(x + pos.getX(i), z + pos.getZ(i)) + lift);
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat(color));
+    m.position.set(x, 0, z);
+    m.receiveShadow = true;
+    return m;
+  }
+  /** Figura de mármol de pie, con el peso en una pierna y la mano en el hombro, a escala s. */
+  function makeStatue(m: THREE.Material, s: number): THREE.Group {
+    const g = new THREE.Group();
+    const part = (geo: THREE.BufferGeometry, x: number, y: number, z: number, rz = 0) => {
+      const o = new THREE.Mesh(geo, m);
+      o.position.set(x, y, z);
+      o.rotation.z = rz;
+      o.castShadow = true;
+      g.add(o);
+    };
+    part(new THREE.CylinderGeometry(0.08, 0.06, 0.62, 6), -0.1, 0.31, 0, 0.05);
+    part(new THREE.CylinderGeometry(0.08, 0.06, 0.62, 6), 0.11, 0.31, 0.04, -0.12);
+    part(new THREE.CylinderGeometry(0.2, 0.15, 0.62, 7), 0, 0.92, 0, 0.04);
+    part(new THREE.IcosahedronGeometry(0.13, 1), 0.02, 1.38, 0);
+    part(new THREE.CylinderGeometry(0.05, 0.045, 0.6, 5), 0.25, 0.92, 0, 0.12);
+    part(new THREE.CylinderGeometry(0.05, 0.045, 0.45, 5), -0.2, 1.1, 0.06, -2.4);
+    g.scale.setScalar(s);
+    return g;
+  }
+  /** Puertas de las casas de los caseríos de las afueras: también se duerme en ellas. */
+  const hamletDoors: { x: number; z: number; era: number }[] = [];
+  const plazaBuilt = new Set<Plaza>();
+  const bonfires = new Map<Plaza, THREE.Group>();
+  const bonfireFlames: THREE.Mesh[] = [];
+  const PAVING: Record<number, number> = { 3: 0x8a7a50, 4: 0xcfc6b2, 5: 0x9a8a72, 6: 0xb4785a };
+  function buildPlaza(pl: Plaza): void {
+    plazaBuilt.add(pl);
+    if (!pl.pit) return;
+    const disc = groundDisc(pl.x, pl.z, PLAZA_R - 0.3, PAVING[pl.era] ?? 0x8a7a50);
+    scene.add(disc);
+    // Hoguera: un anillo de piedras con leña; las llamas solo se ven en las fiestas de la noche
+    const pit = new THREE.Group();
+    const stones: THREE.BufferGeometry[] = [];
+    for (let k = 0; k < 9; k++) {
+      const a = (k / 9) * Math.PI * 2;
+      stones.push(new THREE.DodecahedronGeometry(0.2, 0).translate(Math.cos(a) * 0.75, 0.1, Math.sin(a) * 0.75));
+    }
+    for (let k = 0; k < 4; k++) stones.push(new THREE.CylinderGeometry(0.08, 0.1, 1, 5).rotateZ(0.95).rotateY((k / 4) * Math.PI * 2).translate(0, 0.35, 0));
+    pit.add(new THREE.Mesh(mergeGeometries(stones.map((g) => (g.index ? g.toNonIndexed() : g)))!, mat(0x6d6873)));
+    const fire = new THREE.Group();
+    for (const [r, h, c] of [[0.42, 1.2, 0xff6a1a], [0.26, 0.85, 0xffb040]] as const) {
+      const f = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.92 }));
+      f.position.y = 0.2 + h / 2;
+      f.userData.h = h;
+      fire.add(f);
+      bonfireFlames.push(f);
+    }
+    fire.visible = false;
+    pit.add(fire);
+    bonfires.set(pl, fire);
+    spawn(add(pit, pl.x, groundY(pl.x, pl.z, 0.8), pl.z));
+    // En el borde, mirando a la plaza: un mayo con cintas en el prado, una fuente en las plazas
+    // de la Antigüedad, una cruz de piedra en la Edad Media y una estatua en el Renacimiento.
+    const edge = polar(Math.atan2(-pl.z, -pl.x) + Math.PI * 0.75, PLAZA_R - 0.6);
+    const ex = pl.x + edge.x, ez = pl.z + edge.z;
+    const deco = new THREE.Group();
+    if (pl.era === 3) {
+      const pole2 = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 4.2, 6), mat(0xd8c8a0));
+      pole2.position.y = 2.1;
+      deco.add(pole2);
+      const wreath = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.08, 4, 10), oakLeafMat);
+      wreath.rotation.x = Math.PI / 2;
+      wreath.position.y = 4.1;
+      deco.add(wreath);
+      [0xc0392b, 0x2e6fb0, 0xe8b830, 0x3a8a4a].forEach((c, k) => {
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.6, 0.02), mat(c, { side: THREE.DoubleSide }));
+        const a = (k / 4) * Math.PI * 2;
+        rib.position.set(Math.cos(a) * 0.45, 2.8, Math.sin(a) * 0.45);
+        rib.rotation.set(Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3);
+        deco.add(rib);
+      });
+    } else if (pl.era === 4) {
+      const basin = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, 0.5, 10), marbleShadeMat);
+      basin.position.y = 0.25;
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 1.3, 8), marbleMat);
+      col.position.y = 0.9;
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.2, 0.25, 10), marbleMat);
+      bowl.position.y = 1.6;
+      const water = new THREE.Mesh(new THREE.CircleGeometry(0.8, 10), waterMat);
+      water.rotation.x = -Math.PI / 2;
+      water.position.y = 0.46;
+      deco.add(basin, col, bowl, water);
+    } else if (pl.era === 5) {
+      const step = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, 1.2), castleStoneMat);
+      step.position.y = 0.17;
+      const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.4, 0.22), castleStoneMat);
+      shaft.position.y = 1.5;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 0.2), castleStoneMat);
+      arm.position.y = 2.2;
+      deco.add(step, shaft, arm);
+    } else {
+      const ped = new THREE.Mesh(new THREE.BoxGeometry(1, 1.2, 1), marbleShadeMat);
+      ped.position.y = 0.6;
+      deco.add(ped, makeStatue(marbleMat, 1.1).translateY(1.2));
+    }
+    faceCenter(deco, { x: -edge.x, z: -edge.z });
+    deco.rotation.y += Math.PI;
+    spawn(add(deco, ex, groundY(ex, ez, 0.6), ez));
+  }
+
+  /** Huecos de la plaza para una cosa: corro de baile, sitios junto al fuego, músicos, corros de
+   *  charla y parejas de comerciantes. El orden decide quién llega primero a qué. */
+  function plazaSpots(pl: Plaza, ph: Phase): Spot[] {
+    const f = pl.pit ? 1 : 1.35, out: Spot[] = [];
+    const base = Math.atan2(-pl.z, -pl.x) || 0;
+    const mk = (act: Act, x: number, z: number, fx2: number, fz2: number, a = 0, r = 0): Spot => ({ plaza: pl, act, x, z, fx: fx2, fz: fz2, a, r, taken: null });
+    const ring = (act: Act, n: number, r: number) =>
+      Array.from({ length: n }, (_, k) => {
+        const a = base + (k / n) * Math.PI * 2;
+        return mk(act, pl.x + Math.cos(a) * r, pl.z + Math.sin(a) * r, pl.x, pl.z, a, r);
+      });
+    const music = (n: number) =>
+      Array.from({ length: n }, (_, k) => {
+        const a = base + Math.PI + (k - (n - 1) / 2) * 0.42, r = 4.3 * f;
+        return mk('music', pl.x + Math.cos(a) * r, pl.z + Math.sin(a) * r, pl.x, pl.z);
+      });
+    const chats = (groups: number) =>
+      Array.from({ length: groups }, (_, g) => {
+        const a = base + Math.PI * 0.5 + g * 1.15, gx = pl.x + Math.cos(a) * 5.2 * f, gz = pl.z + Math.sin(a) * 5.2 * f;
+        return Array.from({ length: 3 }, (_, k) => {
+          const b = a + (k / 3) * Math.PI * 2;
+          return mk('chat', gx + Math.cos(b) * 0.8, gz + Math.sin(b) * 0.8, gx, gz);
+        });
+      });
+    const trades = (pairs: number) =>
+      Array.from({ length: pairs }, (_, q) => {
+        const a = base - Math.PI * 0.5 - q * 0.75, cx = pl.x + Math.cos(a) * 4.8 * f, cz = pl.z + Math.sin(a) * 4.8 * f;
+        const tx = -Math.sin(a) * 0.65, tz = Math.cos(a) * 0.65;
+        const s1 = mk('trade', cx + tx, cz + tz, cx - tx, cz - tz), s2 = mk('trade', cx - tx, cz - tz, cx + tx, cz + tz);
+        s1.partner = s2;
+        s2.partner = s1;
+        return [s1, s2];
+      });
+    const dance = ring('dance', 8, 2.6 * f), sit = ring('sit', 8, 1.9 * f);
+    if (ph === 'market') {
+      const tr = trades(4), ch = chats(3);
+      out.push(...tr[0], ...ch[0], ...tr[1], ...tr[2], ...ch[1], ...tr[3], ...ch[2]);
+    } else if (ph === 'festival') {
+      const mu = music(3), tr = trades(3), ch = chats(2);
+      out.push(mu[0], ...dance.slice(0, 4), ...tr[0], mu[1], ...dance.slice(4), ...ch[0], ...tr[1], mu[2], ...ch[1], ...tr[2]);
+    } else if (ph === 'party') {
+      const mu = music(3), ch = chats(3);
+      out.push(mu[0], ...dance.slice(0, 4), mu[1], ...ch[0], ...dance.slice(4), mu[2], ...ch[1], ...ch[2]);
+    } else {
+      const mu = music(2), ch = chats(2);
+      out.push(...sit.slice(0, 4), mu[0], ...sit.slice(4), ...ch[0], mu[1], ...ch[1]);
+    }
+    // Fuera los huecos que caen dentro de algo construido o en el agua
+    return out.filter((sp) => !inWater(sp.x, sp.z, 0.6) && solids.every((o) => !o.obj.parent || Math.hypot(sp.x - o.x, sp.z - o.z) > o.r + 0.5));
+  }
+  const tradeGoods = [mat(0xc8a050), mat(0x8a3a3a), mat(0x3a6a8a), mat(0xe0d8c0)];
+  function beginPhase(ph: Phase): void {
+    failed.clear();
+    for (const sp of phaseSpots) if (sp.item) scene.remove(sp.item);
+    phaseSpots = [];
+    for (const [pl, fire] of bonfires) fire.visible = EVENING.has(ph) && pl.era <= shownEra;
+    if (!TURNOUT[ph]) return;
+    for (const pl of PLAZAS) {
+      if (pl.era > shownEra) continue;
+      for (const sp of plazaSpots(pl, ph)) {
+        phaseSpots.push(sp);
+        if (sp.act === 'trade' && sp.partner && !sp.partner.item) {
+          // Un fardo, un cántaro o una cesta que pasa de uno a otro
+          const it = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.22), tradeGoods[phaseSpots.length % tradeGoods.length]);
+          it.visible = false;
+          scene.add(it);
+          sp.item = it;
+        }
+      }
+    }
+  }
+  /** Una plaza de su lado del río que aún tenga sitio: la más cercana o, a veces, otra que no quede
+   *  mucho más lejos, para que la gente se reparta por todas las plazas abiertas. */
+  function claimSpot(p: Person): Spot | null {
+    const side = sideOf(p.x, p.z), near = new Map<Plaza, number>();
+    for (const sp of phaseSpots) {
+      if (sp.taken || near.has(sp.plaza) || sideOf(sp.plaza.x, sp.plaza.z) !== side) continue;
+      near.set(sp.plaza, Math.hypot(sp.plaza.x - p.x, sp.plaza.z - p.z));
+    }
+    const best = Math.min(...near.values());
+    const options = [...near].filter(([, d]) => d < 36 && d <= best + 16).map(([pl]) => pl);
+    if (!options.length) return null;
+    const pl = options[Math.floor(personRnd(p, 9 + dayNum) * options.length) % options.length];
+    // Dentro de esa plaza, el primer hueco libre según el orden de llegada
+    const first = phaseSpots.find((sp) => sp.plaza === pl && !sp.taken)!;
+    first.taken = p;
+    return first;
+  }
+  /** La puerta de la casa más cercana de su lado del río. */
+  function homeFor(p: Person): { x: number; z: number } | null {
+    const side = sideOf(p.x, p.z);
+    let best: { x: number; z: number } | null = null, bestD = Infinity;
+    const consider = (x: number, z: number) => {
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (d < bestD && sideOf(x, z) === side) [best, bestD] = [{ x, z }, d];
+    };
+    for (const t of tents) if (t.userData.doorAt) consider(t.userData.doorAt.x, t.userData.doorAt.z);
+    for (const d of hamletDoors) if (d.era <= shownEra) consider(d.x, d.z);
+    if (side !== 1 && medievalBuilt && shownEra >= 5) consider(around(LODGE, 0, -2.2).x, around(LODGE, 0, -2.2).z);
+    return best;
+  }
+  const canLeave = (p: Person) =>
+    !STAYS.has(p.kind) && (p.depth ?? 0) === 0 && p.rig.root.visible && !(p.kind === 'hunter' && p.cheer > 0);
+  function leave(p: Person, mode: Life['mode'], spot?: Spot, home?: { x: number; z: number }): void {
+    const r = p.rig;
+    p.life = {
+      mode, spot, home,
+      saved: { x: p.x, z: p.z, state: p.state, timer: p.timer, heading: p.heading, target: p.target, carry: !!r.carry?.visible },
+      best: Infinity, stuck: 0,
+    };
+    if (r.carry) r.carry.visible = false;
+    if (p.line) p.line.visible = false;
+    if (p.bobber) p.bobber.visible = false;
+    r.torso.rotation.set(0, 0, 0);
+    r.armR.rotation.z = 0.12;
+  }
+  /** Se va a dormir a la casa más cercana; si no hay ninguna, sigue con lo suyo. */
+  function sendHome(p: Person): void {
+    leave(p, 'back');
+    setMode(p, 'toHome');
+    if ((p.life as Life | undefined)?.mode === 'back') restore(p);
+  }
+  function setMode(p: Person, mode: Life['mode']): void {
+    const L = p.life!;
+    if (L.spot && mode !== 'event' && mode !== 'toEvent') {
+      L.spot.taken = null;
+      L.spot = undefined;
+    }
+    if (mode === 'toHome' && !L.home) L.home = homeFor(p) ?? undefined;
+    if (mode === 'toHome' && !L.home) mode = 'back';
+    L.mode = mode;
+    L.best = Infinity;
+    L.stuck = 0;
+  }
+  /** Vuelve a su oficio donde lo dejó. */
+  function restore(p: Person): void {
+    const L = p.life!, s0 = L.saved, r = p.rig;
+    if (L.spot) L.spot.taken = null;
+    [p.x, p.z, p.state, p.timer, p.heading, p.target] = [s0.x, s0.z, s0.state, s0.timer, s0.heading, s0.target];
+    if (r.carry) r.carry.visible = s0.carry;
+    if (p.line) p.line.visible = true;
+    if (p.bobber) p.bobber.visible = true;
+    r.root.visible = true;
+    if (r.torch) r.torch.visible = false;
+    if (r.instrument) r.instrument.visible = false;
+    r.legL.rotation.x = r.legR.rotation.x = 0;
+    p.bob = 0;
+    p.life = undefined;
+  }
+  /** Al cambiar de era (o al quitar a alguien) todos vuelven a su oficio al instante. */
+  function resetLives(): void {
+    for (const list of Object.values(people)) for (const p of list) if (p.life) restore(p);
+    phase = 'work';
+    beginPhase('work');
+  }
+  function schedule(): void {
+    const ph = phaseAt(tod, dayNum);
+    if (ph !== phase) {
+      phase = ph;
+      beginPhase(ph);
+    }
+    for (const list of Object.values(people)) for (const p of list) {
+      if (STAYS.has(p.kind)) continue;
+      const L = p.life;
+      if (ph === 'sleep') {
+        if (!L) {
+          if (canLeave(p)) {
+            sendHome(p);
+          }
+        } else if (L.mode === 'toEvent' || L.mode === 'event' || L.mode === 'back') setMode(p, 'toHome');
+      } else if (ph === 'work') {
+        if (L && (L.mode === 'event' || L.mode === 'toEvent' || L.mode === 'toHome')) setMode(p, 'back');
+        else if (L && L.mode === 'home' && tod > 0.13 + personRnd(p, 1) * 0.07 && tod < 0.5) {
+          // Sale de casa por la puerta y vuelve a lo suyo
+          p.x = L.home!.x;
+          p.z = L.home!.z;
+          p.rig.root.visible = true;
+          setMode(p, 'back');
+        }
+      } else if (!L && !failed.has(p) && canLeave(p)) {
+        if (personRnd(p, dayNum * 3 + (EVENING.has(ph) ? 2 : 1)) < TURNOUT[ph]!) {
+          const spot = claimSpot(p);
+          if (spot) leave(p, 'toEvent', spot);
+          else failed.add(p);
+        } else if (EVENING.has(ph)) failed.add(p);
+        // Quien no va a la velada se retira pronto a casa
+        if (!p.life && EVENING.has(ph) && failed.has(p) && tod > 0.81 + personRnd(p, 5) * 0.06) {
+          sendHome(p);
+        }
+      } else if (!L && EVENING.has(ph) && failed.has(p) && canLeave(p) && tod > 0.81 + personRnd(p, 5) * 0.06) {
+        sendHome(p);
+      }
+    }
+  }
+  /** Antorcha en la mano izquierda (se crea la primera vez que hace falta). */
+  function torchOf(r: Rig): THREE.Object3D {
+    if (!r.torch) {
+      const g = new THREE.Group();
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.6, 4), pole);
+      stick.position.y = 0.1;
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.26, 5), torchFlameMat);
+      flame.position.y = 0.5;
+      g.add(stick, flame);
+      g.position.set(0, -0.5, 0.06);
+      r.armL.add(g);
+      r.torch = g;
+    }
+    return r.torch;
+  }
+  const torchFlameMat = new THREE.MeshBasicMaterial({ color: 0xffa640 });
+  /** Laúd, flauta o tambor, según la persona. */
+  function instrumentOf(p: Person): THREE.Object3D {
+    const r = p.rig;
+    if (!r.instrument) {
+      const g = new THREE.Group(), kind = p.i % 3;
+      if (kind === 0) {
+        const body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 7, 5), mat(0xb07a3a));
+        body.scale.set(1, 1.2, 0.5);
+        const neck = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.45, 0.04), mat(0x5a3a1e));
+        neck.position.set(-0.22, 0.25, 0);
+        neck.rotation.z = 0.9;
+        g.add(body, neck);
+        g.position.set(0.05, 0.35, 0.28);
+        g.rotation.z = -0.6;
+      } else if (kind === 1) {
+        const flute = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 5), mat(0xd8c08a));
+        flute.rotation.x = Math.PI / 2 - 0.5;
+        g.add(flute);
+        g.position.set(0, 0.68, 0.38);
+      } else {
+        const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.3, 10), mat(0x9a5a2a));
+        const skin = new THREE.Mesh(new THREE.CircleGeometry(0.21, 10), mat(0xe8dcc0));
+        skin.rotation.x = -Math.PI / 2;
+        skin.position.y = 0.16;
+        g.add(drum, skin);
+        g.position.set(0, 0.1, 0.32);
+      }
+      r.torso.add(g);
+      r.instrument = g;
+    }
+    return r.instrument;
+  }
+  /** Dónde tiene que estar ahora: el corro de baile gira; lo demás está quieto. */
+  function spotNow(sp: Spot, t: number): { x: number; z: number } {
+    if (sp.act !== 'dance') return sp;
+    const a = sp.a + t * 0.28;
+    return { x: sp.plaza.x + Math.cos(a) * sp.r, z: sp.plaza.z + Math.sin(a) * sp.r };
+  }
+  function updateLife(p: Person, dt: number, t: number): void {
+    const L = p.life!, r = p.rig;
+    if (L.mode === 'home') return;
+    const night = day < 0.35;
+    if (L.mode === 'event') return animateEvent(p, L.spot!, dt, t);
+    if (r.instrument) r.instrument.visible = false;
+    const goal = L.mode === 'toEvent' ? spotNow(L.spot!, t) : L.mode === 'toHome' ? L.home! : L.saved;
+    // De noche se alumbra con una antorcha, que lleva en alto
+    const torch = night ? torchOf(r) : r.torch;
+    if (torch) torch.visible = night;
+    if (torch && night) {
+      r.armL.rotation.x = ease(r.armL.rotation.x, -1.1, dt);
+      torch.rotation.x = -r.armL.rotation.x;
+    } else r.armL.rotation.x = -Math.sin(p.walk) * 0.5;
+    r.armR.rotation.x = Math.sin(p.walk) * 0.5;
+    r.torso.rotation.y = ease(r.torso.rotation.y, 0, dt);
+    r.legL.rotation.x = ease(r.legL.rotation.x, 0, dt, 10);
+    p.bob = Math.max(p.bob, 0);
+    const d = Math.hypot(goal.x - p.x, goal.z - p.z);
+    if (d < L.best - 0.25) [L.best, L.stuck] = [d, 0];
+    else L.stuck += dt;
+    const there = walkTo(p, goal.x, goal.z, dt, 1.8);
+    if (!there && L.stuck < 5) return;
+    // Llegó (o se atascó: entonces se le da por llegado)
+    if (L.mode === 'toEvent') {
+      if (there) L.mode = 'event';
+      else setMode(p, 'back');
+    } else if (L.mode === 'toHome') {
+      L.mode = 'home';
+      r.root.visible = false;
+      if (r.torch) r.torch.visible = false;
+    } else {
+      if (!there) [p.x, p.z] = [goal.x, goal.z];
+      restore(p);
+    }
+  }
+  function animateEvent(p: Person, sp: Spot, dt: number, t: number): void {
+    const r = p.rig;
+    if (r.torch) r.torch.visible = false;
+    if (sp.act === 'dance') {
+      // El corro gira: se sigue el sitio con pasitos y los brazos en alto
+      const at = spotNow(sp, t);
+      if (Math.hypot(at.x - p.x, at.z - p.z) > 0.08) walkTo(p, at.x, at.z, dt, 1.2);
+      else standPose(p, dt);
+      const k = Math.sin(t * 6 + sp.a * 3);
+      r.armL.rotation.x = -2.5 + k * 0.35;
+      r.armR.rotation.x = -2.5 - k * 0.35;
+      r.armL.rotation.z = -0.4;
+      r.armR.rotation.z = 0.4;
+      p.bob = Math.abs(Math.sin(t * 5 + sp.a * 2)) * 0.14;
+      return;
+    }
+    r.armL.rotation.z = ease(r.armL.rotation.z, -0.12, dt);
+    if (Math.hypot(sp.x - p.x, sp.z - p.z) > 0.12) {
+      walkTo(p, sp.x, sp.z, dt, 1.2);
+      return;
+    }
+    faceTo(p, sp.fx, sp.fz, dt);
+    if (sp.act === 'sit') {
+      // Sentado en el suelo junto al fuego, con las manos en las rodillas
+      r.legL.rotation.x = ease(r.legL.rotation.x, -1.45, dt, 5);
+      r.legR.rotation.x = ease(r.legR.rotation.x, -1.45, dt, 5);
+      p.bob = ease(p.bob, -0.34, dt, 5);
+      r.torso.rotation.x = ease(r.torso.rotation.x, 0.12 + Math.sin(t * 0.7 + p.phase) * 0.04, dt);
+      r.armL.rotation.x = ease(r.armL.rotation.x, -0.9, dt);
+      r.armR.rotation.x = ease(r.armR.rotation.x, Math.sin(t * 0.5 + p.phase) > 0.7 ? -1.6 : -0.9, dt, 4);
+      return;
+    }
+    standPose(p, dt);
+    if (sp.act === 'music') {
+      const ins = instrumentOf(p);
+      ins.visible = true;
+      const kind = p.i % 3;
+      r.torso.rotation.y = Math.sin(t * 1.2 + p.phase) * 0.12;
+      if (kind === 0) {
+        r.armR.rotation.x = -1.0 + Math.sin(t * 10) * 0.18;
+        r.armL.rotation.x = -1.3;
+      } else if (kind === 1) {
+        r.armR.rotation.x = -1.75 + Math.sin(t * 3) * 0.05;
+        r.armL.rotation.x = -1.65;
+      } else {
+        r.armR.rotation.x = -0.9 + Math.max(0, Math.sin(t * 8)) * -0.5;
+        r.armL.rotation.x = -0.9 + Math.max(0, Math.sin(t * 8 + Math.PI)) * -0.5;
+      }
+      p.bob = Math.abs(Math.sin(t * 4)) * 0.04;
+    } else if (sp.act === 'chat') {
+      // Charla en corro: se gira hacia unos y otros y gesticula de vez en cuando
+      const talk = Math.sin(t * 0.9 + p.phase * 2);
+      r.torso.rotation.y = Math.sin(t * 0.45 + p.phase) * 0.35;
+      r.armR.rotation.x = talk > 0.4 ? -1.1 + Math.sin(t * 5 + p.phase) * 0.35 : ease(r.armR.rotation.x, -0.15, dt);
+      r.armL.rotation.x = talk < -0.7 ? -0.8 : ease(r.armL.rotation.x, -0.1, dt);
+      // Alguna carcajada
+      p.bob = Math.sin(t * 0.33 + p.phase) > 0.94 ? Math.abs(Math.sin(t * 14)) * 0.05 : 0;
+    } else {
+      // Trato: los brazos hacia delante y la mercancía pasa de uno a otro
+      r.armR.rotation.x = -1.05 + Math.sin(t * 1.3 + p.phase) * 0.1;
+      r.armL.rotation.x = -0.6;
+      const it = sp.item ?? sp.partner?.item;
+      const other = sp.partner?.taken;
+      if (it && sp.item) {
+        const ready = other?.life?.mode === 'event' && Math.hypot(other.x - sp.partner!.x, other.z - sp.partner!.z) < 0.3;
+        it.visible = ready;
+        if (ready) {
+          const k = (Math.sin(t * 0.9 + sp.a) + 1) / 2;
+          it.position.set(THREE.MathUtils.lerp(sp.x, sp.fx, k), heightAt(sp.x, sp.z) + 0.95 + Math.sin(k * Math.PI) * 0.25, THREE.MathUtils.lerp(sp.z, sp.fz, k));
+        }
+      }
+    }
+  }
+  /** Llamas de las hogueras de las plazas. */
+  function animateBonfires(t: number): void {
+    bonfireFlames.forEach((f, k) => {
+      const s = 1 + Math.sin(t * (9 + k)) * 0.1 + Math.sin(t * 23 + k) * 0.06;
+      f.scale.set(1 / Math.sqrt(s), s, 1 / Math.sqrt(s));
+      f.position.y = 0.2 + (f.userData.h * s) / 2;
+      f.rotation.y = t * (1 + (k % 2));
+    });
+  }
+
+  // ---------- Afueras ----------
+  // Lo que cada era levanta en el anillo que gana al bosque: caseríos con sus casas, campos de
+  // cultivo, prados con flores, arboledas, rebaños y monumentos, todo con el estilo de su época.
+  const outBuilt = new Set<Outskirt>();
+  interface Beast { root: THREE.Group; legs: THREE.Object3D[]; head: THREE.Object3D; cx: number; cz: number; r: number; x: number; z: number; tx: number; tz: number; heading: number; timer: number; walk: number; speed: number }
+  const beasts: Beast[] = [];
+  const ochreMat = mat(0xd9a45a), roseMat = mat(0xd89a8a), creamMat = mat(0xeadcb8), serenaMat = mat(0x8a8c90);
+  const shutterMat = mat(0x3f5a3a), cypressMat = mat(0x2c4a2c), stonePineMat = mat(0x3d6a34), birchMat = mat(0xe8e4da), birchLeafMat = mat(0x7aa04a);
+  const hayMat = mat(0xd8b85a), hiveMat = mat(0xc89a4a), menhirMat = mat(0x8e8a92);
+  const fieldSoilMat = mat(0x6a4a2c, { side: THREE.DoubleSide });
+  const FLOWER_MATS = [mat(0xe8d050), mat(0xd85a6a), mat(0xf0ece0), mat(0x8a6ad0)];
+  const grainMat = mat(0xd8b04a), flaxMat = mat(0x7a8ad0), cabbageMat = mat(0x8aa860), vineMat = mat(0x4a6a2a), grapeMat = mat(0x5a2a5a);
+  /** Une piezas sueltas en una sola malla (las de los campos y monumentos son muchas y pequeñas). */
+  const meshOf = (geos: THREE.BufferGeometry[], m: THREE.Material) => new THREE.Mesh(mergeGeometries(geos.map((g) => (g.index ? g.toNonIndexed() : g)))!, m);
+  /** Pieza en coordenadas del mundo, a u de lado y v hacia fuera del centro de la zona, sobre el suelo. */
+  function partAt(o: { x: number; z: number }, geo: THREE.BufferGeometry, u: number, v: number, y = 0, ry = 0): THREE.BufferGeometry {
+    const p = around(o, u, v), { tx, tz } = radial(o);
+    geo.rotateY(Math.atan2(-tz, tx) + ry);
+    return geo.translate(p.x, heightAt(p.x, p.z) + y, p.z);
+  }
+  /** Rectángulo de suelo que sigue el relieve, girado como la zona. */
+  function groundPatch(o: { x: number; z: number }, w: number, d: number, m: THREE.Material): THREE.Mesh {
+    const g = new THREE.PlaneGeometry(w, d, 8, 8);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const p = around(o, pos.getX(i), pos.getY(i));
+      pos.setXYZ(i, p.x, heightAt(p.x, p.z) + 0.2, p.z);
+    }
+    g.computeVertexNormals();
+    const mesh = new THREE.Mesh(g, m);
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  // Casas del Renacimiento: dos plantas encaladas en ocre, rosa o crema, zócalo de piedra gris,
+  // cornisa, ventanas con contraventanas verdes y tejado de tejas a cuatro aguas.
+  const REN_WALLS = [ochreMat, roseMat, creamMat, stuccoA];
+  function makeRenHouse(x: number, z: number, s: number, tone: number) {
+    const g = new THREE.Group();
+    const w = 2.4 * s, d = 2 * s, h = 2.5 * s;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), REN_WALLS[(tone + Math.round(Math.abs(x * 3 + z * 7))) % REN_WALLS.length]);
+    wall.position.y = h / 2;
+    const trim = [boxAt(w + 0.12, 0.35 * s, d + 0.12, 0, 0.17 * s, 0), boxAt(w + 0.08, 0.08 * s, d + 0.08, 0, h * 0.5, 0), boxAt(w + 0.3 * s, 0.16 * s, d + 0.3 * s, 0, h, 0)];
+    const roofGeo = new THREE.ConeGeometry(1, 1, 4);
+    roofGeo.rotateY(Math.PI / 4);
+    const roof = new THREE.Mesh(roofGeo, tileMat);
+    roof.scale.set((w + 0.4 * s) / Math.SQRT2, 0.6 * s, (d + 0.4 * s) / Math.SQRT2);
+    roof.position.y = h + 0.08 * s + 0.3 * s;
+    const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.3 * s, 0.8 * s, 0.3 * s), stuccoB);
+    chimney.position.set(-w * 0.28, h + 0.5 * s, -d * 0.2);
+    g.add(wall, new THREE.Mesh(mergeGeometries(trim)!, serenaMat), roof, chimney);
+    const shutters: THREE.BufferGeometry[] = [];
+    for (const sx of [-1, 1]) {
+      for (const [zz, yy] of [[d / 2 + 0.03, h * 0.74], [-d / 2 - 0.03, h * 0.74], [-d / 2 - 0.03, h * 0.3]] as const) {
+        pane(g, sx * w * 0.28, yy, zz, 0.32 * s, 0.48 * s);
+        for (const k of [-1, 1]) shutters.push(boxAt(0.12 * s, 0.5 * s, 0.04, sx * w * 0.28 + k * 0.24 * s, yy, zz));
+      }
+    }
+    pane(g, 0, h * 0.74, d / 2 + 0.03, 0.3 * s, 0.48 * s);
+    g.add(new THREE.Mesh(mergeGeometries(shutters)!, shutterMat));
+    const poles = new THREE.Group(); // humo de la chimenea
+    poles.position.set(-w * 0.28, h + 0.95 * s, -d * 0.2);
+    g.add(poles);
+    const door = new THREE.Group();
+    door.position.set(0, 1.0 * s, d / 2 + 0.04);
+    const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.6 * s, 1.0 * s), mat(0x5a3a22, { side: THREE.DoubleSide }));
+    leaf.position.y = -0.5 * s;
+    door.add(leaf);
+    const arch = new THREE.Mesh(new THREE.CylinderGeometry(0.36 * s, 0.36 * s, 0.06, 10, 1, false, -Math.PI / 2, Math.PI), serenaMat);
+    arch.rotation.x = Math.PI / 2;
+    arch.position.set(0, 1.02 * s, d / 2 + 0.03);
+    g.add(door, arch);
+    g.userData.door = door;
+    g.userData.poles = poles;
+    g.userData.phase = fx() * 6;
+    const gy = groundY(x, z, 1.2 * s);
+    add(g, x, gy, z);
+    g.lookAt(0, gy, 0);
+    return g;
+  }
+
+  function makeCypress(s: number): THREE.Group {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1 * s, 0.14 * s, 0.6 * s, 5), oliveTrunkMat);
+    trunk.position.y = 0.3 * s;
+    const crown = new THREE.Mesh(new THREE.ConeGeometry(0.55 * s, 3.4 * s, 7), cypressMat);
+    crown.position.y = 2.1 * s;
+    g.add(trunk, crown);
+    return g;
+  }
+  /** Pino piñonero: tronco alto y la copa plana como un parasol. */
+  function makeStonePine(s: number): THREE.Group {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * s, 0.2 * s, 2.6 * s, 6), cedarMat);
+    trunk.position.y = 1.3 * s;
+    trunk.rotation.z = 0.12;
+    const crown = new THREE.Mesh(new THREE.SphereGeometry(1.3 * s, 8, 5), stonePineMat);
+    crown.scale.y = 0.38;
+    crown.position.set(0.3 * s, 2.8 * s, 0);
+    g.add(trunk, crown);
+    return g;
+  }
+  function makeBirch(s: number): THREE.Group {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08 * s, 0.13 * s, 2.2 * s, 5), birchMat);
+    trunk.position.y = 1.1 * s;
+    const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8 * s, 0), birchLeafMat);
+    crown.scale.set(0.8, 1.3, 0.8);
+    crown.position.y = 2.5 * s;
+    g.add(trunk, crown);
+    return g;
+  }
+
+  /** Animal de un rebaño: cabras, vacas, ovejas, cerdos o caballos según la era. */
+  const BEAST_LOOK: Record<string, { body: number[]; size: number; leg: number; neck: number; horns: boolean }> = {
+    goat: { body: [0xe8e0d0, 0x8a6a4a, 0x3a3030], size: 0.75, leg: 0.42, neck: 0.15, horns: true },
+    cow: { body: [0xf0ece4, 0x8a5a36, 0x3a2a24], size: 1.15, leg: 0.5, neck: 0.1, horns: true },
+    sheep: { body: [0xf1ece0, 0xe0d8c8], size: 0.8, leg: 0.36, neck: 0.05, horns: false },
+    pig: { body: [0xe8a8a0, 0xd89088], size: 0.8, leg: 0.26, neck: 0, horns: false },
+    horse: { body: [0x6a4028, 0x3a2418, 0xd8c8a8, 0x9a6a3a], size: 1.2, leg: 0.8, neck: 0.5, horns: false },
+  };
+  function makeBeast(kind: string, k: number, o: Outskirt): Beast {
+    const L = BEAST_LOOK[kind], s = L.size, bodyMat = mat(L.body[k % L.body.length]), dark = mat(0x2a2420);
+    const root = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5 * s, 0.42 * s, 0.95 * s), bodyMat);
+    body.position.y = L.leg + 0.2 * s;
+    root.add(body);
+    const head = new THREE.Group();
+    head.position.set(0, L.leg + 0.3 * s + L.neck * 0.6, 0.5 * s);
+    const face = new THREE.Mesh(new THREE.BoxGeometry(0.24 * s, 0.26 * s, 0.4 * s), bodyMat);
+    face.position.set(0, L.neck * 0.4, 0.18 * s);
+    face.rotation.x = L.neck > 0.3 ? 0.6 : 0.2;
+    head.add(face);
+    if (L.horns) for (const sx of [-1, 1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.035 * s, 0.22 * s, 4), mat(0xeee2c8));
+      horn.position.set(sx * 0.1 * s, L.neck * 0.4 + 0.18 * s, 0.05 * s);
+      horn.rotation.x = -0.5;
+      head.add(horn);
+    }
+    if (kind === 'horse') {
+      const mane = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5 * s, 0.12), dark);
+      mane.position.set(0, 0.05, -0.08);
+      mane.rotation.x = 0.6;
+      head.add(mane);
+    }
+    root.add(head);
+    const legs = [[-0.17, 0.33], [0.17, 0.33], [-0.17, -0.33], [0.17, -0.33]].map(([lx, lz]) => {
+      const pivot = new THREE.Group();
+      pivot.position.set(lx * s, L.leg, lz * s);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * s, 0.04 * s, L.leg, 4), kind === 'cow' || kind === 'horse' ? dark : bodyMat);
+      leg.position.y = -L.leg / 2;
+      pivot.add(leg);
+      root.add(pivot);
+      return pivot;
+    });
+    const a = k * 2.1 + o.seed % 7, d = (o.r - 1.4) * (0.3 + (k % 3) * 0.3);
+    const x = o.x + Math.cos(a) * d, z = o.z + Math.sin(a) * d;
+    add(root, x, heightAt(x, z), z);
+    return { root, legs, head, cx: o.x, cz: o.z, r: o.r - 1.3, x, z, tx: x, tz: z, heading: a, timer: fx() * 4, walk: 0, speed: kind === 'horse' ? 0.6 : 0.3 };
+  }
+  function animateBeasts(dt: number, t: number): void {
+    for (const b of beasts) {
+      if (!b.root.parent) continue;
+      b.timer -= dt;
+      const d = Math.hypot(b.tx - b.x, b.tz - b.z);
+      if (d > 0.1) {
+        b.heading = lerpAngle(b.heading, Math.atan2(b.tx - b.x, b.tz - b.z), Math.min(1, dt * 3));
+        b.x += Math.sin(b.heading) * b.speed * dt;
+        b.z += Math.cos(b.heading) * b.speed * dt;
+        b.walk += dt * 7;
+        b.head.rotation.x = ease(b.head.rotation.x, 0, dt);
+      } else {
+        // Pasta: la cabeza abajo y algún tirón
+        b.head.rotation.x = ease(b.head.rotation.x, 0.75 + Math.max(0, Math.sin(t * 2 + b.cx)) * 0.15, dt, 3);
+        b.walk = ease(b.walk, Math.round(b.walk / Math.PI) * Math.PI, dt);
+        if (b.timer <= 0) {
+          const a = fx() * Math.PI * 2, rr = Math.sqrt(fx()) * b.r;
+          [b.tx, b.tz, b.timer] = [b.cx + Math.cos(a) * rr, b.cz + Math.sin(a) * rr, 4 + fx() * 6];
+        }
+      }
+      b.legs.forEach((l, k) => (l.rotation.x = Math.sin(b.walk + (k === 0 || k === 3 ? 0 : Math.PI)) * 0.45));
+      b.root.position.set(b.x, heightAt(b.x, b.z), b.z);
+      b.root.rotation.y = b.heading;
+    }
+  }
+
+  /** Construye una zona de las afueras al llegar su era. */
+  function buildOutskirt(o: Outskirt): void {
+    outBuilt.add(o);
+    const rnd = mulberry32(o.seed), era = o.era;
+    const pick = <T,>(list: T[]) => list[Math.floor(rnd() * list.length) % list.length];
+    if (o.type === 'hamlet') {
+      // Tres o cuatro casas de la era alrededor de un pozo, con un huerto detrás
+      const n = 3 + Math.floor(rnd() * 2), make = era >= 6 ? makeRenHouse : era === 5 ? makeTimberHouse : era === 4 ? makeVilla : era === 3 ? makeHouse : makeHut;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + rnd() * 0.4, p = around(o, Math.cos(a) * 2.7, Math.sin(a) * 2.7);
+        const s = 0.6 + rnd() * 0.08;
+        const h = spawn(make(p.x, p.z, era === 2 ? s * 1.1 : s, k % 2));
+        const back = 1.6 * s + 0.3, l = Math.hypot(p.x, p.z);
+        hamletDoors.push({ x: p.x - (p.x / l) * back, z: p.z - (p.z / l) * back, era });
+        h.userData.hamlet = true;
+      }
+      const well: THREE.BufferGeometry[] = [];
+      well.push(partAt(o, new THREE.CylinderGeometry(0.55, 0.6, 0.7, 10), 0, 0, 0.35));
+      for (const sx of [-1, 1]) well.push(partAt(o, new THREE.BoxGeometry(0.1, 1.4, 0.1), sx * 0.5, 0, 1.05));
+      well.push(partAt(o, new THREE.BoxGeometry(1.3, 0.1, 0.12), 0, 0, 1.75));
+      const wg = new THREE.Group();
+      wg.add(meshOf(well, era >= 4 ? castleStoneMat : stoneMat));
+      spawn(add(wg));
+      return;
+    }
+    if (o.type === 'field') {
+      // Un campo arado con surcos y, según la era, cereal, lino, coles o viñas en hileras
+      const crop = pick(era <= 2 ? ['grain', 'flax'] : era === 3 ? ['grain', 'flax', 'cabbage'] : era === 4 ? ['grain', 'vine', 'cabbage'] : era === 5 ? ['grain', 'cabbage', 'flax'] : ['vine', 'grain', 'cabbage']);
+      const side = o.r * 1.3, rows = 6, g = new THREE.Group();
+      g.add(groundPatch(o, side, side, fieldSoilMat));
+      const plants: THREE.BufferGeometry[] = [], extra: THREE.BufferGeometry[] = [], posts: THREE.BufferGeometry[] = [];
+      for (let rI = 0; rI < rows; rI++) {
+        const v = -side / 2 + 0.5 + (rI * (side - 1)) / (rows - 1);
+        if (crop === 'vine') {
+          plants.push(partAt(o, new THREE.BoxGeometry(side - 1, 0.6, 0.3), 0, v, 0.55));
+          for (let k = 0; k < 6; k++) extra.push(partAt(o, new THREE.IcosahedronGeometry(0.1, 0), -side / 2 + 0.8 + k * ((side - 1.6) / 5), v + 0.17, 0.45));
+          for (const u of [-side / 2 + 0.4, side / 2 - 0.4]) posts.push(partAt(o, new THREE.BoxGeometry(0.06, 1, 0.06), u, v, 0.5));
+        } else {
+          for (let k = 0; k < 7; k++) {
+            const u = -side / 2 + 0.5 + (k * (side - 1)) / 6 + (rnd() - 0.5) * 0.15;
+            if (crop === 'cabbage') plants.push(partAt(o, new THREE.IcosahedronGeometry(0.22, 0), u, v, 0.18));
+            else plants.push(partAt(o, new THREE.ConeGeometry(0.16, crop === 'grain' ? 0.75 : 0.55, 4), u, v, 0.4, rnd()));
+          }
+        }
+      }
+      g.add(meshOf(plants, crop === 'grain' ? grainMat : crop === 'flax' ? flaxMat : crop === 'cabbage' ? cabbageMat : vineMat));
+      if (extra.length) g.add(meshOf(extra, grapeMat));
+      // Espantapájaros desde la Edad del Bronce y cerca de postes desde la Antigüedad
+      if (era >= 3 && crop !== 'vine') {
+        posts.push(partAt(o, new THREE.BoxGeometry(0.08, 1.7, 0.08), 0.2, 0.1, 0.85), partAt(o, new THREE.BoxGeometry(1, 0.07, 0.07), 0.2, 0.1, 1.35));
+        extra.length = 0;
+        extra.push(partAt(o, new THREE.ConeGeometry(0.3, 0.25, 6), 0.2, 0.1, 1.9));
+        g.add(meshOf(extra, hayMat));
+      }
+      if (era >= 4) {
+        for (let k = 0; k < 8; k++) {
+          const f = (k / 8) * 4, sideK = Math.floor(f), u0 = f - sideK;
+          const [u, v] = sideK === 0 ? [-side / 2 - 0.3 + u0 * (side + 0.6), -side / 2 - 0.3] : sideK === 1 ? [side / 2 + 0.3, -side / 2 - 0.3 + u0 * (side + 0.6)] : sideK === 2 ? [side / 2 + 0.3 - u0 * (side + 0.6), side / 2 + 0.3] : [-side / 2 - 0.3, side / 2 + 0.3 - u0 * (side + 0.6)];
+          posts.push(partAt(o, new THREE.BoxGeometry(0.1, 0.8, 0.1), u, v, 0.4));
+        }
+      }
+      if (posts.length) g.add(meshOf(posts, timberMat));
+      spawn(add(g));
+      return;
+    }
+    if (o.type === 'meadow') {
+      // Prado con flores; desde el Bronce, almiares de heno; desde la Antigüedad, colmenas
+      const g = new THREE.Group();
+      g.add(groundDisc(o.x, o.z, o.r - 0.3, 0x6a9a48));
+      FLOWER_MATS.forEach((m) => {
+        const fl: THREE.BufferGeometry[] = [];
+        for (let k = 0; k < 14; k++) {
+          const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * (o.r - 0.8);
+          fl.push(partAt(o, new THREE.IcosahedronGeometry(0.09, 0), Math.cos(a) * d, Math.sin(a) * d, 0.3));
+        }
+        g.add(meshOf(fl, m));
+      });
+      add(g, 0, 0, 0, false);
+      if (era >= 3) {
+        const stacks: THREE.BufferGeometry[] = [];
+        for (const u of era >= 4 ? [-1.2] : [-1.2, 1.1]) {
+          stacks.push(partAt(o, new THREE.CylinderGeometry(0.75, 0.85, 0.9, 8), u, 0.4, 0.45), partAt(o, new THREE.ConeGeometry(0.8, 0.9, 8), u, 0.4, 1.35));
+        }
+        const hs = new THREE.Group();
+        hs.add(meshOf(stacks, hayMat));
+        spawn(add(hs));
+      }
+      if (era >= 4) {
+        const hives: THREE.BufferGeometry[] = [];
+        for (let k = 0; k < 3; k++) {
+          const u = 0.7 + k * 0.7;
+          hives.push(partAt(o, new THREE.CylinderGeometry(0.12, 0.28, 0.5, 8), u, -0.8, 0.45), partAt(o, new THREE.BoxGeometry(0.5, 0.2, 0.5), u, -0.8, 0.1));
+        }
+        const hv = new THREE.Group();
+        hv.add(meshOf(hives, hiveMat));
+        spawn(add(hv));
+      }
+      return;
+    }
+    if (o.type === 'grove') {
+      // Árboles de la época: abedules y robles al norte; olivos y cipreses en el Mediterráneo
+      const kinds = era <= 3 ? ['oak', 'birch', 'birch'] : era === 4 ? ['olive', 'cypress', 'olive'] : era === 5 ? ['oak', 'oak', 'birch'] : ['cypress', 'stonePine', 'olive', 'cypress'];
+      const n = 5 + Math.floor(rnd() * 2);
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + rnd() * 0.5, d = k === 0 ? 0 : 1.6 + rnd() * (o.r - 2.4);
+        const p = k === 0 ? { x: o.x, z: o.z } : around(o, Math.cos(a) * d, Math.sin(a) * d);
+        const kind = pick(kinds), s = 0.7 + rnd() * 0.3;
+        const tree = kind === 'oak' ? makeOak(s * 0.85) : kind === 'birch' ? makeBirch(s) : kind === 'olive' ? makeOlive(s) : kind === 'cypress' ? makeCypress(s) : makeStonePine(s);
+        tree.rotation.y = rnd() * 6;
+        spawn(add(tree, p.x, groundY(p.x, p.z, 0.4), p.z));
+      }
+      return;
+    }
+    if (o.type === 'herd') {
+      // Cercado con animales que pastan: cabras, vacas, ovejas, cerdos o caballos
+      const kind = pick(era === 2 ? ['goat'] : era === 3 ? ['cow', 'goat'] : era === 4 ? ['goat', 'sheep'] : era === 5 ? ['cow', 'pig'] : ['horse', 'cow']);
+      const fence: THREE.BufferGeometry[] = [], n = 18, rr = o.r - 0.3;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2, a2 = ((k + 1) / n) * Math.PI * 2;
+        const u = Math.cos(a) * rr, v = Math.sin(a) * rr, u2 = Math.cos(a2) * rr, v2 = Math.sin(a2) * rr;
+        fence.push(partAt(o, new THREE.BoxGeometry(0.1, 0.9, 0.1), u, v, 0.45));
+        if (k === 0) continue; // la portilla
+        const len = Math.hypot(u2 - u, v2 - v);
+        for (const y of [0.4, 0.75]) fence.push(partAt(o, new THREE.BoxGeometry(len, 0.07, 0.06), (u + u2) / 2, (v + v2) / 2, y, Math.atan2(v2 - v, u2 - u)));
+      }
+      const fg = new THREE.Group();
+      fg.add(meshOf(fence, timberMat));
+      add(fg);
+      const count = kind === 'horse' || kind === 'cow' ? 3 : 4 + Math.floor(rnd() * 2);
+      for (let k = 0; k < count; k++) beasts.push(makeBeast(kind, k, o));
+      if (era >= 3) {
+        // Abrevadero
+        const tr = new THREE.Group();
+        tr.add(meshOf([partAt(o, new THREE.BoxGeometry(1.2, 0.35, 0.45), 0, -o.r + 1.2, 0.18)], timberMat));
+        add(tr);
+      }
+      return;
+    }
+    // Monumentos
+    const g = new THREE.Group(), parts: THREE.BufferGeometry[] = [];
+    let m: THREE.Material = menhirMat;
+    const variant = Math.floor(rnd() * 2);
+    if (era === 2) {
+      // Dolmen: dos losas de pie y una encima; o un menhir con dos piedras menores
+      if (variant) parts.push(partAt(o, new THREE.BoxGeometry(0.4, 1.4, 1.6), -0.8, 0, 0.6), partAt(o, new THREE.BoxGeometry(0.4, 1.4, 1.6), 0.8, 0, 0.6), partAt(o, new THREE.BoxGeometry(2.4, 0.35, 2), 0, 0, 1.45, 0.08));
+      else parts.push(partAt(o, new THREE.BoxGeometry(0.7, 2.8, 0.55), 0, 0, 1.3, 0.2), partAt(o, new THREE.BoxGeometry(0.5, 1.3, 0.4), 1.1, 0.4, 0.6, 0.5), partAt(o, new THREE.BoxGeometry(0.45, 1, 0.4), -1.0, -0.5, 0.45, -0.3));
+    } else if (era === 3) {
+      // Círculo de piedras con dinteles
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        parts.push(partAt(o, new THREE.BoxGeometry(0.45, 1.8, 0.35), Math.cos(a) * 1.8, Math.sin(a) * 1.8, 0.8, a + Math.PI / 2));
+        if (k % 2 === 0) parts.push(partAt(o, new THREE.BoxGeometry(1.6, 0.3, 0.4), Math.cos(a + 0.39) * 1.75, Math.sin(a + 0.39) * 1.75, 1.85, a + 0.39 + Math.PI / 2));
+      }
+    } else if (era === 4) {
+      m = marbleMat;
+      if (variant) {
+        // Templete redondo: seis columnas y una cúpula
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * Math.PI * 2;
+          parts.push(partAt(o, new THREE.CylinderGeometry(0.12, 0.14, 2, 7), Math.cos(a) * 1.1, Math.sin(a) * 1.1, 1.25));
+        }
+        parts.push(partAt(o, new THREE.CylinderGeometry(1.45, 1.55, 0.25, 12), 0, 0, 0.12), partAt(o, new THREE.CylinderGeometry(1.35, 1.35, 0.2, 12), 0, 0, 2.35));
+        parts.push(partAt(o, new THREE.SphereGeometry(1.3, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.6, 1), 0, 0, 2.45));
+      } else parts.push(partAt(o, new THREE.BoxGeometry(1.6, 0.4, 1.6), 0, 0, 0.2), partAt(o, new THREE.BoxGeometry(1.1, 0.4, 1.1), 0, 0, 0.6), partAt(o, new THREE.CylinderGeometry(0.2, 0.42, 3.4, 4, 1).rotateY(Math.PI / 4), 0, 0, 2.5), partAt(o, new THREE.ConeGeometry(0.22, 0.4, 4).rotateY(Math.PI / 4), 0, 0, 4.4));
+    } else if (era === 5) {
+      m = castleStoneMat;
+      if (variant) {
+        // Ermita: una nave pequeña con espadaña y su campana
+        parts.push(partAt(o, new THREE.BoxGeometry(1.8, 1.6, 2.4), 0, 0, 0.8), partAt(o, new THREE.BoxGeometry(1.2, 1.1, 0.3), 0, 1.15, 2.1));
+        const roofG = new THREE.Group();
+        roofG.add(meshOf([partAt(o, gableGeo(2.1, 2.7, 1), 0, 0, 1.6, Math.PI / 2)], slateMat));
+        g.add(roofG);
+        const bell = new THREE.Group();
+        bell.add(meshOf([partAt(o, new THREE.ConeGeometry(0.2, 0.3, 8), 0, 1.15, 2.15)], bronzeMat));
+        g.add(bell);
+      } else {
+        // Torre en ruinas cubierta de hiedra
+        parts.push(partAt(o, new THREE.CylinderGeometry(1.1, 1.25, 3.2, 10), 0, 0, 1.6));
+        for (let k = 0; k < 10; k += 2) {
+          const a = (k / 10) * Math.PI * 2;
+          parts.push(partAt(o, new THREE.BoxGeometry(0.45, 0.5 + (k % 4) * 0.2, 0.4), Math.cos(a) * 0.95, Math.sin(a) * 0.95, 3.4, a + Math.PI / 2));
+        }
+        const ivy = new THREE.Group();
+        ivy.add(meshOf([partAt(o, new THREE.IcosahedronGeometry(0.6, 0).scale(0.6, 1.4, 0.6), 0.9, 0.6, 1.2), partAt(o, new THREE.IcosahedronGeometry(0.5, 0).scale(0.6, 1, 0.6), -1.0, 0.2, 0.9)], oakLeafMat));
+        g.add(ivy);
+      }
+    } else {
+      m = marbleMat;
+      if (variant) {
+        // Templete del Renacimiento: columnas en corro, cúpula y linterna
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2;
+          parts.push(partAt(o, new THREE.CylinderGeometry(0.1, 0.12, 1.9, 7), Math.cos(a) * 1.2, Math.sin(a) * 1.2, 1.25));
+        }
+        parts.push(partAt(o, new THREE.CylinderGeometry(1.5, 1.6, 0.3, 14), 0, 0, 0.15), partAt(o, new THREE.CylinderGeometry(1.4, 1.4, 0.25, 14), 0, 0, 2.3), partAt(o, new THREE.CylinderGeometry(0.15, 0.15, 0.5, 6), 0, 0, 3.6));
+        const dome = new THREE.Group();
+        dome.add(meshOf([partAt(o, new THREE.SphereGeometry(1.1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0, 0, 2.42)], tileMat));
+        g.add(dome);
+      } else {
+        // Estatua sobre un pedestal alto, mirando a la ciudad
+        parts.push(partAt(o, new THREE.BoxGeometry(1.6, 0.3, 1.6), 0, 0, 0.15), partAt(o, new THREE.BoxGeometry(1.1, 1.6, 1.1), 0, 0, 1.1), partAt(o, new THREE.BoxGeometry(1.3, 0.2, 1.3), 0, 0, 1.95));
+        const st = makeStatue(marbleMat, 1.4);
+        const p = around(o, 0, 0), { tx, tz } = radial(o);
+        st.position.set(p.x, heightAt(p.x, p.z) + 2.05, p.z);
+        st.rotation.y = Math.atan2(-tz, tx) + Math.PI / 2;
+        g.add(st);
+      }
+    }
+    g.add(meshOf(parts, m));
+    spawn(add(g));
+  }
+
+  // ---------- Renacimiento: imprenta, viñedo, torre del reloj, escultores, arcabucería, banco,
+  // encuadernadores, catedral con cúpula y astillero en el río ----------
+  // Se construye la primera vez que la villa entra en la era 6, en el anillo que se gana a las colinas.
+  const renStatics: THREE.Object3D[] = [];
+  let renBuilt = false;
+  const pietraMat = mat(0x8a8c90), terraMat = mat(0xc8643a), greenMarbleMat = mat(0x3f6a5a), paperMat = mat(0xf2ecdc), inkMat = mat(0x1e1c22);
+  const brassMat = mat(0xd8b040, { metalness: 0.6, roughness: 0.35 }), clothRedMat = mat(0x8a1a22, { side: THREE.DoubleSide });
+  /** Punto de una zona del Renacimiento a x de lado y z hacia la villa, como en la geometría local. */
+  const zoneAt = (c: { x: number; z: number }, x: number, z: number) => around(c, x, -z);
+  const PRESSES = [zoneAt(PRINTING, -1.7, 1.5), zoneAt(PRINTING, 1.7, 1.5)];
+  const PAPER_PILE = zoneAt(PRINTING, 3.6, 2.2);
+  const VINE_ROWS = [-1.5, 0, 1.5, 3].map((z) => -z);
+  const VINES = VINE_ROWS.flatMap((z) => [-2, 0.4, 2.6].map((x) => zoneAt(VINEYARD, x, z)));
+  const WINE_PRESS = zoneAt(VINEYARD, -3.4, 3.6);
+  const WINE_PILE = zoneAt(VINEYARD, 3.2, 3.8);
+  const CLOCK_BENCHES = [zoneAt(CLOCKTOWER, -1.1, 2.4), zoneAt(CLOCKTOWER, 1.1, 2.4)];
+  const GEAR_PILE = zoneAt(CLOCKTOWER, 2.9, 1);
+  const STATUE_BLOCKS = [zoneAt(SCULPTOR, -2, 0.6), zoneAt(SCULPTOR, 0, 1.3), zoneAt(SCULPTOR, 2, 0.6)];
+  const STATUE_PILE = zoneAt(SCULPTOR, -3.3, 2.6);
+  const GUN_ANVILS = [zoneAt(GUNSMITH, -1.2, 1.4), zoneAt(GUNSMITH, 1.2, 1.4)];
+  const GUN_PILE = zoneAt(GUNSMITH, 3, 1.2);
+  const COUNTERS = [zoneAt(BANK, -1.5, 2.6), zoneAt(BANK, 1.5, 2.6)];
+  const COIN_PILE = zoneAt(BANK, -3.6, 2.2);
+  const BIND_TABLES = [zoneAt(BINDERY, -1.1, 1.8), zoneAt(BINDERY, 1.1, 1.8)];
+  const BOOK_PILE = zoneAt(BINDERY, 2.9, 1.4);
+  // En el astillero el casco apunta al agua: x de lado y z hacia la villa, girado con la orilla
+  const YARD_N = townNormal(SHIPYARD_S), YARD_ROT = Math.atan2(YARD_N.x, YARD_N.z);
+  const yardAt = (x: number, z: number) => ({ x: SHIPYARD.x + x * Math.cos(YARD_ROT) + z * Math.sin(YARD_ROT), z: SHIPYARD.z - x * Math.sin(YARD_ROT) + z * Math.cos(YARD_ROT) });
+  const HULL_SPOTS = [-0.6, 0.9].flatMap((z) => [-1, 1].map((sx) => ({ stand: yardAt(sx * 1.95, z), face: yardAt(0, z) })));
+  const TIMBER_PILE = yardAt(2.6, 2.6);
+  let paperStack: THREE.Object3D[] = [], wineBarrels: THREE.Object3D[] = [], statueRow: THREE.Object3D[] = [], gearPile: THREE.Object3D[] = [];
+  let musketRack: THREE.Object3D[] = [], coinChests: THREE.Object3D[] = [], bookStacks: THREE.Object3D[] = [], timberStack: THREE.Object3D[] = [];
+  let clockHands: THREE.Object3D[] = [], domeTop: THREE.Object3D | null = null, domeScaffold: THREE.Object3D | null = null;
+  let cellar: THREE.Object3D | null = null, gunGlow: THREE.MeshBasicMaterial | null = null, treadBoost = 0;
+  const caravels: THREE.Group[] = [];
+
+  function placeRen(o: THREE.Object3D, at: { x: number; z: number }, dy = 0, face = true): THREE.Object3D {
+    if (face) faceCenter(o, at);
+    renStatics.push(spawn(add(o, at.x, groundY(at.x, at.z, footprint(o)) + dy, at.z)));
+    return o;
+  }
+  /** Un montón que crece: piezas iguales apiladas, colocadas con su propia función. */
+  function heap(at: { x: number; z: number }, n: number, make: (k: number) => THREE.Object3D): THREE.Object3D[] {
+    const g = new THREE.Group(), list = Array.from({ length: n }, (_, k) => {
+      const o = make(k);
+      g.add(o);
+      return o;
+    });
+    faceCenter(g, at);
+    renStatics.push(spawn(add(g, at.x, heightAt(at.x, at.z), at.z)));
+    return list;
+  }
+  /** Mesa de trabajo sencilla con algo encima. */
+  function table(at: { x: number; z: number }, top: THREE.Material = timberMat, extra?: THREE.Object3D): void {
+    const g = new THREE.Group();
+    const parts = [boxAt(1.3, 0.1, 0.75, 0, 0.8, 0)];
+    for (const sx of [-0.55, 0.55]) for (const sz of [-0.3, 0.3]) parts.push(boxAt(0.08, 0.8, 0.08, sx, 0.4, sz));
+    g.add(new THREE.Mesh(mergeGeometries(parts)!, top));
+    if (extra) g.add(extra);
+    placeRen(g, at);
+  }
+  /** Caso de carabela: casco curvo, castillo de popa, dos o tres palos con velas latinas. */
+  function makeCaravel(s: number, sails = true): THREE.Group {
+    const g = new THREE.Group();
+    const hullGeo = new THREE.CylinderGeometry(1, 0.55, 1, 10, 1, false, Math.PI / 2, Math.PI);
+    hullGeo.rotateX(Math.PI / 2);
+    hullGeo.rotateZ(Math.PI);
+    hullGeo.scale(1.1, 0.9, 5);
+    const hull = new THREE.Mesh(hullGeo, barrelMat);
+    hull.position.y = 0.55;
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.1, 4.9), plankMat);
+    deck.position.y = 0.58;
+    const stern = new THREE.Mesh(new THREE.BoxGeometry(2, 0.7, 1.2), barrelMat);
+    stern.position.set(0, 0.95, -1.9);
+    const bow = new THREE.Mesh(new THREE.ConeGeometry(0.75, 1.6, 4), barrelMat);
+    bow.rotation.x = Math.PI / 2;
+    bow.position.set(0, 0.5, 3.1);
+    bow.scale.set(1.3, 1, 0.8);
+    g.add(hull, deck, stern, bow);
+    if (sails) {
+      for (const [z, h] of [[1.2, 3.6], [-0.4, 4.4], [-1.9, 3]] as const) {
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, h, 5), timberMat);
+        mast.position.set(0, 0.6 + h / 2, z);
+        const sailGeo = new THREE.BufferGeometry();
+        sailGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0.9 + h, z + 0.9, 0, 1.0, z - 0.6, 0, 1.2, z + 1.4], 3));
+        sailGeo.computeVertexNormals();
+        const sail = new THREE.Mesh(sailGeo, sailMat);
+        g.add(mast, sail);
+      }
+      const cross = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.5, 0.5), clothRedMat);
+      cross.position.set(0.02, 3.4, -0.3);
+      g.add(cross);
+    }
+    g.scale.setScalar(s);
+    return g;
+  }
+
+  function buildRenaissance(): void {
+    renBuilt = true;
+    // Imprenta: casa de dos plantas con ventanales y, delante, dos prensas de madera
+    {
+      const g = new THREE.Group();
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(6.4, 4, 3.6), ochreMat);
+      wall.position.set(0, 2, -1.3);
+      const roof = new THREE.Mesh(gableGeo(4.2, 7, 1.6).rotateY(Math.PI / 2), tileMat);
+      roof.position.set(0, 4, -1.3);
+      g.add(wall, roof, new THREE.Mesh(mergeGeometries([boxAt(6.6, 0.35, 3.8, 0, 0.17, -1.3), boxAt(6.7, 0.18, 3.9, 0, 4, -1.3)])!, pietraMat));
+      for (const x of [-2.2, 0, 2.2]) {
+        pane(g, x, 2.9, 0.53, 0.8, 1, 0);
+        if (x) pane(g, x, 1.3, 0.53, 0.8, 1, 0);
+      }
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 0.06), paperMat);
+      sign.position.set(0, 1.6, 0.6);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.4, 0.06), beamMat);
+      door.position.set(0, 0.7, 0.53);
+      g.add(sign, door);
+      placeRen(g, PRINTING);
+      for (const at of PRESSES) {
+        // Prensa: dos pies, travesaño, husillo con su barra y la platina sobre la cama
+        const pg = new THREE.Group();
+        const wood = [boxAt(0.18, 2.3, 0.18, -0.55, 1.15, 0), boxAt(0.18, 2.3, 0.18, 0.55, 1.15, 0), boxAt(1.3, 0.25, 0.3, 0, 2.2, 0), boxAt(1.0, 0.18, 0.4, 0, 1.25, 0), boxAt(1.2, 0.12, 1.4, 0, 0.75, 0.2), boxAt(0.1, 0.75, 0.1, -0.5, 0.37, 0.75), boxAt(0.1, 0.75, 0.1, 0.5, 0.37, 0.75)];
+        pg.add(new THREE.Mesh(mergeGeometries(wood)!, timberMat));
+        const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.75, 6), ironMat);
+        screw.position.y = 1.7;
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 4), ironMat);
+        bar.rotation.z = Math.PI / 2;
+        bar.position.set(0.4, 1.6, 0.1);
+        const sheet = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.02, 0.5), paperMat);
+        sheet.position.set(0, 0.82, 0.45);
+        pg.add(screw, bar, sheet);
+        placeRen(pg, at);
+      }
+      paperStack = heap(PAPER_PILE, 8, (k) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.18, 0.45), k % 3 ? paperMat : inkMat);
+        b.position.set((k % 2) * 0.7 - 0.35, 0.09 + Math.floor(k / 2) * 0.19, 0);
+        b.rotation.y = (k % 3) * 0.1;
+        return b;
+      });
+    }
+    // Viñedo: hileras de cepas en espaldera, un lagar de piedra y las barricas
+    {
+      const rows: THREE.BufferGeometry[] = [], stakes: THREE.BufferGeometry[] = [], grapes: THREE.BufferGeometry[] = [];
+      for (const z of VINE_ROWS.map((v) => -v)) {
+        for (let x = -3.2; x <= 3.21; x += 0.8) {
+          rows.push(new THREE.IcosahedronGeometry(0.42, 0).scale(1.1, 0.95, 0.75).translate(x, 0.75, z));
+          if ((x * 10) % 16 === 0) grapes.push(new THREE.IcosahedronGeometry(0.11, 0).translate(x + 0.2, 0.55, z + 0.32));
+          else grapes.push(new THREE.IcosahedronGeometry(0.1, 0).translate(x - 0.15, 0.6, z - 0.33));
+        }
+        for (const x of [-3.6, 0, 3.6]) stakes.push(boxAt(0.08, 1.3, 0.08, x, 0.65, z));
+        stakes.push(boxAt(7.3, 0.03, 0.03, 0, 1.1, z));
+      }
+      const g = new THREE.Group();
+      g.add(meshOf(rows, vineMat), meshOf(stakes, timberMat), meshOf(grapes, grapeMat));
+      placeRen(g, VINEYARD);
+      const lagar = new THREE.Group();
+      const vat = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.2, 0.7, 12, 1, true), pietraMat);
+      vat.position.y = 0.35;
+      const must = new THREE.Mesh(new THREE.CircleGeometry(1.05, 12), grapeMat);
+      must.rotation.x = -Math.PI / 2;
+      must.position.y = 0.55;
+      lagar.add(vat, must);
+      placeRen(lagar, WINE_PRESS);
+      wineBarrels = heap(WINE_PILE, 8, (k) => {
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.33, 0.8, 9), barrelMat);
+        b.rotation.z = Math.PI / 2;
+        b.position.set((k % 3) * 0.7 - 0.7 + (k >= 3 ? 0.35 : 0), 0.33 + (k >= 3 ? 0.6 : 0) + (k >= 6 ? 0.6 : 0), 0);
+        return b;
+      });
+      // Bodega de barricas (mejora): la puerta de la cueva en la ladera y una hilera de toneles
+      const c = new THREE.Group();
+      c.add(new THREE.Mesh(mergeGeometries([boxAt(2.4, 1.8, 0.6, 0, 0.9, 0), boxAt(2.8, 0.3, 0.8, 0, 1.9, 0)])!, pietraMat));
+      const dark = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.3), new THREE.MeshBasicMaterial({ color: 0x0b0806 }));
+      dark.position.set(0, 0.65, 0.31);
+      c.add(dark);
+      for (const x of [-0.9, 0.9]) {
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.9, 9), barrelMat);
+        b.position.set(x * 1.6, 0.4, 0.8);
+        b.rotation.x = Math.PI / 2;
+        c.add(b);
+      }
+      cellar = placeRen(c, zoneAt(VINEYARD, 0, -4.9));
+      cellar.visible = false;
+    }
+    // Torre del reloj: piedra gris y estuco, la esfera mira a la villa y marca la hora del día
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(mergeGeometries([boxAt(2.8, 9, 2.8, 0, 4.5, 0), boxAt(3.1, 0.3, 3.1, 0, 9, 0), boxAt(3.1, 0.5, 3.1, 0, 0.25, 0)])!, creamMat));
+      const belfry: THREE.BufferGeometry[] = [];
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) belfry.push(boxAt(0.4, 2, 0.4, sx * 1.15, 10.15, sz * 1.15));
+      belfry.push(boxAt(3, 0.3, 3, 0, 11.3, 0));
+      g.add(new THREE.Mesh(mergeGeometries(belfry)!, pietraMat));
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(2.2, 2, 4).rotateY(Math.PI / 4), tileMat);
+      cap.position.y = 12.4;
+      const bellR = new THREE.Mesh(bellGeo, bronzeMat);
+      bellR.scale.setScalar(0.7);
+      bellR.position.y = 9.7;
+      const face = new THREE.Mesh(new THREE.CircleGeometry(0.95, 20), paperMat);
+      face.position.set(0, 7.4, 1.42);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.07, 4, 20), brassMat);
+      rim.position.copy(face.position);
+      g.add(cap, bellR, face, rim);
+      clockHands = [0.55, 0.8].map((len, k) => {
+        const hand = new THREE.Group();
+        hand.position.set(0, 7.4, 1.47 + k * 0.02);
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(k ? 0.06 : 0.1, len, 0.03), inkMat);
+        bar.position.y = len / 2 - 0.08;
+        hand.add(bar);
+        g.add(hand);
+        return hand;
+      });
+      for (const y of [3, 5.2]) pane(g, 0, y, 1.42, 0.5, 0.9);
+      placeRen(g, CLOCKTOWER);
+      for (const at of CLOCK_BENCHES) {
+        const gear = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.05, 4, 10), brassMat);
+        gear.rotation.x = Math.PI / 2;
+        gear.position.y = 0.9;
+        table(at, timberMat, gear);
+      }
+      gearPile = heap(GEAR_PILE, 8, (k) => {
+        const b = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.07, 4, 10), brassMat);
+        b.rotation.x = Math.PI / 2;
+        b.position.set((k % 2) * 0.5 - 0.25, 0.08 + Math.floor(k / 2) * 0.12, (k % 3) * 0.1);
+        return b;
+      });
+    }
+    // Taller del escultor: un cobertizo de tejas, bloques de mármol de los que salen figuras y,
+    // al lado, las estatuas acabadas
+    {
+      const g = new THREE.Group();
+      const wood: THREE.BufferGeometry[] = [];
+      for (const x of [-2.8, 0, 2.8]) wood.push(boxAt(0.2, 2.6, 0.2, x, 1.3, -1.6));
+      g.add(new THREE.Mesh(mergeGeometries(wood)!, timberMat), new THREE.Mesh(mergeGeometries([boxAt(6.4, 2.6, 0.4, 0, 1.3, -2.6)])!, stuccoB));
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.2, 2.2), tileMat);
+      roof.position.set(0, 2.65, -2.1);
+      roof.rotation.x = -0.18;
+      g.add(roof);
+      placeRen(g, SCULPTOR);
+      STATUE_BLOCKS.forEach((at, k) => {
+        const b = new THREE.Group();
+        const block = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9 - k * 0.15, 0.8), marbleMat);
+        block.position.y = (0.9 - k * 0.15) / 2;
+        const fig = makeStatue(marbleMat, 0.55 + k * 0.12);
+        fig.position.y = 0.85 - k * 0.15 - 0.2;
+        b.add(block, fig);
+        placeRen(b, at);
+      });
+      statueRow = heap(STATUE_PILE, 6, (k) => {
+        const st = new THREE.Group();
+        const ped = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.55), marbleShadeMat);
+        ped.position.y = 0.22;
+        const fig = makeStatue(marbleMat, 0.62);
+        fig.position.y = 0.45;
+        st.add(ped, fig);
+        st.position.set((k % 3) * 0.95 - 0.95, 0, Math.floor(k / 3) * 1.0 - 0.5);
+        return st;
+      });
+    }
+    // Arcabucería: fragua de piedra con chimenea y dos yunques; los arcabuces, en su armero
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(mergeGeometries([boxAt(5, 2.6, 3.2, 0, 1.3, -1.4), boxAt(0.9, 4.6, 0.9, 1.6, 2.3, -2.2)])!, castleStoneMat));
+      const roof = new THREE.Mesh(gableGeo(3.7, 5.4, 1.2).rotateY(Math.PI / 2), tileMat);
+      roof.position.set(0, 2.6, -1.4);
+      gunGlow = new THREE.MeshBasicMaterial({ color: 0x3a1a08 });
+      const hearth = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1), gunGlow);
+      hearth.position.set(-0.9, 0.8, 0.22);
+      g.add(roof, hearth);
+      placeRen(g, GUNSMITH);
+      for (const at of GUN_ANVILS) {
+        const a = new THREE.Group();
+        const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.35, 0.55, 7), barrelMat);
+        stump.position.y = 0.27;
+        const anvil = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 0.75), ironMat);
+        anvil.position.y = 0.67;
+        a.add(stump, anvil);
+        placeRen(a, at);
+      }
+      const rack = new THREE.Group();
+      rack.add(new THREE.Mesh(mergeGeometries([boxAt(2, 0.12, 0.3, 0, 0.3, 0), boxAt(2, 0.12, 0.3, 0, 1.3, -0.25), boxAt(0.1, 1.5, 0.1, -1, 0.75, -0.2), boxAt(0.1, 1.5, 0.1, 1, 0.75, -0.2)])!, timberMat));
+      placeRen(rack, GUN_PILE);
+      musketRack = heap(GUN_PILE, 8, (k) => {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.06, 1.5, 5), k % 2 ? ironMat : barrelMat);
+        m.position.set(-0.85 + k * 0.24, 0.95, -0.05);
+        m.rotation.x = -0.18;
+        return m;
+      });
+    }
+    // Banco: palacio con la planta baja almohadillada, loggia de tres arcos, escudo y cornisa
+    {
+      const g = new THREE.Group();
+      const rust: THREE.BufferGeometry[] = [];
+      for (let y = 0; y < 4; y++) for (let x = 0; x < 7; x++) rust.push(boxAt(0.92, 0.62, 0.15, -2.85 + x * 0.95 + (y % 2) * 0.2, 0.33 + y * 0.66, 0.55));
+      g.add(new THREE.Mesh(mergeGeometries(rust)!, pietraMat));
+      g.add(new THREE.Mesh(mergeGeometries([boxAt(7, 2.7, 4.4, 0, 1.35, -1.6), boxAt(7, 2.6, 4.4, 0, 4, -1.6)])!, creamMat));
+      g.add(new THREE.Mesh(mergeGeometries([boxAt(7.6, 0.4, 5, 0, 5.4, -1.6), boxAt(7.2, 0.14, 4.6, 0, 2.72, -1.6)])!, pietraMat));
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 4).rotateY(Math.PI / 4), tileMat);
+      roof.scale.set(7.4 / Math.SQRT2, 1.2, 4.8 / Math.SQRT2);
+      roof.position.set(0, 6.2, -1.6);
+      g.add(roof);
+      for (const x of [-2.4, -0.8, 0.8, 2.4]) pane(g, x, 4.1, 0.62, 0.6, 1.1);
+      // Loggia: cuatro columnas con su cubierta delante de la puerta
+      const log: THREE.BufferGeometry[] = [];
+      for (const x of [-2.6, -0.9, 0.9, 2.6]) log.push(...columnGeos(x, 1.9, 2.5, 0.16));
+      log.push(boxAt(5.8, 0.35, 1.8, 0, 2.95, 1.2));
+      g.add(new THREE.Mesh(mergeGeometries(log.map((q) => (q.index ? q.toNonIndexed() : q)))!, marbleMat));
+      // El escudo: bolas rojas sobre oro
+      const shield = new THREE.Mesh(new THREE.CircleGeometry(0.55, 12), goldMat);
+      shield.position.set(0, 4.1, 0.7);
+      g.add(shield);
+      for (let k = 0; k < 6; k++) {
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 4), clothRedMat);
+        const a = (k / 6) * Math.PI * 2;
+        ball.position.set(Math.cos(a) * 0.32, 4.1 + Math.sin(a) * 0.32, 0.75);
+        g.add(ball);
+      }
+      placeRen(g, BANK);
+      for (const at of COUNTERS) {
+        const cloth = new THREE.Mesh(new THREE.BoxGeometry(1.34, 0.04, 0.79), mat(0x2f5a3a));
+        cloth.position.y = 0.86;
+        table(at, timberMat, cloth);
+      }
+      coinChests = heap(COIN_PILE, 6, (k) => {
+        const c = new THREE.Group();
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.42), barrelMat);
+        box.position.y = 0.2;
+        const coins = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.34), goldMat);
+        coins.position.y = 0.42;
+        c.add(box, coins);
+        c.position.set((k % 2) * 0.7 - 0.35, Math.floor(k / 2) * 0.48, 0);
+        return c;
+      });
+    }
+    // Encuadernadores: tienda con toldo a rayas y mesas con los pliegos
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(4.6, 2.8, 2.6).translate(0, 1.4, -1.4), roseMat));
+      const roof = new THREE.Mesh(gableGeo(3.1, 5, 1).rotateY(Math.PI / 2), tileMat);
+      roof.position.set(0, 2.8, -1.4);
+      const awning: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 6; k++) awning.push(boxAt(0.7, 0.05, 1.1, -1.75 + k * 0.7, 2.1, 0.45).rotateX(0));
+      const stripes = [awning.filter((_, k) => k % 2 === 0), awning.filter((_, k) => k % 2 === 1)];
+      const aw1 = new THREE.Mesh(mergeGeometries(stripes[0])!, clothRedMat), aw2 = new THREE.Mesh(mergeGeometries(stripes[1])!, paperMat);
+      for (const a of [aw1, aw2]) a.rotation.x = 0.25;
+      g.add(roof, aw1, aw2);
+      pane(g, -1.3, 1.3, -0.08, 0.9, 0.9);
+      pane(g, 1.3, 1.3, -0.08, 0.9, 0.9);
+      placeRen(g, BINDERY);
+      for (const at of BIND_TABLES) {
+        const book = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.3), mat(0x7a2a24));
+        book.position.y = 0.92;
+        table(at, timberMat, book);
+      }
+      bookStacks = heap(BOOK_PILE, 10, (k) => {
+        const st = new THREE.Group();
+        for (let q = 0; q < 4; q++) {
+          const b = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.3), mat(BOOK_COLORS[(k + q) % BOOK_COLORS.length]));
+          b.position.y = 0.05 + q * 0.1;
+          b.rotation.y = (q % 2) * 0.2;
+          st.add(b);
+        }
+        st.position.set((k % 5) * 0.5 - 1, 0, Math.floor(k / 5) * 0.45);
+        return st;
+      });
+    }
+    // Catedral: fachada de mármol a franjas, nave, tambor octogonal y la cúpula de tejas con sus
+    // nervios blancos y la linterna (mientras no se compre la cúpula, el tambor está en obras)
+    {
+      const g = new THREE.Group();
+      const white: THREE.BufferGeometry[] = [boxAt(5.4, 6, 0.4, 0, 3, 3.8), new THREE.CylinderGeometry(3, 3, 3.2, 8).translate(0, 6.4, -2.4)];
+      for (const y of [1, 2.6, 4.2]) white.push(boxAt(5.5, 0.3, 0.45, 0, y, 3.8));
+      const green: THREE.BufferGeometry[] = [];
+      for (const x of [-2.2, 2.2]) green.push(boxAt(0.35, 6, 0.48, x, 3, 3.8));
+      green.push(new THREE.ConeGeometry(3.1, 1.6, 3).rotateZ(0).scale(1, 1, 0.1).translate(0, 6.7, 3.8));
+      g.add(new THREE.Mesh(mergeGeometries(white.map((q) => (q.index ? q.toNonIndexed() : q)))!, marbleMat));
+      g.add(new THREE.Mesh(mergeGeometries(green.map((q) => (q.index ? q.toNonIndexed() : q)))!, greenMarbleMat));
+      const nave = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 6.4), creamMat);
+      nave.position.set(0, 2.5, 0.6);
+      const naveRoof = new THREE.Mesh(gableGeo(5.4, 6.6, 1.5), terraMat);
+      naveRoof.position.set(0, 5, 0.6);
+      const rose = new THREE.Mesh(new THREE.CircleGeometry(0.7, 12), windowMat);
+      rose.position.set(0, 4.6, 4.02);
+      const portal = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.2), mat(0x3a2418));
+      portal.position.set(0, 1.1, 4.02);
+      g.add(nave, naveRoof, rose, portal);
+      for (const x of [-1.5, 1.5]) pane(g, x * 1.68, 3.2, 0.6, 0.5, 1.4, Math.PI / 2);
+      // Campanario a franjas al lado de la fachada
+      const tower: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 6; k++) tower.push(boxAt(1.8, 1.8, 1.8, 4.3, 0.9 + k * 1.8, 2.6));
+      g.add(new THREE.Mesh(mergeGeometries(tower.filter((_, k) => k % 2 === 0))!, marbleMat), new THREE.Mesh(mergeGeometries(tower.filter((_, k) => k % 2 === 1))!, greenMarbleMat));
+      const spire = new THREE.Mesh(new THREE.ConeGeometry(1.3, 1.6, 4).rotateY(Math.PI / 4), terraMat);
+      spire.position.set(4.3, 11.6, 2.6);
+      g.add(spire);
+      // Cúpula
+      const top = new THREE.Group();
+      const domeGeo = new THREE.SphereGeometry(3, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+      domeGeo.scale(1, 1.25, 1);
+      const dome = new THREE.Mesh(domeGeo, terraMat);
+      dome.position.set(0, 8, -2.4);
+      const ribs: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 8; k++) {
+        // Un cuarto de arco que sigue la curva de la cúpula, de la base a la linterna
+        const rib = new THREE.TorusGeometry(3.03, 0.1, 4, 12, Math.PI / 2);
+        rib.scale(1, 1.25, 1);
+        rib.rotateY((k / 8) * Math.PI * 2 + Math.PI / 8);
+        ribs.push(rib.translate(0, 8, -2.4));
+      }
+      const lantern = [new THREE.CylinderGeometry(0.5, 0.6, 1.2, 8).translate(0, 12.3, -2.4), new THREE.ConeGeometry(0.55, 1, 8).translate(0, 13.4, -2.4), new THREE.SphereGeometry(0.15, 6, 4).translate(0, 14, -2.4)];
+      top.add(dome, meshOf(ribs, marbleMat), meshOf(lantern, marbleMat));
+      const scaf = new THREE.Group();
+      const poles2: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        poles2.push(new THREE.CylinderGeometry(0.06, 0.06, 4, 4).translate(Math.cos(a) * 3.3, 9.5, -2.4 + Math.sin(a) * 3.3));
+      }
+      for (const y of [8.6, 10.2]) poles2.push(new THREE.TorusGeometry(3.3, 0.05, 3, 24).rotateX(Math.PI / 2).translate(0, y, -2.4));
+      scaf.add(meshOf(poles2, timberMat));
+      g.add(top, scaf);
+      domeTop = top;
+      domeScaffold = scaf;
+      placeRen(g, DOME);
+    }
+    // Astillero: grada de tablones hacia el agua, un casco de carabela a medio hacer y la madera
+    {
+      const g = new THREE.Group();
+      const ways: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 6; k++) ways.push(boxAt(2.6, 0.6, 0.9, 0, 0.05, 2.2 - k * 0.95));
+      g.add(meshOf(ways, plankMat));
+      const ribs: THREE.BufferGeometry[] = [new THREE.BoxGeometry(0.22, 0.3, 4.8).translate(0, 0.5, 0)];
+      for (let k = 0; k < 7; k++) {
+        const z = -1.8 + k * 0.6, w = 0.9 + Math.sin(((k + 0.5) / 7) * Math.PI) * 0.4;
+        ribs.push(new THREE.TorusGeometry(w, 0.08, 4, 10, Math.PI).rotateZ(Math.PI).translate(0, 0.55 + w, z));
+      }
+      g.add(meshOf(ribs, barrelMat));
+      for (const sx of [-1, 1]) for (const z of [-1.5, 1.5]) g.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, 0.12).translate(sx * 1.6, 1.0, z), timberMat));
+      g.rotation.y = YARD_ROT;
+      renStatics.push(spawn(add(g, SHIPYARD.x, heightAt(SHIPYARD.x, SHIPYARD.z), SHIPYARD.z)));
+      // La grada es zona de trabajo: los carpinteros andan junto al casco, no la rodean
+      for (let k = solids.length - 1; k >= 0; k--) if (solids[k].obj === g) solids.splice(k, 1);
+      timberStack = heap(TIMBER_PILE, 8, (k) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 1.8), plankMat);
+        b.position.set((k % 4) * 0.28 - 0.42, 0.09 + Math.floor(k / 4) * 0.19, 0);
+        return b;
+      });
+    }
+  }
+  /** Carabelas fondeadas río arriba del astillero (mejora): se mecen en el agua. */
+  function setCaravels(on: boolean): void {
+    if (on && !caravels.length) {
+      for (const ds of [12, 24]) {
+        const s0 = SHIPYARD_S - ds, c = riverAt(s0), c2 = riverAt(s0 + 1);
+        const ship = makeCaravel(0.75);
+        ship.rotation.y = Math.atan2(c2.x - c.x, c2.z - c.z) + (ds === 12 ? Math.PI : 0);
+        ship.userData.phase = ds;
+        add(ship, c.x, -0.62, c.z);
+        caravels.push(ship);
+      }
+    }
+    for (const c of caravels) c.visible = on;
+  }
+  /** La torre del reloj marca la hora del día; la fragua del arcabucero brilla; las carabelas se mecen. */
+  function animateRenaissance(t: number, dt: number): void {
+    if (!renBuilt || shownEra < 6) return;
+    if (gunGlow) gunGlow.color.setRGB(0.55 + Math.sin(t * 5) * 0.1, 0.2 + Math.sin(t * 7) * 0.05, 0.04);
+    for (const c of caravels) {
+      c.rotation.z = Math.sin(t * 0.8 + c.userData.phase) * 0.04;
+      c.position.y = -0.62 + Math.sin(t * 1.1 + c.userData.phase) * 0.05;
+    }
+    treadBoost = Math.max(0, treadBoost - dt);
+  }
+
+  // ---------- El agua y el terreno de cada era ----------
+  // Puente sobre el río, en el tramo más cercano a la ciudad: de madera en la Edad del Bronce y de
+  // piedra desde la Antigüedad. El eje x del puente cruza el río; el z va a lo largo del agua.
+  let bridge: THREE.Object3D | null = null, bridgeStone = false;
+  function makeBridge(stone: boolean): THREE.Group {
+    const g = new THREE.Group();
+    const c = riverAt(RIVER_NEAR_S), n = townNormal(RIVER_NEAR_S);
+    const half = RIVER_W + 2.4, segs = 10, top = 1.65;
+    const endY = (u: number) => heightAt(c.x + n.x * half * u, c.z + n.z * half * u);
+    const deckY = (u: number) => THREE.MathUtils.lerp(Math.max(endY(Math.sign(u) || 1), 0), top, 1 - u * u) + 0.05;
+    const deck: THREE.BufferGeometry[] = [], rails: THREE.BufferGeometry[] = [];
+    for (let k = 0; k < segs; k++) {
+      const u0 = (k / segs) * 2 - 1, u1 = ((k + 1) / segs) * 2 - 1, um = (u0 + u1) / 2;
+      const x0 = u0 * half, x1 = u1 * half, y0 = deckY(u0), y1 = deckY(u1), len = Math.hypot(x1 - x0, y1 - y0) + 0.04;
+      const tilt = Math.atan2(y1 - y0, x1 - x0);
+      if (stone) {
+        // Bóveda: en los extremos el muro baja hasta el lecho; en el centro queda el arco
+        const deep = Math.abs(um) > 0.55 ? (y0 + y1) / 2 + 0.8 : 0.55;
+        deck.push(new THREE.BoxGeometry(len, deep, 2.2).translate(0, -deep / 2 + 0.2, 0).rotateZ(tilt).translate((x0 + x1) / 2, (y0 + y1) / 2, 0));
+        for (const side of [-1, 1]) rails.push(new THREE.BoxGeometry(len, 0.5, 0.25).rotateZ(tilt).translate((x0 + x1) / 2, (y0 + y1) / 2 + 0.45, side * 1.0));
+      } else {
+        deck.push(new THREE.BoxGeometry(len, 0.14, 1.8).rotateZ(tilt).translate((x0 + x1) / 2, (y0 + y1) / 2, 0));
+        for (const side of [-1, 1]) {
+          rails.push(new THREE.BoxGeometry(0.1, 0.8, 0.1).translate(x0, y0 + 0.4, side * 0.85));
+          rails.push(new THREE.BoxGeometry(len, 0.08, 0.08).rotateZ(tilt).translate((x0 + x1) / 2, (y0 + y1) / 2 + 0.75, side * 0.85));
+        }
+        // Pilotes clavados en el lecho
+        if (k === 3 || k === 6) for (const side of [-1, 1]) rails.push(new THREE.BoxGeometry(0.18, y0 + 1.2, 0.18).translate(x0, (y0 - 1.2) / 2, side * 0.7));
+      }
+    }
+    const m = stone ? castleStoneMat : timberMat;
+    g.add(new THREE.Mesh(mergeGeometries(deck)!, m), new THREE.Mesh(mergeGeometries(rails)!, stone ? marbleShadeMat : timberMat));
+    g.rotation.y = Math.atan2(-n.z, n.x);
+    return add(g, c.x, 0, c.z);
+  }
+  /** Agua y colinas de la era: charca, lago o río, y en el Renacimiento las colinas más lejos. */
+  function setLand(era: number): void {
+    const stage = era >= 3 ? 3 : era === 2 ? 2 : 1, hills = era >= 6 ? 80 : 64;
+    if (stage !== waterStage || hills !== hillsR) {
+      waterStage = stage;
+      hillsR = hills;
+      shapeTerrain();
+      pond.visible = stage < 3;
+      river.visible = stage === 3;
+      const c = stage === 2 ? LAKE : POND;
+      pond.position.set(c.x, -0.25, c.y);
+      pond.scale.setScalar(stage === 2 ? (LAKE_R + 0.4) / POND_R : 1);
+      for (const p of pines) p.obj.position.y = heightAt(p.obj.position.x, p.obj.position.z) - 0.05;
+      placeOuterForest();
+      placeMountains();
+      for (const p of [...people.fisher, ...people.rafter]) placeOnWater(p);
+      if (props.nets) {
+        const at = netsSpot();
+        props.nets.position.set(at.x, heightAt(at.x, at.z), at.z);
+        moveSolid(props.nets);
+      }
+    }
+    const stone = era >= 4;
+    if (stage === 3 && (!bridge || bridgeStone !== stone)) {
+      if (bridge) scene.remove(bridge);
+      bridge = makeBridge(stone);
+      bridgeStone = stone;
+    } else if (stage < 3 && bridge) {
+      scene.remove(bridge);
+      bridge = null;
+    }
   }
 
   let dwellingStyle = 0;
@@ -4229,22 +6169,24 @@ export function createVillage(container: HTMLElement): Village {
       const first = shownEra === 0;
       gentleDrops = !first;
       shownEra = state.era;
-      dayTarget = neolithic ? 1 : 0;
-      // La tarde dorada es solo de la Edad del Bronce; en la Antigüedad vuelve un mediodía claro.
-      warmTarget = state.era === 3 ? 1 : 0;
+      // La tarde dorada es de la Edad del Bronce (y algo de la Toscana en el Renacimiento); en la
+      // Antigüedad luce un mediodía claro.
+      warmTarget = state.era === 3 ? 1 : state.era === 6 ? 0.35 : 0;
       // En la Edad Media vuelve el cielo templado del norte, sin la luz blanca del Mediterráneo.
       medTarget = state.era === 4 ? 1 : 0;
       // La sombra del sol cubre todo el claro de la era.
-      const reach = state.era >= 5 ? 64 : 46;
+      const reach = state.era >= 6 ? 78 : state.era >= 5 ? 64 : 46;
       Object.assign(moonLight.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach });
       moonLight.shadow.camera.updateProjectionMatrix();
       zoomTarget = Math.min(MAX_ZOOM, state.era);
       if (first || reduceMotion) {
-        applyDay((day = dayTarget), (warm = warmTarget), (med = medTarget));
+        applyDay(day, (warm = warmTarget), (med = medTarget));
         zoom = zoomTarget;
       }
       // Desde el Neolítico la partida se abre mirando por encima de los campos, sin la arboleda delante.
       if (first && neolithic) angle = 2.5;
+      // El agua de la era (charca, lago o río) y el terreno que la rodea
+      setLand(state.era);
       // El bosque retrocede: los árboles dentro del nuevo claro se talan.
       clearForest(state.era, !first && !reduceMotion);
       if (neolithic) {
@@ -4263,7 +6205,16 @@ export function createVillage(container: HTMLElement): Village {
         if (!medievalBuilt) buildMedieval();
         else for (const o of medievalStatics) o.visible = true;
       } else for (const o of medievalStatics) o.visible = false;
+      const renaissance = state.era >= 6;
+      if (renaissance) {
+        if (!renBuilt) buildRenaissance();
+        else for (const o of renStatics) o.visible = true;
+      } else for (const o of renStatics) o.visible = false;
       wheatInst.visible = neolithic && neoBuilt;
+      // Cada era nueva empieza con todos en su oficio, y con las plazas que ya tiene.
+      resetLives();
+      for (const pl of PLAZAS) if (pl.era <= state.era && !plazaBuilt.has(pl)) buildPlaza(pl);
+      for (const o of OUTSKIRTS) if (o.era <= state.era && !outBuilt.has(o)) buildOutskirt(o);
       // Toda la población se viste con la ropa y las herramientas de la era nueva.
       for (const list of Object.values(people)) for (const p of list) {
         dress(p.rig, state.era);
@@ -4280,23 +6231,28 @@ export function createVillage(container: HTMLElement): Village {
     // Tiendas de piel en el Paleolítico, casas de barro en el Neolítico, casas de piedra en la
     // Edad del Bronce y villas en la Antigüedad. Cada era empieza con unas pocas y crecen con los
     // oficios de esa era.
-    const style = Math.min(5, state.era);
+    const style = Math.min(6, state.era);
     if (dwellingStyle !== style) {
       for (const t of tents) scene.remove(t);
       tents.length = 0;
       dwellingStyle = style;
     }
     // Nunca hay menos viviendas que al final de la era anterior: la aldea solo crece.
-    const slots = style === 5 ? TIMBER_SLOTS : style === 4 ? VILLA_SLOTS : style === 3 ? HOUSE_SLOTS : style === 2 ? HUT_SLOTS : TENT_SLOTS;
+    const slots = style === 6 ? REN_SLOTS : style === 5 ? TIMBER_SLOTS : style === 4 ? VILLA_SLOTS : style === 3 ? HOUSE_SLOTS : style === 2 ? HUT_SLOTS : TENT_SLOTS;
     const units = (n: number) => BUILDINGS_OF[n].reduce((a, b) => a + state.buildings[b], 0);
     let wantTents = Math.min(TENT_SLOTS.length, 1 + Math.floor(units(1) / 6));
     if (style >= 2) wantTents = Math.min(HUT_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(2) / 12));
     if (style >= 3) wantTents = Math.min(HOUSE_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(3) / 9));
     if (style >= 4) wantTents = Math.min(VILLA_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(4) / 9));
     if (style >= 5) wantTents = Math.min(TIMBER_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(5) / 9));
+    if (style >= 6) wantTents = Math.min(REN_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(6) / 9));
     while (tents.length < wantTents) {
       const t = slots[tents.length];
-      tents.push(spawn(style === 5 ? makeTimberHouse(t.x, t.z, t.s * 0.72, t.tone) : style === 4 ? makeVilla(t.x, t.z, t.s * 0.72, t.tone) : style === 3 ? makeHouse(t.x, t.z, t.s * 0.72, t.tone) : style === 2 ? makeHut(t.x, t.z, t.s * 0.8, t.tone) : makeTent(t.x, t.z, t.s, t.tone)));
+      const home = spawn(style === 6 ? makeRenHouse(t.x, t.z, t.s * 0.7, t.tone) : style === 5 ? makeTimberHouse(t.x, t.z, t.s * 0.72, t.tone) : style === 4 ? makeVilla(t.x, t.z, t.s * 0.72, t.tone) : style === 3 ? makeHouse(t.x, t.z, t.s * 0.72, t.tone) : style === 2 ? makeHut(t.x, t.z, t.s * 0.8, t.tone) : makeTent(t.x, t.z, t.s, t.tone));
+      // La puerta mira al centro de la aldea: ahí entra la gente a dormir.
+      const back = 1.6 * t.s + 0.3, tl = Math.hypot(t.x, t.z) || 1;
+      home.userData.doorAt = { x: t.x - (t.x / tl) * back, z: t.z - (t.z / tl) * back };
+      tents.push(home);
     }
     while (tents.length > wantTents) scene.remove(tents.pop()!);
     for (const kind of Object.keys(people) as BuildingId[]) {
@@ -4374,6 +6330,22 @@ export function createVillage(container: HTMLElement): Village {
       ashlars5.forEach((b, k) => (b.visible = k < 2 + state.buildings.bricklayer));
       oakLogs.forEach((b, k) => (b.visible = k < 2 + state.buildings.ranger));
     }
+    if (renBuilt && state.era >= 6) {
+      const books = Math.min(bookStacks.length, Math.round(Math.log10(state.resources.books + 1) * 0.55));
+      bookStacks.forEach((b, k) => (b.visible = k < books));
+      paperStack.forEach((b, k) => (b.visible = k < 2 + state.buildings.printer));
+      wineBarrels.forEach((b, k) => (b.visible = k < 2 + state.buildings.vintner));
+      statueRow.forEach((b, k) => (b.visible = k < 1 + state.buildings.sculptor));
+      gearPile.forEach((b, k) => (b.visible = k < 2 + state.buildings.clockmaker));
+      musketRack.forEach((b, k) => (b.visible = k < 2 + state.buildings.gunsmith));
+      coinChests.forEach((b, k) => (b.visible = k < 1 + state.buildings.banker));
+      timberStack.forEach((b, k) => (b.visible = k < 2 + state.buildings.shipwright));
+      const dome = state.upgrades.includes('dome');
+      if (domeTop) domeTop.visible = dome;
+      if (domeScaffold) domeScaffold.visible = !dome;
+      if (cellar) cellar.visible = state.upgrades.includes('barrels');
+    }
+    setCaravels(state.era >= 6 && state.upgrades.includes('caravels'));
     dropDelay = 0;
   }
 
@@ -4626,14 +6598,25 @@ export function createVillage(container: HTMLElement): Village {
     ffGeo.attributes.color.needsUpdate = true;
     (stars.material as THREE.PointsMaterial).opacity = (0.85 + Math.sin(t * 0.7) * 0.15) * (1 - day);
 
-    // Superficie del lago y ondas
-    const pp = pondGeo.attributes.position;
-    for (let i = 0; i < pp.count; i++) {
-      const x = pondBase[i * 3], y = pondBase[i * 3 + 1], edge = 1 - Math.hypot(x, y) / POND_R;
-      pp.setZ(i, (Math.sin(x * 1.3 + t * 1.6) + Math.cos(y * 1.1 - t * 1.3)) * 0.05 * edge);
+    // Superficie del lago (o del río) y ondas
+    if (pond.visible) {
+      const pp = pondGeo.attributes.position;
+      for (let i = 0; i < pp.count; i++) {
+        const x = pondBase[i * 3], y = pondBase[i * 3 + 1], edge = 1 - Math.hypot(x, y) / POND_R;
+        pp.setZ(i, (Math.sin(x * 1.3 + t * 1.6) + Math.cos(y * 1.1 - t * 1.3)) * 0.05 * edge);
+      }
+      pp.needsUpdate = true;
+      pondGeo.computeVertexNormals();
+    } else if (river.visible) {
+      // La corriente: ondas que bajan por el río, más vivas en el centro que en las orillas
+      const rp = riverGeo.attributes.position;
+      for (let k = 0; k < RIVER.length; k++) {
+        const s = RIVER_S[k];
+        for (let j = 1; j < 3; j++) rp.setY(k * 4 + j, (Math.sin(s * 0.9 - t * 2.2 + j * 1.7) + Math.cos(s * 0.37 - t * 1.4)) * 0.045);
+      }
+      rp.needsUpdate = true;
+      riverGeo.computeVertexNormals();
     }
-    pp.needsUpdate = true;
-    pondGeo.computeVertexNormals();
     for (const m of ripples) {
       if (m.userData.age >= 1) continue;
       m.userData.age += dt / 1.6;
@@ -4641,9 +6624,9 @@ export function createVillage(container: HTMLElement): Village {
       m.scale.setScalar((0.2 + a * 1.4) * m.userData.size);
       (m.material as THREE.MeshBasicMaterial).opacity = (1 - a) * 0.55;
     }
-    if (fx() < dt * 0.35) {
-      const a = fx() * Math.PI * 2, d = fx() * 3.8;
-      ripple(POND.x + Math.cos(a) * d, POND.y + Math.sin(a) * d, 0.5);
+    if (fx() < dt * (waterStage === 3 ? 1.2 : 0.35)) {
+      const w = waterSpot();
+      ripple(w.x, w.z, 0.5);
     }
 
     // Peces: saltan solos o salen con el sedal
@@ -4652,9 +6635,14 @@ export function createVillage(container: HTMLElement): Village {
         if (j.fish.userData.catch) continue;
         j.wait -= dt;
         if (j.wait <= 0) {
-          const a = fx() * Math.PI * 2, d = fx() * 3, from = new THREE.Vector3(POND.x + Math.cos(a) * d, -0.25, POND.y + Math.sin(a) * d);
-          const b = a + Math.PI / 2;
-          const to = from.clone().add(new THREE.Vector3(Math.cos(b) * 1.3, 0, Math.sin(b) * 1.3));
+          const w = waterSpot(), from = new THREE.Vector3(w.x, -0.25, w.z);
+          // Salta hacia un punto que también está en el agua
+          let to = from.clone();
+          for (let n = 0; n < 6; n++) {
+            const b = fx() * Math.PI * 2;
+            to = from.clone().add(new THREE.Vector3(Math.cos(b) * 1.3, 0, Math.sin(b) * 1.3));
+            if (inWater(to.x, to.z, -0.4)) break;
+          }
           launch(j, from, to, 0.75);
           ripple(from.x, from.z, 0.8);
           emit(splashMat, from.x, -0.1, from.z, 4, 0.6, 0.04);
@@ -4750,7 +6738,7 @@ export function createVillage(container: HTMLElement): Village {
       d.mesh.position.addScaledVector(d.v, dt);
       d.mesh.rotation.x += d.spin.x * dt;
       d.mesh.rotation.y += d.spin.y * dt;
-      const floor = Math.max(heightAt(d.mesh.position.x, d.mesh.position.z), Math.hypot(d.mesh.position.x - POND.x, d.mesh.position.z - POND.y) < POND_R ? -0.25 : -99);
+      const floor = Math.max(heightAt(d.mesh.position.x, d.mesh.position.z), inWater(d.mesh.position.x, d.mesh.position.z) ? -0.25 : -99);
       if (d.mesh.position.y < floor + 0.03) {
         if (!d.ground) d.life = 0;
         d.mesh.position.y = floor + 0.03;
@@ -4811,21 +6799,42 @@ export function createVillage(container: HTMLElement): Village {
       f.rotation.y = t * (1 + k);
       f.position.y = 0.3 + (f.userData.h * s) / 2;
     });
-    // De día el fuego alumbra menos: manda el sol.
-    if (day !== dayTarget || warm !== warmTarget || med !== medTarget) {
-      day = dayTarget > day ? Math.min(dayTarget, day + dt / 4) : Math.max(dayTarget, day - dt / 4);
-      warm = warmTarget > warm ? Math.min(warmTarget, warm + dt / 4) : Math.max(warmTarget, warm - dt / 4);
-      med = medTarget > med ? Math.min(medTarget, med + dt / 4) : Math.max(medTarget, med - dt / 4);
-      applyDay(day, warm, med);
+    // El reloj del día. De día el fuego alumbra menos: manda el sol.
+    if (!reduceMotion) {
+      tod += dt / CYCLE;
+      if (tod >= 1) {
+        tod -= 1;
+        dayNum++;
+      }
+    }
+    day = daylightAt(tod);
+    warm = warmTarget > warm ? Math.min(warmTarget, warm + dt / 4) : Math.max(warmTarget, warm - dt / 4);
+    med = medTarget > med ? Math.min(medTarget, med + dt / 4) : Math.max(medTarget, med - dt / 4);
+    applyDay(day, Math.max(warm, glowAt(tod) * 0.9), med);
+    // La torre del reloj (Renacimiento): esfera de doce horas, la aguja corta da dos vueltas por
+    // día y la larga, una por hora
+    if (clockHands.length) {
+      clockHands[0].rotation.z = -tod * Math.PI * 4;
+      clockHands[1].rotation.z = -tod * Math.PI * 48;
     }
     fireLight.intensity = (55 + Math.sin(t * 11) * 6 + Math.sin(t * 27) * 4) * big * (1 + flash) * (1 - day * 0.65);
     if (wheatInst.visible) updateWheat(reduceMotion ? 0 : t, reduceMotion ? 0 : dt);
 
     if (!reduceMotion) {
       animateWorld(t, dt);
+      animateBonfires(t);
+      animateBeasts(dt, t);
+      animateRenaissance(t, dt);
+      // La agenda del día se revisa unas pocas veces por segundo: basta y ahorra trabajo.
+      schedTimer -= dt;
+      if (schedTimer <= 0) {
+        schedTimer = 0.3;
+        schedule();
+      }
       for (const kind of Object.keys(people) as BuildingId[]) {
         for (const p of people[kind]) {
-          if (kind === 'gatherer') updateGatherer(p, dt, t);
+          if (p.life) updateLife(p, dt, t);
+          else if (kind === 'gatherer') updateGatherer(p, dt, t);
           else if (kind === 'woodcutter' || kind === 'feller') updateWoodcutter(p, dt, t);
           else if (kind === 'hunter') updateHunter(p, dt, t);
           else if (kind === 'rafter') updateRafter(p, dt, t);
@@ -4951,7 +6960,11 @@ export function createVillage(container: HTMLElement): Village {
     update,
     pulse() {
       flash = 1;
-      if (shownEra >= 5 && medievalBuilt) {
+      if (shownEra >= 6 && renBuilt) {
+        // Pisar uvas: salpica mosto morado del lagar
+        emit(grapeMat, WINE_PRESS.x, heightAt(WINE_PRESS.x, WINE_PRESS.z) + 0.8, WINE_PRESS.z, 6, 1.3, 0.06, 1.1);
+        treadBoost = 1;
+      } else if (shownEra >= 5 && medievalBuilt) {
         // Moler trigo: el molino acelera y sale harina por la puerta
         const door = around(WINDMILL, 0, -1.9);
         emit(flourMat, door.x, heightAt(door.x, door.z) + 0.8, door.z, 5, 1.1, 0.06, 1);
@@ -4983,6 +6996,7 @@ export function createVillage(container: HTMLElement): Village {
         renderer.render(scene, camera);
       }
     },
+    daylight: () => day,
     setPaused(p: boolean) {
       paused = p;
       if (p) stop();

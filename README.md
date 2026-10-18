@@ -6,11 +6,13 @@ Juego incremental para navegador sobre la evolución de una civilización humana
 
 ## Estado
 
-Fase 2: la era 1 (Paleolítico) completa y jugable, con una aldea 3D low poly (Three.js) que crece con cada compra.
+Seis eras jugables, cada una con su estilo, su música, su ropa y su parte de la aldea 3D low poly (Three.js):
+Paleolítico, Neolítico, Edad del Bronce, Antigüedad, Edad Media y Renacimiento.
 
-- 4 oficios: recolector, leñador, cazador y pescador. Cada uno duplica su producción al llegar a 10, 25, 50 y 100.
-- 6 mejoras y una meta de era: descubrir la agricultura.
-- Guardado automático, progreso fuera de línea (hasta 8 h) y exportar/importar partida.
+- Cada era suma un recurso (comida y madera, piedra, bronce, hierro, oro y libros), sus oficios, sus mejoras y una meta que abre la siguiente.
+- La aldea crece con cada compra: el agua pasa de charca a lago (con balsas) y a río (con puente y carabelas), y las afueras se llenan de caseríos, campos, prados, rebaños y monumentos.
+- Ciclo de día y noche: de día cada uno hace su oficio; a mediodía hay mercado o fiesta en las plazas, al anochecer baile o velada junto a la hoguera, y de noche todos vuelven a casa con antorchas y se encienden las ventanas.
+- Guardado automático, progreso fuera de línea (hasta 8 h) y partida en archivo `.civ`.
 
 ## Desarrollo
 

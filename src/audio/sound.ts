@@ -55,6 +55,7 @@ export class Sound {
   private noise!: AudioBuffer;
   private crackleTimer: number | undefined;
   private cricketTimer: number | undefined;
+  private daylight = 1;
   private birdTimer: number | undefined;
   private anvilTimer: number | undefined;
   private cicadaTimer: number | undefined;
@@ -148,11 +149,17 @@ export class Sound {
     this.syncRunning();
   }
 
-  /** El ambiente cambia con la era: noche en el Paleolítico, día en el Neolítico, martillos sobre el yunque
-   *  en la Edad del Bronce y, en la Antigüedad, cigarras y el hierro de la forja, y en la Edad Media, campanas lejanas. Encima suena la música de la era. */
+  /** El ambiente cambia con la era y con la hora: grillos de noche y pájaros de día en todas, martillos
+   *  sobre el yunque desde la Edad del Bronce, cigarras en la Antigüedad y campanas lejanas desde la
+   *  Edad Media. Encima suena la música de la era. */
   setEra(era: number): void {
     this.era = era;
     this.music?.setEra(era);
+  }
+
+  /** Luz del día en la aldea (0 = noche, 1 = día): de noche cantan los grillos y de día los pájaros. */
+  setDaylight(k: number): void {
+    this.daylight = k;
   }
 
   /** Pausa el ambiente cuando la pestaña no se ve. */
@@ -272,7 +279,8 @@ export class Sound {
     crackle();
 
     const cricket = () => {
-      if (this.era === 1 && this.audible) {
+      // Los grillos cantan de noche en todas las eras
+      if (this.daylight < 0.4 && this.audible) {
         const f = 4200 + Math.random() * 500;
         for (let i = 0; i < 3; i++) this.tone({ type: 'sine', freq: f, decay: 0.04, gain: 0.03, delay: i * 0.07, out: this.ambience });
       }
@@ -282,7 +290,7 @@ export class Sound {
 
     // De día cantan los pájaros: trinos cortos que suben y bajan.
     const bird = () => {
-      if (this.era >= 2 && this.audible) {
+      if (this.daylight > 0.6 && this.audible) {
         const base = 2200 + Math.random() * 1400, notes = 2 + Math.floor(Math.random() * 4);
         for (let i = 0; i < notes; i++) {
           const up = i % 2 === 0;
@@ -296,7 +304,8 @@ export class Sound {
     // En la Edad del Bronce suenan a lo lejos martillos sobre el bronce: golpes cortos con
     // armónicos que no casan entre sí, como el metal.
     const anvil = () => {
-      if (this.era >= 3 && this.audible) {
+      // Los martillos callan de noche
+      if (this.era >= 3 && this.daylight > 0.5 && this.audible) {
         // En la Antigüedad se forja hierro: el golpe suena más grave.
         const base = (this.era >= 4 ? 620 : 900) + Math.random() * 300, hits = 1 + Math.floor(Math.random() * 3);
         for (let i = 0; i < hits; i++) {
@@ -312,7 +321,7 @@ export class Sound {
 
     // Antigüedad: el canto de las cigarras al mediodía, pulsos muy rápidos que suben y se apagan.
     const cicada = () => {
-      if (this.era === 4 && this.audible) {
+      if (this.era === 4 && this.daylight > 0.7 && this.audible) {
         const f = 5600 + Math.random() * 900, pulses = 18 + Math.floor(Math.random() * 20);
         for (let i = 0; i < pulses; i++) {
           const k = Math.sin((i / pulses) * Math.PI);
