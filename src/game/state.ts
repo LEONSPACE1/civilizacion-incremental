@@ -1,5 +1,5 @@
 // Estado completo de una partida. Todo lo que se guarda vive aquí.
-export const RESOURCES = ['food', 'wood', 'stone', 'metal', 'iron'] as const;
+export const RESOURCES = ['food', 'wood', 'stone', 'metal', 'iron', 'gold'] as const;
 export type ResourceId = (typeof RESOURCES)[number];
 
 export const BUILDINGS = [
@@ -7,6 +7,7 @@ export const BUILDINGS = [
   'quarrier', 'farmer', 'forester', 'herder', 'carpenter', 'miner',
   'smelter', 'plowman', 'charcoaler', 'mason', 'copperMiner',
   'blacksmith', 'oliveGrower', 'sawyer', 'marbler', 'bronzesmith', 'ironMiner',
+  'merchant', 'miller', 'ranger', 'bricklayer', 'bellfounder', 'armorer', 'goldMiner',
 ] as const;
 export type BuildingId = (typeof BUILDINGS)[number];
 
@@ -15,7 +16,7 @@ export type Cost = Partial<Amounts>;
 
 export interface GameState {
   version: number;
-  /** Era en la que está la tribu (1 = Paleolítico, 2 = Neolítico, 3 = Edad del Bronce, 4 = Antigüedad). */
+  /** Era en la que está la tribu (1 = Paleolítico, 2 = Neolítico, 3 = Edad del Bronce, 4 = Antigüedad, 5 = Edad Media). */
   era: number;
   resources: Amounts;
   totals: Amounts;
@@ -29,9 +30,9 @@ export interface GameState {
 }
 
 export const SAVE_VERSION = 3;
-export const LAST_ERA = 4;
+export const LAST_ERA = 5;
 
-const zeroAmounts = (): Amounts => ({ food: 0, wood: 0, stone: 0, metal: 0, iron: 0 });
+const zeroAmounts = (): Amounts => ({ food: 0, wood: 0, stone: 0, metal: 0, iron: 0, gold: 0 });
 
 export function newGame(now = Date.now()): GameState {
   return {
