@@ -4,7 +4,9 @@
    del Bronce (body[data-era='3']) es bronce bruñido, pátina verde y oro, como el disco de Nebra; la
    Antigüedad (body[data-era='4']) es mármol blanco con vetas, azul del Egeo, greca y oro; la Edad
    Media (body[data-era='5']) es pergamino iluminado, carmesí, azul real, pan de oro y heráldica; el
-   Renacimiento (body[data-era='6']) es estuco ocre, terracota, piedra gris, lapislázuli y oro. */
+   Renacimiento (body[data-era='6']) es estuco ocre, terracota, piedra gris, lapislázuli y oro; la
+   Revolución Industrial (body[data-era='7']) es hierro remachado, ladrillo, latón y papel de cartel;
+   la Era Moderna (body[data-era='8']) es cristal, acero, blanco y azul eléctrico. */
 :root {
   --bg: #140e12;
   --text: #f3e6d0;
@@ -335,6 +337,231 @@ body[data-era='6'] {
   --toast-bg: var(--stucco), var(--grain), linear-gradient(170deg, #fcf4e2, #eedab4);
   --float: #a8442a;
   --float-shadow: 0 2px 0 #fff6e4, 0 0 10px rgba(255, 230, 180, 0.9);
+  color-scheme: light;
+}
+
+/* ---------- Era 7: Revolución Industrial. Hierro remachado, ladrillo rojo, latón y papel de cartel ---------- */
+body[data-era='7'] {
+  --bg: #d8ccb6;
+  --text: #1e1a18;
+  --muted: #5e554c;
+  --ochre: #9a3a22;
+  --ochre-deep: #4a1e12;
+  --hi: #b8913a;
+  --good: #3a5a3a;
+  --bad: #8a2a1a;
+  --focus: #2a3a4a;
+  --heading: 'Alfa Slab One', 'Rockwell', Georgia, serif;
+  --heading-scale: 0.92;
+  --r-stone: 3px;
+  /* Hollín y manchas de humedad sobre el papel */
+  --soot:
+    radial-gradient(ellipse at 20% 20%, rgba(40, 30, 24, 0.07), transparent 45%),
+    radial-gradient(ellipse at 80% 85%, rgba(154, 58, 34, 0.06), transparent 45%);
+
+  --page-bg:
+    radial-gradient(ellipse at 85% -10%, rgba(255, 220, 160, 0.35), transparent 50%),
+    radial-gradient(ellipse at 6% 105%, rgba(40, 32, 28, 0.22), transparent 55%),
+    url('./assets/industrial.svg'),
+    var(--grain),
+    linear-gradient(180deg, #e2d6c0, #d4c6ac 65%, #c2b294);
+  --page-size: auto, auto, 640px 640px, 220px 220px, auto;
+  --stage-bg: linear-gradient(180deg, #ddd0b8 85%, rgba(221, 208, 184, 0));
+  --scroll: #5e4a3a;
+
+  --title: linear-gradient(180deg, #c0583a, #9a3a22 55%, #4a1e12);
+  --title-shadow: drop-shadow(0 2px 0 rgba(255, 244, 222, 0.95));
+  --badge-bg: rgba(250, 242, 226, 0.85);
+  --badge-border: rgba(46, 42, 40, 0.5);
+
+  --btn-bg: var(--grain), linear-gradient(170deg, #f2e8d4, #ddcca8);
+  --btn-border: #2e2a28;
+  --btn-shadow: #1a1614;
+  --btn-glow: rgba(184, 145, 58, 0.35);
+
+  --scene-bg: linear-gradient(#a8a49a, #e0cfa8);
+  --scene-border: #1a1614;
+  --scene-ring: 0 0 0 5px #2e2a28, 0 0 0 7px #b8913a;
+  --scene-ring-thin: 0 0 0 3px #2e2a28, 0 0 0 4px #b8913a;
+  --scene-vignette: inset 0 0 60px rgba(40, 30, 24, 0.38);
+
+  --chip-bg: rgba(246, 238, 222, 0.92);
+  --chip-border: rgba(46, 42, 40, 0.5);
+  --chip-value: #9a3a22;
+
+  --gather-bg: linear-gradient(180deg, #e8c890, #b8913a 45%, #6e5420);
+  --gather-text: #fff6e4;
+  --gather-icon: #fff2d4;
+  --gather-edge: #3a2a10;
+  --gather-glow: rgba(184, 145, 58, 0.45);
+
+  /* Paneles de papel de cartel con marco de hierro y remaches */
+  --panel-bg: var(--soot), var(--grain), linear-gradient(165deg, #f6eedc, #e6d8bc 55%, #efe4cc);
+  --panel-border: #2e2a28;
+  --panel-shadow: 0 10px 24px rgba(20, 14, 10, 0.4), inset 0 0 0 3px rgba(46, 42, 40, 0.3), inset 0 -3px 0 rgba(90, 60, 40, 0.2);
+  --seam: 1px solid rgba(46, 42, 40, 0.4);
+  /* Remaches bajo los títulos */
+  --rule: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='8'%3E%3Cpath d='M0 4h14' stroke='%232e2a28' stroke-width='1.6'/%3E%3Ccircle cx='7' cy='4' r='2.4' fill='%23b8913a' stroke='%232e2a28' stroke-width='.8'/%3E%3C/svg%3E") repeat-x 0 100% / 14px 8px;
+
+  --card-bg: var(--soot), var(--grain), linear-gradient(180deg, #faf2e2, #eadcc0);
+  --card-border: #8a7a66;
+  --card-edge: #5e5246;
+  --icon-bg: radial-gradient(circle at 40% 35%, #f6eedc, #ddcca8);
+  --icon-color: #5e4a3a;
+  --icon-on: #ffe6b0;
+  --icon-on-bg: radial-gradient(circle at 40% 35%, #c0583a, #6a2614);
+  --icon-glow: rgba(154, 58, 34, 0.35);
+  --card-hover: rgba(154, 58, 34, 0.15);
+
+  --bar-bg: #e2d4b8;
+  --bar-border: #8a7a66;
+  --bar-fill: linear-gradient(90deg, #2e2a28, #6a625a);
+  --goal-fill: linear-gradient(90deg, #6e5420, #b8913a 70%, #ecd08a);
+  --goal-glow: rgba(184, 145, 58, 0.45);
+  --done: linear-gradient(90deg, #b8913a, #ecd08a);
+  --green-btn: linear-gradient(180deg, #c0583a, #7a2a16);
+  --green-edge: #3a140a;
+  --green-text: #fff4e4;
+  --green-hi: #9a3a22;
+  --off-bg: #e2d4b8;
+
+  --dialog-wall:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 226, 170, 0.35), transparent 60%),
+    url('./assets/industrial.svg'), var(--soot), var(--grain),
+    radial-gradient(ellipse at 50% 40%, #f6eedc, #e4d4b4 65%, #d0bc98);
+  --dialog-size: auto, 640px 640px, auto, auto, 220px 220px, auto;
+  --dialog-border: #2e2a28;
+  --dialog-shadow: 0 24px 60px rgba(20, 14, 10, 0.5), inset 0 0 60px rgba(90, 60, 30, 0.18);
+  --paint: rgba(154, 58, 34, 0.6);
+  --node-bg: radial-gradient(circle at 40% 35%, #faf2e2, #e2d0b0);
+  --node-border: #8a7a66;
+  --node-owned-bg: radial-gradient(circle at 40% 35%, #c0583a, #6a2614);
+  --node-owned-color: #ffe6b0;
+  --node-owned-border: #d8b050;
+  --node-header-bg: radial-gradient(circle at 40% 35%, #5a524a, #2e2a28);
+  --node-header-border: #b8913a;
+  --node-locked-bg: #e6d8bc;
+  --node-locked-border: #b8a68a;
+  --node-locked-color: #9a8a72;
+  --label-bg: rgba(250, 242, 226, 0.9);
+  --q-color: #5e4a3a;
+  --q-shadow: 0 2px 0 #fff6e4;
+
+  --toast-bg: var(--soot), var(--grain), linear-gradient(170deg, #faf2e2, #e6d8bc);
+  --float: #9a3a22;
+  --float-shadow: 0 2px 0 #fff6e4, 0 0 10px rgba(255, 230, 180, 0.9);
+  color-scheme: light;
+}
+
+/* ---------- Era 8: Era Moderna. Cristal, acero, blanco y azul eléctrico ---------- */
+body[data-era='8'] {
+  --bg: #e6edf4;
+  --text: #13202e;
+  --muted: #4f6072;
+  --ochre: #1f6fd6;
+  --ochre-deep: #0e3a7a;
+  --hi: #22b8a8;
+  --good: #1f8a4a;
+  --bad: #c0303a;
+  --focus: #1f6fd6;
+  --heading: 'Exo 2', 'Segoe UI', system-ui, sans-serif;
+  --heading-scale: 0.98;
+  --r-stone: 12px;
+  /* Reflejos del cristal */
+  --glass:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.55) 0 18%, transparent 18% 22%, rgba(255, 255, 255, 0.25) 22% 26%, transparent 26%),
+    radial-gradient(ellipse at 80% 90%, rgba(31, 111, 214, 0.08), transparent 50%);
+
+  --page-bg:
+    radial-gradient(ellipse at 85% -10%, rgba(140, 200, 255, 0.5), transparent 50%),
+    radial-gradient(ellipse at 6% 105%, rgba(34, 184, 168, 0.18), transparent 55%),
+    url('./assets/modern.svg'),
+    linear-gradient(180deg, #f2f6fa, #e2eaf2 65%, #d2dee9);
+  --page-size: auto, auto, 640px 640px, auto;
+  --stage-bg: linear-gradient(180deg, #eaf0f6 85%, rgba(234, 240, 246, 0));
+  --scroll: #6a7f96;
+
+  --title: linear-gradient(180deg, #3a8cf0, #1f6fd6 55%, #0e3a7a);
+  --title-shadow: drop-shadow(0 2px 0 rgba(255, 255, 255, 0.95));
+  --badge-bg: rgba(255, 255, 255, 0.85);
+  --badge-border: rgba(31, 111, 214, 0.4);
+
+  --btn-bg: linear-gradient(170deg, #ffffff, #e2eaf3);
+  --btn-border: #9aaec4;
+  --btn-shadow: #6a7f96;
+  --btn-glow: rgba(31, 111, 214, 0.3);
+
+  --scene-bg: linear-gradient(#6aaef0, #dcecf8);
+  --scene-border: #4f6072;
+  --scene-ring: 0 0 0 4px #c8d6e4, 0 0 0 6px #1f6fd6;
+  --scene-ring-thin: 0 0 0 3px #c8d6e4, 0 0 0 4px #1f6fd6;
+  --scene-vignette: inset 0 0 40px rgba(14, 58, 122, 0.18);
+
+  --chip-bg: rgba(255, 255, 255, 0.92);
+  --chip-border: rgba(31, 111, 214, 0.35);
+  --chip-value: #1f6fd6;
+
+  --gather-bg: linear-gradient(180deg, #8ee8a8, #2aa860 45%, #146a3a);
+  --gather-text: #f4fff6;
+  --gather-icon: #f0fff4;
+  --gather-edge: #0c4a26;
+  --gather-glow: rgba(42, 168, 96, 0.4);
+
+  /* Paneles de cristal esmerilado con borde de acero */
+  --panel-bg: var(--glass), linear-gradient(165deg, #ffffff, #eef3f8 55%, #f6f9fc);
+  --panel-border: #9aaec4;
+  --panel-shadow: 0 12px 28px rgba(14, 40, 80, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.9), inset 0 -3px 0 rgba(31, 111, 214, 0.12);
+  --seam: 1px solid rgba(154, 174, 196, 0.6);
+  /* Línea de circuito bajo los títulos */
+  --rule: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8'%3E%3Cpath d='M0 4h9l3-3h12' fill='none' stroke='%231f6fd6' stroke-width='1.4'/%3E%3Ccircle cx='9' cy='4' r='1.8' fill='%2322b8a8'/%3E%3C/svg%3E") repeat-x 0 100% / 24px 8px;
+
+  --card-bg: var(--glass), linear-gradient(180deg, #ffffff, #edf2f8);
+  --card-border: #b8c8da;
+  --card-edge: #8aa0b8;
+  --icon-bg: radial-gradient(circle at 40% 35%, #ffffff, #dde7f2);
+  --icon-color: #4f6072;
+  --icon-on: #ffffff;
+  --icon-on-bg: radial-gradient(circle at 40% 35%, #3a8cf0, #0e4a9a);
+  --icon-glow: rgba(31, 111, 214, 0.35);
+  --card-hover: rgba(31, 111, 214, 0.12);
+
+  --bar-bg: #e2eaf3;
+  --bar-border: #b8c8da;
+  --bar-fill: linear-gradient(90deg, #1f6fd6, #22b8a8);
+  --goal-fill: linear-gradient(90deg, #0e3a7a, #1f6fd6 60%, #7ac4ff);
+  --goal-glow: rgba(31, 111, 214, 0.4);
+  --done: linear-gradient(90deg, #22b8a8, #8ee8d8);
+  --green-btn: linear-gradient(180deg, #3a8cf0, #0e4a9a);
+  --green-edge: #0a2e66;
+  --green-text: #ffffff;
+  --green-hi: #1f6fd6;
+  --off-bg: #e2eaf3;
+
+  --dialog-wall:
+    radial-gradient(ellipse at 50% 0%, rgba(140, 200, 255, 0.35), transparent 60%),
+    url('./assets/modern.svg'), var(--glass),
+    radial-gradient(ellipse at 50% 40%, #ffffff, #eaf0f6 65%, #d8e3ee);
+  --dialog-size: auto, 640px 640px, auto, auto, auto;
+  --dialog-border: #9aaec4;
+  --dialog-shadow: 0 24px 60px rgba(14, 40, 80, 0.3), inset 0 0 40px rgba(31, 111, 214, 0.08);
+  --paint: rgba(31, 111, 214, 0.55);
+  --node-bg: radial-gradient(circle at 40% 35%, #ffffff, #e2eaf3);
+  --node-border: #b8c8da;
+  --node-owned-bg: radial-gradient(circle at 40% 35%, #3a8cf0, #0e4a9a);
+  --node-owned-color: #ffffff;
+  --node-owned-border: #7ac4ff;
+  --node-header-bg: radial-gradient(circle at 40% 35%, #2ad0bc, #12786c);
+  --node-header-border: #1f6fd6;
+  --node-locked-bg: #e8eef5;
+  --node-locked-border: #c4d2e0;
+  --node-locked-color: #98a8ba;
+  --label-bg: rgba(255, 255, 255, 0.9);
+  --q-color: #4f6072;
+  --q-shadow: 0 2px 0 #ffffff;
+
+  --toast-bg: var(--glass), linear-gradient(170deg, #ffffff, #e8eff6);
+  --float: #1f6fd6;
+  --float-shadow: 0 2px 0 #ffffff, 0 0 10px rgba(160, 210, 255, 0.9);
   color-scheme: light;
 }
 
@@ -1202,6 +1429,36 @@ body[data-era='6'] .choice[aria-checked='true'] { background: linear-gradient(18
 body[data-era='6'] .hint { color: #6e5a48; }
 body[data-era='6'] .panel h2, body[data-era='6'] .tree-head h2, body[data-era='6'] .tree-detail h3, body[data-era='6'] .settings h2, body[data-era='6'] .settings h3 { font-weight: 700; }
 
+/* Ajustes en la Revolución Industrial: un cartel enmarcado en hierro con remaches de latón */
+body[data-era='7'] .settings-inner {
+  border-radius: 3px;
+  background: var(--soot), var(--grain), radial-gradient(ellipse at 30% 15%, #faf2e2, #e8dabe 65%, #d6c4a2);
+  border: 6px solid #2e2a28;
+  box-shadow: 0 24px 60px rgba(20, 14, 10, 0.5), inset 0 0 0 2px #b8913a, inset 0 0 40px rgba(90, 60, 30, 0.18);
+}
+body[data-era='7'] .settings-inner::before { inset: 8px; border: 1.5px dashed rgba(46, 42, 40, 0.45); border-radius: 2px; }
+body[data-era='7'] .settings h2, body[data-era='7'] .settings h3 { color: #9a3a22; }
+body[data-era='7'] .stone-btn { color: #fff4e4; border-color: #1a1614; background: var(--grain), linear-gradient(180deg, #5a524a, #2e2a28); box-shadow: 0 3px 0 #1a1614; }
+body[data-era='7'] .stone-btn.danger { background: var(--grain), linear-gradient(180deg, #c0583a, #7a2a16); }
+body[data-era='7'] .choice[aria-checked='true'] { background: linear-gradient(180deg, #5a524a, #2e2a28); border-color: #1a1614; box-shadow: 0 3px 0 #1a1614; color: #fff4e4; }
+body[data-era='7'] .hint { color: #5e554c; }
+body[data-era='7'] .panel h2, body[data-era='7'] .tree-head h2, body[data-era='7'] .tree-detail h3, body[data-era='7'] .settings h2, body[data-era='7'] .settings h3 { font-weight: 400; letter-spacing: 0.01em; }
+
+/* Ajustes en la Era Moderna: una ventana de cristal con esquinas redondeadas */
+body[data-era='8'] .settings-inner {
+  border-radius: 18px;
+  background: var(--glass), radial-gradient(ellipse at 30% 15%, #ffffff, #eef3f8 65%, #dde7f1);
+  border: 2px solid #9aaec4;
+  box-shadow: 0 24px 60px rgba(14, 40, 80, 0.3), inset 0 0 0 1px #ffffff;
+}
+body[data-era='8'] .settings-inner::before { inset: 8px; border: 1px solid rgba(31, 111, 214, 0.25); border-radius: 12px; }
+body[data-era='8'] .settings h2, body[data-era='8'] .settings h3 { color: #0e3a7a; }
+body[data-era='8'] .stone-btn { color: #ffffff; border-color: #0a2e66; background: linear-gradient(180deg, #3a8cf0, #1f6fd6); box-shadow: 0 3px 0 #0a2e66; }
+body[data-era='8'] .stone-btn.danger { background: linear-gradient(180deg, #e0505a, #a0202a); }
+body[data-era='8'] .choice[aria-checked='true'] { background: linear-gradient(180deg, #3a8cf0, #1f6fd6); border-color: #0a2e66; box-shadow: 0 3px 0 #0a2e66; color: #ffffff; }
+body[data-era='8'] .hint { color: #4f6072; }
+body[data-era='8'] .panel h2, body[data-era='8'] .tree-head h2, body[data-era='8'] .tree-detail h3, body[data-era='8'] .settings h2, body[data-era='8'] .settings h3 { font-weight: 800; }
+
 /* Avisos */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(8px); margin: 0; z-index: 10;
@@ -1309,6 +1566,40 @@ body[data-era='2'] .float { font-weight: 700; }
 }
 .era-curtain[data-era='6'] .era-intro { text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
 
+/* La cortina de la Revolución Industrial: humo de chimeneas al amanecer y engranajes detrás */
+.era-curtain[data-era='7'] {
+  background:
+    url('./assets/industrial.svg') center / 640px 640px,
+    radial-gradient(circle at 50% 40%, #ffe2a8 0 10%, #d88a4a 24%, #6a4a3a 50%, #1a1614);
+}
+.era-curtain[data-era='7'] .era-card { color: #fff4e4; }
+.era-curtain[data-era='7'] .era-kicker { color: #ecd08a; }
+.era-curtain[data-era='7'] .era-card h2 {
+  font-family: 'Alfa Slab One', Georgia, serif; font-weight: 400; font-size: clamp(2.2rem, 8vw, 4.2rem); color: #ffe6b0; line-height: 1.05;
+  text-shadow: 0 3px 0 #2a120a, 0 0 30px rgba(255, 190, 110, 0.55);
+}
+.era-curtain[data-era='7'] .era-card h2::after {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='8'%3E%3Cpath d='M0 4h14' stroke='%23ecd08a' stroke-width='1.4'/%3E%3Ccircle cx='7' cy='4' r='2.4' fill='%23ecd08a'/%3E%3C/svg%3E") repeat-x center / 14px 8px;
+}
+.era-curtain[data-era='7'] .era-intro { text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7); }
+
+/* La cortina de la Era Moderna: cielo nocturno con la ciudad iluminada y la estela del cohete */
+.era-curtain[data-era='8'] {
+  background:
+    url('./assets/modern.svg') center / 640px 640px,
+    radial-gradient(circle at 50% 40%, #ffffff 0 8%, #8ec8ff 20%, #1f6fd6 46%, #0a1a3a 75%, #050a1a);
+}
+.era-curtain[data-era='8'] .era-card { color: #ffffff; }
+.era-curtain[data-era='8'] .era-kicker { color: #8ee8d8; }
+.era-curtain[data-era='8'] .era-card h2 {
+  font-family: 'Exo 2', system-ui, sans-serif; font-weight: 800; font-size: clamp(2.6rem, 9vw, 4.8rem); color: #ffffff; line-height: 1;
+  text-shadow: 0 3px 0 #0a2e66, 0 0 30px rgba(140, 200, 255, 0.8);
+}
+.era-curtain[data-era='8'] .era-card h2::after {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8'%3E%3Cpath d='M0 4h9l3-3h12' fill='none' stroke='%238ee8d8' stroke-width='1.4'/%3E%3Ccircle cx='9' cy='4' r='1.8' fill='%23ffffff'/%3E%3C/svg%3E") repeat-x center / 24px 8px;
+}
+.era-curtain[data-era='8'] .era-intro { text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+
 @media (max-width: 1000px) {
   .app { grid-template-columns: minmax(0, 1fr) 340px; }
   .chip-name { display: none; }
@@ -1335,6 +1626,8 @@ body[data-era='2'] .float { font-weight: 700; }
   .chip { padding: 3px 8px 3px 5px; font-size: 0.82rem; gap: 4px; }
   .chip b { font-size: 0.92rem; }
   .chip-icon svg { width: 17px; height: 17px; }
+  /* Con nueve o diez recursos, en el móvil el HUD muestra solo las cantidades para no tapar la escena */
+  body[data-era='7'] .chip small, body[data-era='8'] .chip small { display: none; }
   .gather { bottom: 10px; padding: 10px 18px 10px 12px; }
   .scene { box-shadow: var(--scene-ring-thin); }
   .slider { grid-template-columns: 1fr 48px; }

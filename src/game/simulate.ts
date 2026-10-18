@@ -47,7 +47,8 @@ export interface SimOptions {
   onSecond?: (t: number, s: GameState) => void;
 }
 
-let bias: Record<ResourceId, number> = { food: 1, wood: 1, stone: 1, metal: 1, iron: 1, gold: 1, books: 1 };
+const NO_BIAS = Object.fromEntries(RESOURCES.map((r) => [r, 1])) as Record<ResourceId, number>;
+let bias = { ...NO_BIAS };
 const value = (c: Cost) => RESOURCES.reduce((sum, r) => sum + (c[r] ?? 0) * bias[r], 0);
 
 /** Un jugador razonable: compra mejoras en cuanto puede y, si no, el edificio más rentable. */
@@ -85,51 +86,44 @@ export function simulateEra1(options: SimOptions = {}): SimResult {
   return simulateEra(newGame(0), options);
 }
 
-/** La era 2 empieza donde termina una era 1 jugada por el mismo jugador. */
-export function simulateEra2(options: SimOptions = {}): SimResult {
-  const s = simulateEra1(options).state;
-  advanceEra(s);
-  return simulateEra(s, { earlyClickSeconds: 0, ...options });
+// Cada era empieza donde termina la anterior, jugada por el mismo jugador. Las partidas al final de
+// cada era se guardan para no volver a jugar las eras anteriores en cada prueba.
+const finished = new Map<string, GameState>();
+function startOfEra(era: number, options: SimOptions): GameState {
+  if (era <= 1) return newGame(0);
+  const key = `${era}:${JSON.stringify({ ...options, onSecond: undefined })}`;
+  let s = finished.get(key);
+  if (!s) {
+    s = simulateEra(startOfEra(era - 1, options), era === 2 ? options : { earlyClickSeconds: 0, ...options }).state;
+    advanceEra(s);
+    finished.set(key, s);
+  }
+  return structuredClone(s);
 }
 
-/** La era 3 sigue a la era 2 del mismo jugador. */
-export function simulateEra3(options: SimOptions = {}): SimResult {
-  const s = simulateEra2(options).state;
-  advanceEra(s);
-  return simulateEra(s, { earlyClickSeconds: 0, ...options });
+/** Juega la era indicada con una partida que viene de jugar todas las anteriores. */
+export function simulateEraN(era: number, options: SimOptions = {}): SimResult {
+  return simulateEra(startOfEra(era, options), era === 1 ? options : { earlyClickSeconds: 0, ...options });
 }
 
-/** La era 4 sigue a la era 3 del mismo jugador. */
-export function simulateEra4(options: SimOptions = {}): SimResult {
-  const s = simulateEra3(options).state;
-  advanceEra(s);
-  return simulateEra(s, { earlyClickSeconds: 0, ...options });
-}
-
-/** La era 5 sigue a la era 4 del mismo jugador. */
-export function simulateEra5(options: SimOptions = {}): SimResult {
-  const s = simulateEra4(options).state;
-  advanceEra(s);
-  return simulateEra(s, { earlyClickSeconds: 0, ...options });
-}
-
-/** La era 6 sigue a la era 5 del mismo jugador. */
-export function simulateEra6(options: SimOptions = {}): SimResult {
-  const s = simulateEra5(options).state;
-  advanceEra(s);
-  return simulateEra(s, { earlyClickSeconds: 0, ...options });
-}
+export const simulateEra2 = (options: SimOptions = {}) => simulateEraN(2, options);
+export const simulateEra3 = (options: SimOptions = {}) => simulateEraN(3, options);
+export const simulateEra4 = (options: SimOptions = {}) => simulateEraN(4, options);
+export const simulateEra5 = (options: SimOptions = {}) => simulateEraN(5, options);
+export const simulateEra6 = (options: SimOptions = {}) => simulateEraN(6, options);
+export const simulateEra7 = (options: SimOptions = {}) => simulateEraN(7, options);
+export const simulateEra8 = (options: SimOptions = {}) => simulateEraN(8, options);
 
 /** Juega la era en la que está la partida hasta pagar su meta. */
 export function simulateEra(s: GameState, options: SimOptions = {}): SimResult {
   const { earlyClicksPerSecond = 3, earlyClickSeconds = 180, maxSeconds = 4 * 3600 } = options;
-  bias = { food: 1, wood: 1, stone: 1, metal: 1, iron: 1, gold: 1, books: 1, ...options.bias };
+  bias = { ...NO_BIAS, ...options.bias };
   const events: SimEvent[] = [];
   let lastBuy = 0;
   let longestWait = 0;
   let longestWaitBefore = '';
   let pendingClicks = 0;
-  const blockedBy: Record<ResourceId, number> = { food: 0, wood: 0, stone: 0, metal: 0, iron: 0, gold: 0, books: 0 };
+  const blockedBy = Object.fromEntries(RESOURCES.map((r) => [r, 0])) as Record<ResourceId, number>;
   for (let t = 0; t < maxSeconds; t++) {
     pendingClicks += t < earlyClickSeconds ? earlyClicksPerSecond : 0.2;
     for (; pendingClicks >= 1; pendingClicks--) gather(s);

@@ -493,7 +493,8 @@ function renderGoal(): void {
         playEraTransition();
       });
     } else {
-      goalPanel.innerHTML = `<h2>¡Era ${era.n} completada!</h2><p>Has llegado al final de lo que existe por ahora. La siguiente era llegará en una próxima actualización; mientras tanto puedes seguir haciendo crecer tu aldea.</p>`;
+      // La última era: el cohete ha despegado y la historia de la civilización está completa.
+      goalPanel.innerHTML = `<h2>¡Tu civilización ha llegado a las estrellas!</h2><p>De aquella primera chispa junto al fuego al cohete que cruza el cielo: has completado las ${era.n} eras de la historia. Pronto podrás volver a empezar con lo aprendido y avanzar más rápido; mientras tanto puedes seguir haciendo crecer tu ciudad.</p>`;
     }
     return;
   }
