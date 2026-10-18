@@ -1607,8 +1607,10 @@ body[data-era='2'] .float { font-weight: 700; }
 /* En pantallas estrechas la aldea queda fija arriba y los paneles se desplazan debajo */
 @media (max-width: 760px) {
   .app { display: block; height: auto; padding: 0 12px 12px; }
+  /* Alto fijo con svh (la pantalla con la barra del navegador visible): al deslizar, la barra se
+     oculta o aparece y con dvh la aldea cambiaba de tamaño y se veía en blanco un instante. */
   .stage {
-    position: sticky; top: 0; z-index: 4; padding: 10px 0; gap: 8px; height: 46vh; height: 46dvh;
+    position: sticky; top: 0; z-index: 4; padding: 10px 0; gap: 8px; height: 46vh; height: 46svh;
     background: var(--stage-bg);
   }
   .header h1 { font-size: calc(1.5rem * var(--heading-scale)); }
