@@ -72,8 +72,18 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-const mat = (color: number, extra: THREE.MeshStandardMaterialParameters = {}) =>
+const newMat = (color: number, extra: THREE.MeshStandardMaterialParameters = {}) =>
   new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 1, metalness: 0, ...extra });
+/** Material compartido por color y opciones. Compartirlo ahorra trabajo al dibujar (antes había más de
+ *  1400 materiales en la era 8, muchos iguales). Nada que salga de aquí debe cambiarse después: lo que
+ *  cambia con el tiempo (color, opacidad) se crea aparte con newMat(). */
+const matCache = new Map<string, THREE.MeshStandardMaterial>();
+const mat = (color: number, extra?: THREE.MeshStandardMaterialParameters) => {
+  const key = extra ? `${color}:${JSON.stringify(extra)}` : `${color}`;
+  let m = matCache.get(key);
+  if (!m) matCache.set(key, (m = newMat(color, extra)));
+  return m;
+};
 const polar = (a: number, d: number) => ({ x: Math.cos(a) * d, z: Math.sin(a) * d });
 const angDist = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 const lerpAngle = (a: number, b: number, k: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
@@ -485,8 +495,10 @@ interface Rig {
   /** La lanza se mantiene vertical aunque el brazo se mueva. */
   tool?: THREE.Object3D;
   rodTip?: THREE.Object3D;
-  /** Piezas que cambian de aspecto con la era (ver dress()). */
-  body: THREE.Mesh;
+  /** Piel y pelo de la persona. El cuerpo, la cabeza y el pelo van unidos a la ropa en una sola
+   *  malla con colores por vértice (ver dress()): así cada persona se dibuja con menos piezas. */
+  skin: THREE.Material;
+  hair: number;
   limbs: { legs: THREE.Mesh[]; arms: THREE.Mesh[] };
   /** Cabezas de hacha, puntas de lanza, hojas de hoz…: piedra, luego bronce y luego hierro. */
   heads: THREE.Mesh[];
@@ -767,7 +779,7 @@ export function createVillage(container: HTMLElement): Village {
 
   // Montañas (de noche se ven violetas; de día, azuladas por la distancia). Por donde sale el río no
   // hay montaña, y en el Renacimiento se apartan con las colinas.
-  const mountainMat = mat(0x4a4066), snowMat = mat(0xe9e6f4);
+  const mountainMat = newMat(0x4a4066), snowMat = mat(0xe9e6f4);
   const mountains: { peak: THREE.Mesh; snow: THREE.Mesh; a: number; d: number }[] = [];
   const riverMouths = [Math.atan2(RIVER[0].z, RIVER[0].x), Math.atan2(RIVER[RIVER.length - 1].z, RIVER[RIVER.length - 1].x)];
   for (let i = 0; i < 16; i++) {
@@ -1196,6 +1208,59 @@ export function createVillage(container: HTMLElement): Village {
     g.add(m);
   }
 
+  /**
+   * Une en una sola malla las piezas fijas de g que comparten material: una casa moderna pasa de nueve
+   * piezas a seis, y cada pieza menos es un dibujo menos en cada fotograma (y en cada sombra). Se ve
+   * igual. Lo que se anima o se usa después (lo guardado en g.userData, como la puerta y el humo) y
+   * las piezas con datos propios se quedan como están.
+   */
+  function bakeStatic<T extends THREE.Object3D>(g: T): T {
+    const keep = new Set(Object.values(g.userData).filter((v): v is THREE.Object3D => v instanceof THREE.Object3D));
+    const sets = new Map<string, { m: THREE.Material; cast: boolean; receive: boolean; list: THREE.Mesh[] }>();
+    const walk = (o: THREE.Object3D) => {
+      if (keep.has(o) || !o.visible) return;
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh && !(mesh as THREE.InstancedMesh).isInstancedMesh && !Array.isArray(mesh.material) && !Object.keys(mesh.userData).length) {
+        const key = `${mesh.material.uuid}:${mesh.castShadow}:${mesh.receiveShadow}`;
+        let set = sets.get(key);
+        if (!set) sets.set(key, (set = { m: mesh.material, cast: mesh.castShadow, receive: mesh.receiveShadow, list: [] }));
+        set.list.push(mesh);
+      }
+      for (const c of o.children) walk(c);
+    };
+    for (const c of g.children) walk(c);
+    g.updateMatrixWorld(true);
+    const toLocal = new THREE.Matrix4().copy(g.matrixWorld).invert(), rel = new THREE.Matrix4();
+    for (const { m, cast, receive, list } of sets.values()) {
+      if (list.length < 2) continue;
+      const colors = (m as THREE.MeshStandardMaterial).vertexColors;
+      const geos = list.map((mesh) => {
+        const src = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
+        for (const name of Object.keys(src.attributes)) if (name !== 'position' && name !== 'normal' && !(colors && name === 'color')) src.deleteAttribute(name);
+        rel.multiplyMatrices(toLocal, mesh.matrixWorld);
+        src.applyMatrix4(rel);
+        // Una pieza reflejada (escala negativa) tiene las caras al revés: se les da la vuelta.
+        if (rel.determinant() < 0) {
+          for (const attr of Object.values(src.attributes) as THREE.BufferAttribute[]) {
+            const a = attr.array, n = attr.itemSize;
+            for (let v = 0; v < attr.count; v += 3)
+              for (let k = 0; k < n; k++) [a[(v + 1) * n + k], a[(v + 2) * n + k]] = [a[(v + 2) * n + k], a[(v + 1) * n + k]];
+          }
+        }
+        return src;
+      });
+      if (geos.some((x) => !x.attributes.normal)) for (const x of geos) if (x.attributes.normal) x.deleteAttribute('normal');
+      const merged = mergeGeometries(geos);
+      if (!merged) continue;
+      for (const mesh of list) mesh.removeFromParent();
+      const one = new THREE.Mesh(merged, m);
+      one.castShadow = cast;
+      one.receiveShadow = receive;
+      g.add(one);
+    }
+    return g;
+  }
+
   function makeTent(x: number, z: number, s: number, tone: number) {
     const g = new THREE.Group();
     // La punta, tiznada de humo, deja ver de noche el fuego de dentro
@@ -1292,24 +1357,15 @@ export function createVillage(container: HTMLElement): Village {
     const torso = new THREE.Group();
     torso.position.y = 0.42;
     root.add(torso);
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.62, 7), mat(clothes[kind]));
-    body.position.y = 0.3;
-    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.21, 0), skin);
-    head.position.y = 0.78;
-    const hair = new THREE.Mesh(new THREE.IcosahedronGeometry(0.225, 0), mat(hairs[i % hairs.length]));
-    hair.scale.set(1, 0.6, 1);
-    hair.position.set(0, 0.88, -0.05);
-    torso.add(body, head, hair);
     const armL = limb(-0.27, 0.56, 0.5, 0.065, skin, torso);
     const armR = limb(0.27, 0.56, 0.5, 0.065, skin, torso);
     armL.rotation.z = -0.12;
     armR.rotation.z = 0.12;
     const meshOf = (g: THREE.Group) => g.children[0] as THREE.Mesh;
     const rig: Rig = {
-      root, torso, armL, armR, legL, legR, body, heads, kind, i, era: 0,
+      root, torso, armL, armR, legL, legR, skin, hair: hairs[i % hairs.length], heads, kind, i, era: 0,
       limbs: { legs: [meshOf(legL), meshOf(legR)], arms: [meshOf(armL), meshOf(armR)] },
     };
-    body.userData.skin = skin;
     if (kind === 'hunter') {
       const spear = new THREE.Group();
       spear.position.set(0, -0.48, 0.02);
@@ -1739,13 +1795,6 @@ export function createVillage(container: HTMLElement): Village {
   // Edad del Bronce, túnicas blancas con orla, banda y sombrero de ala en la Antigüedad, y en la
   // Edad Media sayos de colores con capucha, calzas y zurrón. Las herramientas pasan de piedra a
   // bronce y de bronce a hierro.
-  const clothMats = new Map<string, THREE.MeshStandardMaterial>();
-  const clothMat = (color: number, extra?: THREE.MeshStandardMaterialParameters) => {
-    const key = `${color}:${extra ? JSON.stringify(extra) : ''}`;
-    let m = clothMats.get(key);
-    if (!m) clothMats.set(key, (m = mat(color, extra)));
-    return m;
-  };
   const outfitMat = mat(0xffffff, { vertexColors: true });
   const mix = (a: number, b: number, k: number) => new THREE.Color(a).lerp(new THREE.Color(b), k).getHex();
   const DYES = [0x8a2a24, 0x3a5a8a, 0x4a6a3a, 0xa8803a, 0x6a3a6a, 0x2f5a5a];
@@ -1773,7 +1822,7 @@ export function createVillage(container: HTMLElement): Village {
     rig.era = era;
     const { kind, i } = rig;
     const base = clothes[kind];
-    const skin = rig.body.userData.skin as THREE.Material;
+    const skin = rig.skin;
     const dye = DYES[(i + kind.length) % DYES.length];
     const parts: THREE.BufferGeometry[] = [];
     let body = base, legs: THREE.Material = wrapMat, arms: THREE.Material = skin;
@@ -1789,8 +1838,8 @@ export function createVillage(container: HTMLElement): Village {
     } else if (era === 3) {
       // Lana teñida con mangas, cinturón de cuero con hebilla de bronce, capa corta y gorro de cuero
       body = base;
-      legs = clothMat(0x4a3a2c);
-      arms = clothMat(base);
+      legs = mat(0x4a3a2c);
+      arms = mat(base);
       parts.push(piece(new THREE.TorusGeometry(0.262, 0.035, 4, 10), 0x4a2e1a, [0, 0.25, 0], [Math.PI / 2, 0, 0]));
       parts.push(piece(new THREE.BoxGeometry(0.1, 0.08, 0.04), 0xc98a3a, [0, 0.25, 0.27]));
       parts.push(piece(new THREE.BoxGeometry(0.46, 0.5, 0.04), dye, [0, 0.32, -0.27], [-0.12, 0, 0]));
@@ -1810,8 +1859,8 @@ export function createVillage(container: HTMLElement): Village {
       // Revolución Industrial: chaqueta de paño oscuro con chaleco, pantalón largo, pañuelo al cuello
       // y gorra plana; los de la bolsa, el periódico y el comercio, sombrero de copa o bombín
       body = mix(base, 0x2a2826, 0.35);
-      arms = clothMat(mix(base, 0x1a1816, 0.45));
-      legs = clothMat(i % 2 ? 0x3a3530 : 0x4a4238);
+      arms = mat(mix(base, 0x1a1816, 0.45));
+      legs = mat(i % 2 ? 0x3a3530 : 0x4a4238);
       parts.push(piece(new THREE.BoxGeometry(0.3, 0.4, 0.05), DYES[(i + 1) % DYES.length], [0, 0.36, 0.25], [-0.06, 0, 0]));
       parts.push(piece(new THREE.TorusGeometry(0.16, 0.045, 4, 10), dye, [0, 0.6, 0.02], [Math.PI / 2, 0, 0]));
       if (SUITED.has(kind)) {
@@ -1826,8 +1875,8 @@ export function createVillage(container: HTMLElement): Village {
       // Era Moderna: camiseta o camisa, vaqueros, chaleco reflectante y casco en las obras, bata
       // blanca en el laboratorio, traje y corbata en las oficinas y gorra en el campo
       body = base;
-      arms = kind === 'scientist' || SUITED.has(kind) || i % 2 ? clothMat(base) : skin;
-      legs = clothMat(SUITED.has(kind) ? 0x2a2a30 : i % 3 === 2 ? 0x8a7a5a : 0x2a3e6a);
+      arms = kind === 'scientist' || SUITED.has(kind) || i % 2 ? mat(base) : skin;
+      legs = mat(SUITED.has(kind) ? 0x2a2a30 : i % 3 === 2 ? 0x8a7a5a : 0x2a3e6a);
       // Cinturón y cuello de la camisa o de la camiseta
       parts.push(piece(new THREE.TorusGeometry(0.262, 0.025, 4, 10), 0x2a2420, [0, 0.25, 0], [Math.PI / 2, 0, 0]));
       parts.push(piece(new THREE.TorusGeometry(0.15, 0.035, 4, 10), SUITED.has(kind) ? 0xf2f2f0 : mix(base, 0xffffff, 0.3), [0, 0.6, 0.01], [Math.PI / 2, 0, 0]));
@@ -1849,8 +1898,8 @@ export function createVillage(container: HTMLElement): Village {
       // Renacimiento: jubón ceñido con mangas abullonadas, cuello de lechuguilla, calzas de color
       // y, según quién, boina con pluma o sombrero de paja en el campo
       body = base;
-      arms = clothMat(mix(base, 0x000000, 0.15));
-      legs = clothMat(DYES[(i + 3) % DYES.length]);
+      arms = mat(mix(base, 0x000000, 0.15));
+      legs = mat(DYES[(i + 3) % DYES.length]);
       for (const sx of [-1, 1]) parts.push(piece(new THREE.IcosahedronGeometry(0.11, 1), dye, [sx * 0.27, 0.54, 0], [0, 0, 0], [1, 0.85, 1]));
       parts.push(piece(new THREE.TorusGeometry(0.15, 0.05, 5, 12), 0xf2eee4, [0, 0.62, 0], [Math.PI / 2, 0, 0]));
       parts.push(piece(new THREE.CylinderGeometry(0.305, 0.33, 0.14, 9, 1, true), dye, [0, 0.03, 0]));
@@ -1866,8 +1915,8 @@ export function createVillage(container: HTMLElement): Village {
     } else {
       // Edad Media: sayo del color del oficio, capucha con esclavina de otro color, calzas, cinturón y zurrón
       body = base;
-      arms = clothMat(base);
-      legs = clothMat(DYES[(i + 2) % DYES.length]);
+      arms = mat(base);
+      legs = mat(DYES[(i + 2) % DYES.length]);
       parts.push(piece(new THREE.CylinderGeometry(0.235, 0.3, 0.16, 9, 1, true), dye, [0, 0.55, 0]));
       parts.push(piece(new THREE.TorusGeometry(0.262, 0.03, 4, 10), 0x3a2416, [0, 0.25, 0], [Math.PI / 2, 0, 0]));
       parts.push(piece(new THREE.BoxGeometry(0.13, 0.15, 0.08), 0x6a4a2c, [0.2, 0.17, 0.18], [0, -0.6, 0]));
@@ -1884,7 +1933,10 @@ export function createVillage(container: HTMLElement): Village {
         parts.push(piece(new THREE.SphereGeometry(0.23, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2), 0xe8e0cc, [0, 0.82, -0.02], [-0.15, 0, 0]));
       }
     }
-    rig.body.material = clothMat(body);
+    // Cuerpo, cabeza y pelo, con los mismos colores que tenían como piezas sueltas
+    parts.push(piece(new THREE.CylinderGeometry(0.2, 0.3, 0.62, 7), body, [0, 0.3, 0]));
+    parts.push(piece(new THREE.IcosahedronGeometry(0.21, 0), skins[i % skins.length], [0, 0.78, 0]));
+    parts.push(piece(new THREE.IcosahedronGeometry(0.225, 0), rig.hair, [0, 0.88, -0.05], [0, 0, 0], [1, 0.6, 1]));
     for (const l of rig.limbs.legs) l.material = legs;
     for (const a of rig.limbs.arms) a.material = arms;
     for (const h of rig.heads) h.material = era >= 4 ? ironMat : era === 3 ? bronzeHeadMat : (h.userData.base as THREE.Material);
@@ -1893,7 +1945,7 @@ export function createVillage(container: HTMLElement): Village {
       rig.outfit.geometry.dispose();
     }
     const outfit = new THREE.Mesh(mergeGeometries(parts)!, outfitMat);
-    outfit.castShadow = true;
+    outfit.castShadow = outfit.receiveShadow = true;
     rig.torso.add(outfit);
     rig.outfit = outfit;
   }
@@ -3075,7 +3127,7 @@ export function createVillage(container: HTMLElement): Village {
     const gy = groundY(x, z, 1.1 * s);
     add(g, x, gy, z);
     g.lookAt(0, gy, 0);
-    return g;
+    return bakeStatic(g);
   }
 
   // ---------- Rutinas de los oficios del Neolítico ----------
@@ -4487,7 +4539,7 @@ export function createVillage(container: HTMLElement): Village {
     const gy = groundY(x, z, 1.1 * s);
     add(g, x, gy, z);
     g.lookAt(0, gy, 0);
-    return g;
+    return bakeStatic(g);
   }
 
   // Villas de la Antigüedad: muros encalados y tejado de tejas rojas a cuatro aguas
@@ -4534,7 +4586,7 @@ export function createVillage(container: HTMLElement): Village {
     const gy = groundY(x, z, 1.1 * s);
     add(g, x, gy, z);
     g.lookAt(0, gy, 0);
-    return g;
+    return bakeStatic(g);
   }
 
   /** Olivarero: va a un olivo, varea y recoge las aceitunas, y las lleva a la prensa. */
@@ -4623,7 +4675,7 @@ export function createVillage(container: HTMLElement): Village {
     const gy = groundY(x, z, 1.1 * s);
     add(g, x, gy, z);
     g.lookAt(0, gy, 0);
-    return g;
+    return bakeStatic(g);
   }
 
   // ---------- Rutinas de los oficios de la Edad del Bronce ----------
@@ -5528,7 +5580,7 @@ export function createVillage(container: HTMLElement): Village {
     const gy = groundY(x, z, 1.2 * s);
     add(g, x, gy, z);
     g.lookAt(0, gy, 0);
-    return g;
+    return bakeStatic(g);
   }
 
   function makeCypress(s: number): THREE.Group {
@@ -7026,7 +7078,7 @@ export function createVillage(container: HTMLElement): Village {
     const gy = groundY(x, z, 1.2 * s);
     add(g, x, gy, z);
     g.lookAt(0, gy, 0);
-    return g;
+    return bakeStatic(g);
   }
   // Casas de la Era Moderna: bloques de dos plantas enlucidos de colores claros, azotea con su
   // pretil y una placa solar, ventanales y un balcón con barandilla de cristal.
@@ -7063,7 +7115,7 @@ export function createVillage(container: HTMLElement): Village {
     const gy = groundY(x, z, 1.2 * s);
     add(g, x, gy, z);
     g.lookAt(0, gy, 0);
-    return g;
+    return bakeStatic(g);
   }
 
   // ---------- Era Moderna: central eléctrica, oficinas de cristal, campo solar, mina a cielo
@@ -7852,14 +7904,21 @@ export function createVillage(container: HTMLElement): Village {
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
 
-  const resize = () => {
+  // Cambiar el tamaño del lienzo lo borra. Se vuelve a dibujar en el acto (el ResizeObserver avisa
+  // antes de pintar) para que la aldea no se vea en blanco hasta el siguiente fotograma, que puede
+  // tardar o no llegar si la escena está parada.
+  let sizeW = 0, sizeH = 0, drawn = false;
+  const resize = (force = false) => {
     const w = container.clientWidth, h = container.clientHeight;
-    if (!w || !h) return;
+    if (!w || !h || (!force && w === sizeW && h === sizeH)) return;
+    sizeW = w;
+    sizeH = h;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    if (drawn && !document.hidden) renderer.render(scene, camera);
   };
-  const ro = new ResizeObserver(resize);
+  const ro = new ResizeObserver(() => resize());
   ro.observe(container);
   resize();
 
@@ -8379,6 +8438,7 @@ export function createVillage(container: HTMLElement): Village {
     else fireLight.shadow.needsUpdate = true;
     if (newObjects.length) trimShadows();
     renderer.render(scene, camera);
+    drawn = true;
   }
 
   // Bucle de dibujo con ritmo propio para ahorrar batería. En «Auto», 30 fotogramas por segundo en
@@ -8420,7 +8480,7 @@ export function createVillage(container: HTMLElement): Village {
     const before = quality;
     quality = QUALITY_PRESETS[level];
     renderer.setPixelRatio(pixelRatioFor(level, window.devicePixelRatio));
-    resize();
+    resize(true);
     renderer.shadowMap.enabled = quality.shadows;
     renderer.shadowMap.type = quality.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     fireLight.castShadow = quality.fireShadows;
