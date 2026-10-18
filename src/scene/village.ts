@@ -27,12 +27,16 @@ const MAX_SHOWN: Record<BuildingId, number> = {
   blacksmith: 4, oliveGrower: 4, sawyer: 3, marbler: 4, bronzesmith: 3, ironMiner: 4,
   merchant: 4, miller: 3, ranger: 3, bricklayer: 4, bellfounder: 3, armorer: 3, goldMiner: 4,
   printer: 4, vintner: 4, shipwright: 4, sculptor: 3, clockmaker: 3, gunsmith: 3, banker: 3, bookbinder: 4,
+  coalMiner: 4, journalist: 3, canner: 3, cabinetmaker: 3, brickmaker: 3, boilermaker: 3, puddler: 3, stockbroker: 3, engineer: 3,
+  electrician: 4, excavator: 2, agronomist: 4, forestEngineer: 3, concreter: 3, mechanic: 3, welder: 3, entrepreneur: 3, scientist: 3, solarTech: 4,
 };
 // Radio del claro de la aldea en cada era: más allá empieza el bosque. Al pasar de era se talan
 // los árboles que quedan dentro y la cámara se aleja para que se note el crecimiento.
-const CLEARING: Record<number, number> = { 1: 24, 2: 31, 3: 40, 4: 48, 5: 58, 6: 72 };
-const CAMERA: Record<number, { r: number; y: number }> = { 1: { r: 21, y: 9.5 }, 2: { r: 29, y: 15 }, 3: { r: 39, y: 23 }, 4: { r: 47, y: 30 }, 5: { r: 58, y: 38 }, 6: { r: 70, y: 47 } };
-const FOG: Record<number, [number, number]> = { 1: [28, 85], 2: [36, 110], 3: [48, 140], 4: [60, 175], 5: [74, 215], 6: [88, 255] };
+const CLEARING: Record<number, number> = { 1: 24, 2: 31, 3: 40, 4: 48, 5: 58, 6: 72, 7: 89, 8: 106 };
+const CAMERA: Record<number, { r: number; y: number }> = {
+  1: { r: 21, y: 9.5 }, 2: { r: 29, y: 15 }, 3: { r: 39, y: 23 }, 4: { r: 47, y: 30 }, 5: { r: 58, y: 38 }, 6: { r: 70, y: 47 }, 7: { r: 90, y: 60 }, 8: { r: 106, y: 72 },
+};
+const FOG: Record<number, [number, number]> = { 1: [28, 85], 2: [36, 110], 3: [48, 140], 4: [60, 175], 5: [74, 215], 6: [88, 255], 7: [108, 305], 8: [126, 350] };
 const MAX_ZOOM = Math.max(...Object.keys(CAMERA).map(Number));
 // Las colinas empiezan detrás del claro de la última era. En el Renacimiento la ciudad llega más
 // lejos y las colinas se apartan (el terreno se rehace al cambiar de era, ver shapeTerrain()).
@@ -47,6 +51,8 @@ const BUILDINGS_OF: Record<number, BuildingId[]> = {
   4: BUILDING_DEFS.filter((b) => b.era === 4).map((b) => b.id),
   5: BUILDING_DEFS.filter((b) => b.era === 5).map((b) => b.id),
   6: BUILDING_DEFS.filter((b) => b.era === 6).map((b) => b.id),
+  7: BUILDING_DEFS.filter((b) => b.era === 7).map((b) => b.id),
+  8: BUILDING_DEFS.filter((b) => b.era === 8).map((b) => b.id),
 };
 // Pasillos de trabajo: hacia los arbustos y hacia la arboleda. Ahí no se levantan tiendas.
 const GATHER_ANGLE = -2.3;
@@ -156,6 +162,11 @@ function heightAt(x: number, z: number): number {
   if (cd < 13) h += 3.2 * (1 - THREE.MathUtils.smoothstep(cd, 8.5, 13));
   const gd = Math.hypot(x - GOLD_HILL.x, z - GOLD_HILL.z);
   if (gd < 10) h += Math.cos((gd / 10) * Math.PI * 0.5) ** 2 * 7;
+  // La mina a cielo abierto de la Era Moderna: un hoyo ancho con el fondo llano
+  if (hillsR > 100) {
+    const pd = Math.hypot(x - OPEN_PIT.x, z - OPEN_PIT.z);
+    if (pd < 7.5) h -= 3.4 * (1 - THREE.MathUtils.smoothstep(pd, 2.5, 7.5));
+  }
   if (waterStage === 1) {
     const pd = Math.hypot(x - POND.x, z - POND.y);
     if (pd < 5.5) h = Math.min(h, -0.6 + (pd / 5.5) * 0.6);
@@ -237,6 +248,32 @@ const DOME = polar(-2.5, 63);
 // El astillero, aguas arriba del puente: de ahí salen las carabelas río arriba
 const SHIPYARD_S = RIVER_NEAR_S - 30;
 const SHIPYARD = riverBank(SHIPYARD_S, RIVER_W + 4);
+// Revolución Industrial: pozo de carbón, fábricas de ladrillo, la bolsa, el periódico y la estación,
+// en el anillo que se gana al bosque. Un ferrocarril da la vuelta a toda la ciudad por el borde.
+const TRACK_R = 86.5;
+const COLLIERY = polar(0.25, 77);
+const CANNERY = polar(-0.35, 77.5);
+const CABINET = polar(1.0, 78);
+const BRICKWORKS = polar(-1.0, 77);
+const BOILERSHOP = polar(1.6, 78);
+const IRONWORKS = polar(-1.6, 77);
+const EXCHANGE = polar(2.12, 77);
+const NEWSPAPER = polar(-2.08, 77.5);
+const STATION = polar(0.64, 82);
+const EXHIBITION = polar(-2.47, 78);
+// Era Moderna: más allá de la vía, la central eléctrica, rascacielos, campos solares, invernaderos,
+// el laboratorio, la obra con su grúa, el taller, la mina a cielo abierto y la rampa del cohete
+const POWER = polar(0.0, 97.5);
+const OFFICES = polar(0.38, 95.5);
+const SOLAR = polar(0.76, 96);
+const OPEN_PIT = polar(1.12, 97.5);
+const NURSERY8 = polar(1.47, 95);
+const GARAGE = polar(2.05, 95);
+const LAB = polar(-0.38, 95);
+const GREENHOUSES = polar(-0.75, 96);
+const LAUNCH = polar(-1.08, 96);
+const SITE = polar(-1.42, 96);
+const STEELWORKS = polar(-2.02, 95);
 const AQUEDUCT_ANGLE = -2.65;
 const FOUNTAIN = polar(AQUEDUCT_ANGLE, 34.5);
 const CART = polar(-2.75, 13.5);
@@ -296,10 +333,32 @@ const blockers: { x: number; z: number; r: number }[] = [
   { ...BINDERY, r: 4.5 },
   { ...DOME, r: 8.5 },
   { ...SHIPYARD, r: 4.5 },
+  { ...COLLIERY, r: 7 },
+  { ...CANNERY, r: 5.5 },
+  { ...CABINET, r: 5.5 },
+  { ...BRICKWORKS, r: 6.5 },
+  { ...BOILERSHOP, r: 5.5 },
+  { ...IRONWORKS, r: 6.5 },
+  { ...EXCHANGE, r: 6 },
+  { ...NEWSPAPER, r: 5.5 },
+  { ...STATION, r: 7.5 },
+  { ...EXHIBITION, r: 5.8 },
+  { ...POWER, r: 8.5 },
+  { ...OFFICES, r: 6.5 },
+  { ...SOLAR, r: 8.5 },
+  { ...OPEN_PIT, r: 10.5 },
+  { ...NURSERY8, r: 7 },
+  { ...GARAGE, r: 6 },
+  { ...LAB, r: 6 },
+  { ...GREENHOUSES, r: 7 },
+  { ...LAUNCH, r: 7 },
+  { ...SITE, r: 7.5 },
+  { ...STEELWORKS, r: 6 },
 ];
-/** Libre de lo construido, del lago del Neolítico y del río. */
+/** Libre de lo construido, del lago del Neolítico, del río y de la vía del tren. */
 const isFree = (x: number, z: number, r: number) =>
-  Math.hypot(x - LAKE.x, z - LAKE.y) > LAKE_R + 0.8 + r && riverDist(x, z) > RIVER_W + 2 + r && blockers.every((b) => Math.hypot(x - b.x, z - b.z) > b.r + r);
+  Math.hypot(x - LAKE.x, z - LAKE.y) > LAKE_R + 0.8 + r && riverDist(x, z) > RIVER_W + 2 + r && Math.abs(Math.hypot(x, z) - TRACK_R) > 2.2 + r &&
+  blockers.every((b) => Math.hypot(x - b.x, z - b.z) > b.r + r);
 
 /** Primer hueco libre de radio `r` cerca de un ángulo y una distancia. */
 function findFree(a: number, d: number, r: number): { x: number; z: number } | null {
@@ -319,7 +378,7 @@ function findFree(a: number, d: number, r: number): { x: number; z: number } | n
 interface Plaza { x: number; z: number; era: number; pit: boolean }
 const PLAZA_R = 6.2;
 const PLAZAS: Plaza[] = [{ x: 0, z: 0, era: 1, pit: false }, { x: LAKE.x, z: LAKE.y, era: 3, pit: true }];
-for (const [era, a, d] of [[4, -2.25, 33], [4, 0.55, 33], [5, -2.0, 45], [5, 1.0, 45], [6, -1.0, 59], [6, 0.85, 59], [6, -2.35, 52]]) {
+for (const [era, a, d] of [[4, -2.25, 33], [4, 0.55, 33], [5, -2.0, 45], [5, 1.0, 45], [6, -1.0, 59], [6, 0.85, 59], [6, -2.35, 52], [7, -1.3, 71], [7, 1.3, 71], [7, 0.0, 71], [8, -1.75, 95], [8, 1.76, 95], [8, -0.2, 93]]) {
   const p = findFree(a, d, PLAZA_R);
   if (!p) continue;
   PLAZAS.push({ ...p, era, pit: true });
@@ -338,9 +397,11 @@ const OUT_MIX: Record<number, OutType[]> = {
   4: ['hamlet', 'field', 'grove', 'meadow', 'monument', 'herd', 'hamlet', 'field', 'grove', 'meadow', 'monument'],
   5: ['hamlet', 'field', 'grove', 'meadow', 'monument', 'herd', 'hamlet', 'field', 'grove', 'meadow', 'hamlet', 'field', 'monument'],
   6: ['hamlet', 'field', 'grove', 'meadow', 'monument', 'herd', 'hamlet', 'field', 'grove', 'meadow', 'hamlet', 'field', 'monument', 'grove', 'herd', 'meadow', 'hamlet'],
+  7: ['hamlet', 'field', 'grove', 'meadow', 'monument', 'herd', 'hamlet', 'field', 'grove', 'meadow', 'hamlet', 'field', 'monument', 'grove', 'herd', 'meadow', 'hamlet', 'field'],
+  8: ['hamlet', 'field', 'monument', 'grove', 'meadow', 'herd', 'hamlet', 'monument', 'field', 'grove', 'meadow', 'hamlet', 'monument', 'field', 'grove', 'herd', 'meadow', 'hamlet', 'monument', 'field'],
 };
 const OUTSKIRTS: Outskirt[] = [];
-for (const era of [2, 3, 4, 5, 6]) {
+for (const era of [2, 3, 4, 5, 6, 7, 8]) {
   const rnd = mulberry32(900 + era);
   const inner = CLEARING[era - 1] + (era === 2 ? 1 : -2), outer = CLEARING[era] - 2.5;
   const mix = OUT_MIX[era];
@@ -381,6 +442,9 @@ const VILLA_SLOTS = dwellingSlots([9.4, 11.8, 14.2, 16.6, 19.2, 21.8, 24.4, 27],
 const TIMBER_SLOTS = dwellingSlots([9.4, 11.8, 14.2, 16.6, 19.2, 21.8, 24.4, 27, 29.6, 32.2, 34.8], 48, 1.35, false);
 // Casas del Renacimiento: fachadas de colores con tejado de tejas, hasta la orilla del río
 const REN_SLOTS = dwellingSlots([9.4, 11.8, 14.2, 16.6, 19.2, 21.8, 24.4, 27, 29.6, 32.2, 34.8, 37.4, 40, 42.6], 64, 1.4, false);
+// Casas obreras de ladrillo de la Revolución Industrial y bloques modernos: la ciudad sigue creciendo
+const BRICK_SLOTS = dwellingSlots([9.4, 11.8, 14.2, 16.6, 19.2, 21.8, 24.4, 27, 29.6, 32.2, 34.8, 37.4, 40, 42.6, 45.2, 47.8, 50.4], 80, 1.4, false);
+const MODERN_SLOTS = dwellingSlots([9.4, 11.8, 14.2, 16.6, 19.2, 21.8, 24.4, 27, 29.6, 32.2, 34.8, 37.4, 40, 42.6, 45.2, 47.8, 50.4, 53, 55.6], 96, 1.4, false);
 const TENT_SLOTS = dwellingSlots([6.2, 8, 9.8], 10, 1.45, true);
 const BUSHES = Array.from({ length: 8 }, (_, k) => polar(GATHER_ANGLE + (k - 3.5) * 0.15, 11 + (k % 2) * 1.4));
 const GROVE = Array.from({ length: MAX_SHOWN.woodcutter }, (_, k) => polar(WOOD_ANGLE + (k - 4.5) * 0.12, 11 + (k % 2) * 1.7));
@@ -593,6 +657,7 @@ export function createVillage(container: HTMLElement): Village {
     const a = (k / 7) * Math.PI * 2;
     g.position.set(Math.cos(a) * 95, 38 + rng() * 14, Math.sin(a) * 95);
     g.userData.a = a;
+    g.userData.y = g.position.y;
     g.visible = false;
     scene.add(g);
     return g;
@@ -630,6 +695,7 @@ export function createVillage(container: HTMLElement): Village {
   const tpos = tg.attributes.position as THREE.BufferAttribute;
   tg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(tpos.count * 3), 3));
   const grassA = new THREE.Color(0x3f5a2e), grassB = new THREE.Color(0x4d6b35), dirt = new THREE.Color(0x6b4a32);
+  const pitCol = new THREE.Color(0x4e4440);
   const rockC = new THREE.Color(0x5e5868), rockHi = new THREE.Color(0x8a8296), sand = new THREE.Color(0x8a7a52), tc = new THREE.Color();
   const shore = (x: number, z: number) =>
     waterStage === 1 ? Math.hypot(x - POND.x, z - POND.y) < 6.5
@@ -650,6 +716,7 @@ export function createVillage(container: HTMLElement): Village {
       tc.copy(grassA).lerp(grassB, n);
       if (r < 4.5 + n2) tc.copy(dirt).offsetHSL(0, 0, (n - 0.5) * 0.04);
       else if (shore(cx, cz)) tc.copy(sand).offsetHSL(0, 0, (n - 0.5) * 0.05);
+      else if (hillsR > 100 && Math.hypot(cx - OPEN_PIT.x, cz - OPEN_PIT.z) < 8) tc.copy(pitCol).offsetHSL(0, 0, (n - 0.5) * 0.06);
       else if (cy > 4 && Math.hypot(cx - COPPER_HILL.x, cz - COPPER_HILL.z) > 7) tc.copy(rockC).lerp(rockHi, Math.min(1, (cy - 4) / 8));
       // Senderos pisados hacia los arbustos y la arboleda
       else if (r < 11 && (angDist(Math.atan2(cz, cx), GATHER_ANGLE) < 0.12 || angDist(Math.atan2(cz, cx), WOOD_ANGLE) < 0.12)) tc.lerp(dirt, 0.55);
@@ -714,7 +781,7 @@ export function createVillage(container: HTMLElement): Village {
     mountains.push({ peak, snow, a, d });
   }
   function placeMountains(): void {
-    const k = hillsR > 64 ? 1.22 : 1;
+    const k = hillsR > 100 ? 1.5 : hillsR > 85 ? 1.36 : hillsR > 64 ? 1.22 : 1;
     for (const m of mountains) for (const o of [m.peak, m.snow]) o.position.set(Math.cos(m.a) * m.d * k, o.position.y, Math.sin(m.a) * m.d * k);
   }
   placeMountains();
@@ -763,7 +830,7 @@ export function createVillage(container: HTMLElement): Village {
     // Fuera del alcance de la sombra del sol no hace falta que proyecten sombra
     if (d > 44) g.traverse((c) => (c.castShadow = false));
     swaying.push({ obj: g, phase: rng() * 6, amp: 0.02 + rng() * 0.025 });
-    const clearedIn = isNear ? 2 : d < CLEARING[2] ? 2 : d < CLEARING[3] ? 3 : d < CLEARING[4] ? 4 : d < CLEARING[5] ? 5 : d < CLEARING[6] ? 6 : 99;
+    const clearedIn = isNear ? 2 : d < CLEARING[2] ? 2 : d < CLEARING[3] ? 3 : d < CLEARING[4] ? 4 : d < CLEARING[5] ? 5 : d < CLEARING[6] ? 6 : 7;
     // Los que quedan en el cauce del río desaparecen del todo cuando llega el agua
     pines.push({ obj: g, clearedIn, k: 1, river: riverDist(x, z) < RIVER_W + 2.5 });
   }
@@ -780,20 +847,35 @@ export function createVillage(container: HTMLElement): Village {
     return mergeGeometries(cones)!;
   })();
   const outerTrunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 0.9, 5).translate(0, 0.45, 0);
-  const outerSpots: { x: number; z: number; s: number; rot: number }[] = [];
+  const outerSpots: { x: number; z: number; s: number; rot: number; d: number }[] = [];
   for (let i = 0; i < 4000 && outerSpots.length < 520; i++) {
     const a = rng() * Math.PI * 2, d = 74 + rng() * 52, x = Math.cos(a) * d, z = Math.sin(a) * d;
     if (riverDist(x, z) < RIVER_W + 5 || Math.abs(x) > 148 || Math.abs(z) > 148) continue;
-    outerSpots.push({ x, z, s: 0.9 + rng() * 1.1, rot: rng() * 6 });
+    outerSpots.push({ x, z, s: 0.9 + rng() * 1.1, rot: rng() * 6, d });
+  }
+  // Más allá, hasta el borde del mundo, para cuando la ciudad moderna se coma el bosque de antes
+  {
+    const far = mulberry32(77);
+    for (let i = 0; i < 3000 && outerSpots.length < 820; i++) {
+      const a = far() * Math.PI * 2, d = 120 + far() * 30, x = Math.cos(a) * d, z = Math.sin(a) * d;
+      if (riverDist(x, z) < RIVER_W + 5 || Math.abs(x) > 148 || Math.abs(z) > 148) continue;
+      outerSpots.push({ x, z, s: 1 + far() * 1.2, rot: far() * 6, d });
+    }
   }
   const outerCrowns = new THREE.InstancedMesh(outerCrownGeo, pineCrownMat, outerSpots.length);
   const outerTrunks = new THREE.InstancedMesh(outerTrunkGeo, trunkMat, outerSpots.length);
   outerSpots.forEach((_, k) => outerCrowns.setColorAt(k, new THREE.Color().setHSL(0.3, 0.2, 0.85 + ((k * 37) % 10) / 60)));
   scene.add(outerCrowns, outerTrunks);
-  /** Coloca los pinos lejanos sobre el terreno (se llama cada vez que el terreno cambia). */
+  /**
+   * Coloca los pinos lejanos sobre el terreno (se llama cada vez que el terreno cambia o la ciudad
+   * crece). Desde la Revolución Industrial la ciudad llega hasta ellos: los del claro, los de la vía
+   * y los que caen sobre lo construido desaparecen.
+   */
   function placeOuterForest(): void {
+    const clear = CLEARING[Math.max(1, shownEra)] ?? 0;
     outerSpots.forEach((o, k) => {
-      tmpM4.compose(tmpV3.set(o.x, heightAt(o.x, o.z) - 0.1, o.z), tmpQ4.setFromAxisAngle(tmpUp, o.rot), tmpS3.setScalar(o.s));
+      const gone = o.d < clear || (shownEra >= 7 && (Math.abs(o.d - TRACK_R) < 3 || blockers.some((b) => b.r > 3 && Math.hypot(o.x - b.x, o.z - b.z) < b.r + 1)));
+      tmpM4.compose(tmpV3.set(o.x, heightAt(o.x, o.z) - 0.1, o.z), tmpQ4.setFromAxisAngle(tmpUp, o.rot), tmpS3.setScalar(gone ? 0 : o.s));
       outerCrowns.setMatrixAt(k, tmpM4);
       outerTrunks.setMatrixAt(k, tmpM4);
     });
@@ -1162,6 +1244,10 @@ export function createVillage(container: HTMLElement): Village {
     merchant: 0x7a2a3a, miller: 0xd8cfb8, ranger: 0x3e5a2e, bricklayer: 0x8a7a62, bellfounder: 0x5a4a6a, armorer: 0x4a4a52, goldMiner: 0x6a5232,
     // Renacimiento: jubones de terciopelo y paño fino
     printer: 0x2e3440, vintner: 0x6a2a4a, shipwright: 0x2f4f6e, sculptor: 0xcfc6b4, clockmaker: 0x5e4a2a, gunsmith: 0x3f4248, banker: 0x8a1a22, bookbinder: 0x4a5a32,
+    // Revolución Industrial: paño oscuro, chalecos y gorras
+    coalMiner: 0x3a3632, journalist: 0x4a4038, canner: 0x6a7a8a, cabinetmaker: 0x7a5a3a, brickmaker: 0x8a5a42, boilermaker: 0x3e4a5a, puddler: 0x5a3a2a, stockbroker: 0x2a2a32, engineer: 0x2f3e5a,
+    // Era Moderna: monos y camisas de colores, bata blanca en el laboratorio
+    electrician: 0x2a5aa8, excavator: 0xd88a2a, agronomist: 0x5a8a3a, forestEngineer: 0x3a6a3a, concreter: 0x8a8a8a, mechanic: 0x2a3a6a, welder: 0x5a4a3a, entrepreneur: 0x2e3440, scientist: 0xf2f2f0, solarTech: 0xe8a82a,
   };
   const wheatMat = mat(0xe2b64a), flintMat = mat(0x2e2a30, { roughness: 0.6 }), blockMat = mat(0xa8a3a0), clayMat = mat(0xb5683a);
   const wrapMat = mat(0x3d2a1c), stoneMat = mat(0x9a9aa8), berryMat = mat(0xc23a3a);
@@ -1172,6 +1258,17 @@ export function createVillage(container: HTMLElement): Village {
   const goldOreHeadMat = mat(0xd8a828), goldMatP = mat(0xd8b040, { metalness: 0.6, roughness: 0.35 });
   const RENAISSANCE_GEAR = new Set<BuildingId>(['printer', 'vintner', 'shipwright', 'sculptor', 'clockmaker', 'gunsmith', 'banker', 'bookbinder']);
   const BOOK_COLORS = [0x7a2a24, 0x2a4a6a, 0x3a5a2a, 0x6a4a2a];
+  // Revolución Industrial y Era Moderna: herramienta en la mano (si la usan) y lo que llevan al montón
+  const INDUSTRY_TOOL: Partial<Record<BuildingId, 'pick' | 'hammer' | 'bar' | 'shovel' | 'torch'>> = {
+    coalMiner: 'pick', boilermaker: 'hammer', puddler: 'bar', engineer: 'shovel', concreter: 'shovel', mechanic: 'hammer', welder: 'torch', cabinetmaker: 'hammer',
+  };
+  const INDUSTRY_LOAD: Partial<Record<BuildingId, [number, number, number, number]>> = {
+    journalist: [0.4, 0.2, 0.3, 0xece4d0], canner: [0.4, 0.25, 0.3, 0xc8ccd0], cabinetmaker: [0.42, 0.42, 0.3, 0x8a5a32], brickmaker: [0.45, 0.22, 0.3, 0xb4583a],
+    boilermaker: [0.36, 0.36, 0.36, 0x5a6068], puddler: [0.8, 0.1, 0.14, 0x4a4c55], stockbroker: [0.36, 0.12, 0.28, 0xe8dcb8], engineer: [0.4, 0.3, 0.3, 0x1e1c1c],
+    electrician: [0.4, 0.4, 0.2, 0x2e2a28], excavator: [0.4, 0.3, 0.3, 0x1e1c1c], agronomist: [0.45, 0.25, 0.32, 0xd83a2a], forestEngineer: [0.2, 0.2, 1, 0x8a5a32],
+    concreter: [0.42, 0.25, 0.3, 0xb8b4ac], mechanic: [0.4, 0.4, 0.14, 0x2e2a28], welder: [1, 0.12, 0.14, 0x8a4a2a], entrepreneur: [0.5, 0.36, 0.14, 0x3a2418],
+    scientist: [0.4, 0.26, 0.3, 0xd8d4c8], solarTech: [0.7, 0.05, 0.45, 0x1e3a6a],
+  };
   function makePerson(kind: BuildingId, i: number): Rig {
     const root = new THREE.Group();
     const skin = mat(skins[i % skins.length]);
@@ -1572,6 +1669,47 @@ export function createVillage(container: HTMLElement): Village {
         torso.add(load);
       }
       rig.carry = load;
+    } else if (kind in INDUSTRY_LOAD || kind === 'coalMiner') {
+      const tk = INDUSTRY_TOOL[kind];
+      if (tk) {
+        const tool = new THREE.Group();
+        tool.position.set(0, -0.48, 0.02);
+        const long = tk === 'shovel' || tk === 'bar';
+        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, long ? 0.9 : 0.5, 4), pole);
+        handle.rotation.x = Math.PI / 2;
+        handle.position.z = long ? 0.4 : 0.22;
+        const headGeo =
+          tk === 'pick' ? new THREE.ConeGeometry(0.05, 0.45, 4).rotateZ(Math.PI / 2)
+          : tk === 'shovel' ? new THREE.BoxGeometry(0.24, 0.04, 0.28)
+          : tk === 'torch' ? new THREE.CylinderGeometry(0.04, 0.05, 0.2, 5).rotateX(Math.PI / 2)
+          : tk === 'bar' ? new THREE.BoxGeometry(0.05, 0.05, 0.3)
+          : new THREE.BoxGeometry(0.13, 0.13, 0.2);
+        const head = th(new THREE.Mesh(headGeo, ironMat));
+        head.position.set(0, 0, long ? 0.95 : 0.5);
+        tool.add(handle, head);
+        armR.add(tool);
+      }
+      let load: THREE.Object3D;
+      if (kind === 'coalMiner') {
+        // Cesto de carbón a la espalda
+        const basket = new THREE.Group();
+        basket.position.set(0, 0.35, -0.3);
+        basket.add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.32, 7), mat(0x5a4a32)));
+        load = new THREE.Group();
+        for (let k = 0; k < 5; k++) {
+          const b = new THREE.Mesh(new THREE.DodecahedronGeometry(0.08, 0), mat(0x1e1c1c));
+          b.position.set((k % 3 - 1) * 0.1, 0.17, (Math.floor(k / 3) - 0.5) * 0.12);
+          load.add(b);
+        }
+        basket.add(load);
+        torso.add(basket);
+      } else {
+        const [w, h, d, c] = INDUSTRY_LOAD[kind]!;
+        load = new THREE.Mesh(kind === 'electrician' || kind === 'mechanic' ? new THREE.TorusGeometry(w / 2, h / 4, 5, 10) : kind === 'forestEngineer' ? new THREE.CylinderGeometry(w / 2, w / 2, d, 6).rotateX(Math.PI / 2) : new THREE.BoxGeometry(w, h, d), mat(c));
+        load.position.set(0, 0.72, -0.2);
+        torso.add(load);
+      }
+      rig.carry = load;
     } else if (kind === 'plowman') {
       // Vara para guiar a los bueyes, siempre en alto
       const goad = new THREE.Group();
@@ -1611,7 +1749,11 @@ export function createVillage(container: HTMLElement): Village {
   const outfitMat = mat(0xffffff, { vertexColors: true });
   const mix = (a: number, b: number, k: number) => new THREE.Color(a).lerp(new THREE.Color(b), k).getHex();
   const DYES = [0x8a2a24, 0x3a5a8a, 0x4a6a3a, 0xa8803a, 0x6a3a6a, 0x2f5a5a];
-  const FIELD_JOBS = new Set<BuildingId>(['gatherer', 'farmer', 'forester', 'herder', 'plowman', 'oliveGrower', 'fisher', 'rafter', 'vintner']);
+  const FIELD_JOBS = new Set<BuildingId>(['gatherer', 'farmer', 'forester', 'herder', 'plowman', 'oliveGrower', 'fisher', 'rafter', 'vintner', 'agronomist', 'forestEngineer']);
+  // Era Moderna: chaleco reflectante en las obras y en la calle, y casco en las más duras
+  const HI_VIS = new Set<BuildingId>(['concreter', 'welder', 'excavator', 'electrician', 'solarTech', 'forestEngineer', 'mechanic', 'coalMiner', 'quarrier', 'miner', 'woodcutter', 'feller']);
+  const HARD_HAT = new Set<BuildingId>(['concreter', 'welder', 'excavator', 'electrician', 'coalMiner', 'miner', 'quarrier']);
+  const SUITED = new Set<BuildingId>(['stockbroker', 'journalist', 'banker', 'merchant', 'entrepreneur', 'printer', 'bookbinder']);
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
   /** Pieza de ropa ya colocada y teñida, lista para unir con las demás. */
   function piece(geo: THREE.BufferGeometry, color: number, at: [number, number, number], rot: [number, number, number] = [0, 0, 0], scale: [number, number, number] = [1, 1, 1]) {
@@ -1664,7 +1806,46 @@ export function createVillage(container: HTMLElement): Village {
         parts.push(piece(new THREE.CylinderGeometry(0.36, 0.36, 0.03, 10), 0xc8a868, [0, 0.9, 0]));
         parts.push(piece(new THREE.SphereGeometry(0.2, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2), 0xb89858, [0, 0.9, 0]));
       }
-    } else if (era >= 6) {
+    } else if (era === 7) {
+      // Revolución Industrial: chaqueta de paño oscuro con chaleco, pantalón largo, pañuelo al cuello
+      // y gorra plana; los de la bolsa, el periódico y el comercio, sombrero de copa o bombín
+      body = mix(base, 0x2a2826, 0.35);
+      arms = clothMat(mix(base, 0x1a1816, 0.45));
+      legs = clothMat(i % 2 ? 0x3a3530 : 0x4a4238);
+      parts.push(piece(new THREE.BoxGeometry(0.3, 0.4, 0.05), DYES[(i + 1) % DYES.length], [0, 0.36, 0.25], [-0.06, 0, 0]));
+      parts.push(piece(new THREE.TorusGeometry(0.16, 0.045, 4, 10), dye, [0, 0.6, 0.02], [Math.PI / 2, 0, 0]));
+      if (SUITED.has(kind)) {
+        parts.push(piece(new THREE.CylinderGeometry(0.33, 0.33, 0.03, 12), 0x1a1a1e, [0, 0.9, 0]));
+        parts.push(piece(new THREE.CylinderGeometry(0.19, 0.2, i % 2 ? 0.42 : 0.2, 10), 0x1a1a1e, [0, i % 2 ? 1.11 : 1.0, 0]));
+      } else if (hatted || i % 3 === 1) {
+        // Gorra plana con visera
+        parts.push(piece(new THREE.CylinderGeometry(0.25, 0.24, 0.1, 10), i % 2 ? 0x4a4440 : 0x5a4a3a, [0, 0.93, -0.02]));
+        parts.push(piece(new THREE.BoxGeometry(0.3, 0.03, 0.16), 0x3a3430, [0, 0.9, 0.24]));
+      }
+    } else if (era >= 8) {
+      // Era Moderna: camiseta o camisa, vaqueros, chaleco reflectante y casco en las obras, bata
+      // blanca en el laboratorio, traje y corbata en las oficinas y gorra en el campo
+      body = base;
+      arms = kind === 'scientist' || SUITED.has(kind) || i % 2 ? clothMat(base) : skin;
+      legs = clothMat(SUITED.has(kind) ? 0x2a2a30 : i % 3 === 2 ? 0x8a7a5a : 0x2a3e6a);
+      // Cinturón y cuello de la camisa o de la camiseta
+      parts.push(piece(new THREE.TorusGeometry(0.262, 0.025, 4, 10), 0x2a2420, [0, 0.25, 0], [Math.PI / 2, 0, 0]));
+      parts.push(piece(new THREE.TorusGeometry(0.15, 0.035, 4, 10), SUITED.has(kind) ? 0xf2f2f0 : mix(base, 0xffffff, 0.3), [0, 0.6, 0.01], [Math.PI / 2, 0, 0]));
+      if (HI_VIS.has(kind)) {
+        parts.push(piece(new THREE.CylinderGeometry(0.255, 0.3, 0.42, 9, 1, true), 0xd8e82a, [0, 0.33, 0]));
+        parts.push(piece(new THREE.CylinderGeometry(0.29, 0.29, 0.05, 9, 1, true), 0xe8e8e8, [0, 0.26, 0]));
+      }
+      if (kind === 'scientist') parts.push(piece(new THREE.CylinderGeometry(0.31, 0.35, 0.34, 9, 1, true), 0xf6f6f2, [0, 0.02, 0]));
+      if (SUITED.has(kind)) parts.push(piece(new THREE.BoxGeometry(0.07, 0.3, 0.03), DYES[(i + 4) % DYES.length], [0, 0.42, 0.26], [-0.08, 0, 0]));
+      if (HARD_HAT.has(kind)) {
+        parts.push(piece(new THREE.SphereGeometry(0.25, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), 0xe8c02a, [0, 0.86, 0]));
+        parts.push(piece(new THREE.CylinderGeometry(0.3, 0.3, 0.03, 10), 0xe8c02a, [0, 0.86, 0.02]));
+      } else if (hatted && !SUITED.has(kind)) {
+        // Gorra de visera
+        parts.push(piece(new THREE.SphereGeometry(0.235, 8, 3, 0, Math.PI * 2, 0, Math.PI / 2), dye, [0, 0.86, -0.01]));
+        parts.push(piece(new THREE.BoxGeometry(0.26, 0.03, 0.2), dye, [0, 0.88, 0.25]));
+      }
+    } else if (era === 6) {
       // Renacimiento: jubón ceñido con mangas abullonadas, cuello de lechuguilla, calzas de color
       // y, según quién, boina con pluma o sombrero de paja en el campo
       body = base;
@@ -1806,7 +1987,7 @@ export function createVillage(container: HTMLElement): Village {
     } else if (kind === 'charcoaler') {
       const start = around(CHARCOAL, (i - 1.5) * 0.8, -1.4);
       [p.x, p.z, p.state] = [start.x, start.z, 'toStack'];
-    } else if (kind === 'copperMiner' || kind === 'ironMiner' || kind === 'goldMiner') {
+    } else if (kind === 'copperMiner' || kind === 'ironMiner' || kind === 'goldMiner' || kind === 'coalMiner') {
       const start = around(mineOf(kind).mouth, (i - 1.5) * 0.9, -2.6 - i * 0.5);
       [p.x, p.z, p.state] = [start.x, start.z, i % 2 ? 'toMine' : 'toHeap'];
     } else if (kind === 'plowman') {
@@ -3395,7 +3576,9 @@ export function createVillage(container: HTMLElement): Village {
   const CHIMNEY = around(FORGE, 1.6, 1.6);
 
   /** Puesto y montón de cada artesano, con lo que mira mientras trabaja. */
-  const CRAFTERS = new Set<BuildingId>(['smelter', 'mason', 'blacksmith', 'bronzesmith', 'marbler', 'sawyer', 'merchant', 'miller', 'ranger', 'bricklayer', 'bellfounder', 'armorer', 'printer', 'vintner', 'shipwright', 'sculptor', 'clockmaker', 'gunsmith', 'banker', 'bookbinder']);
+  const CRAFTERS = new Set<BuildingId>(['smelter', 'mason', 'blacksmith', 'bronzesmith', 'marbler', 'sawyer', 'merchant', 'miller', 'ranger', 'bricklayer', 'bellfounder', 'armorer', 'printer', 'vintner', 'shipwright', 'sculptor', 'clockmaker', 'gunsmith', 'banker', 'bookbinder',
+    'journalist', 'canner', 'cabinetmaker', 'brickmaker', 'boilermaker', 'puddler', 'stockbroker', 'engineer',
+    'electrician', 'excavator', 'agronomist', 'forestEngineer', 'concreter', 'mechanic', 'welder', 'entrepreneur', 'scientist', 'solarTech']);
   function craftSpot(kind: BuildingId, i: number): { stand: { x: number; z: number }; face: { x: number; z: number } } {
     if (kind === 'smelter') return furnaceStand(i);
     const at = (list: { x: number; z: number }[], u: number, v: number) => {
@@ -3420,6 +3603,26 @@ export function createVillage(container: HTMLElement): Village {
     if (kind === 'gunsmith') return at(GUN_ANVILS, 0.7, -0.75);
     if (kind === 'banker') return { stand: around(COUNTERS[i % 2], 0, 0.7), face: COUNTERS[i % 2] };
     if (kind === 'bookbinder') return { stand: around(BIND_TABLES[i % 2], (i >> 1) % 2 ? 0.35 : -0.35, -0.7), face: BIND_TABLES[i % 2] };
+    const near = (list: { x: number; z: number }[], k: number, u: number, v: number) => ({ stand: around(list[k % list.length], u, v), face: list[k % list.length] });
+    const side = (i >> 1) % 2 ? 1 : -1;
+    if (kind === 'canner') return near(CAN_TABLES, i, side * 0.35, -0.75);
+    if (kind === 'cabinetmaker') return near(CAB_BENCHES, i, 0, -0.75);
+    if (kind === 'brickmaker') return near(BRICK_TABLES, i, 0, -0.75);
+    if (kind === 'boilermaker') return at(BOILERS, 0.5, -1.25);
+    if (kind === 'puddler') return near(PUDDLE, i, side * 0.35, -1.5);
+    if (kind === 'stockbroker') return at(TICKERS, 0.5, -0.75);
+    if (kind === 'journalist') return near(NEWS_DESKS, i, 0, -0.75);
+    if (kind === 'engineer') return near(BUNKERS, i, 0, -1.25);
+    if (kind === 'electrician') return at(TRANSFORMERS, 0.4, -1.1);
+    if (kind === 'excavator') return near(EXCAVATORS, i, 0, -2.2);
+    if (kind === 'agronomist') return at(BEDS, 0.5, -0.85);
+    if (kind === 'forestEngineer') return near(SAPLINGS8, i * 5, 0, -0.7);
+    if (kind === 'concreter') return near(FORMS, i, side * 0.4, -0.95);
+    if (kind === 'mechanic') return near(CARS, i, side * 0.7, -1.05);
+    if (kind === 'welder') return at(WELD_SPOTS, 0.5, -0.75);
+    if (kind === 'entrepreneur') return near(DESKS8, i, 0, -0.75);
+    if (kind === 'scientist') return near(BENCHES8, i, side * 0.35, -0.75);
+    if (kind === 'solarTech') return near(PANELS, i * 5, 0, -1);
     return { stand: around(ROUGH_BLOCKS[i % 4], 0, -0.95), face: ROUGH_BLOCKS[i % 4] };
   }
   const craftPile = (kind: BuildingId) =>
@@ -3428,6 +3631,9 @@ export function createVillage(container: HTMLElement): Village {
       armorer: ARMOR_PILE, bellfounder: BELL_PILE, merchant: CHESTS, miller: MILL_SACKS, ranger: OAK_LOGS, bricklayer: ASHLAR5_PILE,
       printer: PAPER_PILE, vintner: WINE_PRESS, shipwright: TIMBER_PILE, sculptor: STATUE_PILE, clockmaker: GEAR_PILE, gunsmith: GUN_PILE,
       banker: COIN_PILE, bookbinder: BOOK_PILE,
+      canner: CAN_PILE, cabinetmaker: CHAIR_PILE, brickmaker: BRICK_PILE, boilermaker: BOILER_PILE, puddler: IRON7_PILE, stockbroker: CERT_PILE,
+      journalist: BUNDLE_PILE, engineer: COAL_STAGE, electrician: CABLE_PILE, excavator: PIT_HEAP, agronomist: CRATE_PILE, forestEngineer: LOG8_PILE,
+      concreter: SLAB_PILE, mechanic: TIRE_PILE, welder: BEAM_PILE, entrepreneur: CASE_PILE, scientist: FLASK_PILE, solarTech: PANEL_PILE,
     } as Partial<Record<BuildingId, { x: number; z: number }>>)[kind] ?? ASHLAR_PILE;
 
   /** Una pieza colocada en el suelo de la escena, girada hacia la aldea, que cae del cielo al construirse. */
@@ -4427,6 +4633,8 @@ export function createVillage(container: HTMLElement): Village {
   };
   const furnaceHeat = [0, 0];
 
+  /** Oficios de mesa de las dos últimas eras: enlatar, escribir, ensayar, conectar, firmar, manejar. */
+  const DESK_WORK = new Set<BuildingId>(['canner', 'journalist', 'scientist', 'electrician', 'entrepreneur', 'excavator']);
   /** Trabajo en un puesto y, al terminar, llevar la pieza a su montón. Lo usan fundidor, picapedrero,
    *  herrero, broncista, marmolista y aserrador. */
   function updateCrafter(p: Person, dt: number, t: number): void {
@@ -4467,7 +4675,7 @@ export function createVillage(container: HTMLElement): Village {
         const f = FURNACES[k];
         emit(sparkMat, f.x, heightAt(f.x, f.z) + 1.6, f.z, 1, 1.4, 0.04, 1.6, false);
       }
-    } else if (p.kind === 'sawyer') {
+    } else if (p.kind === 'sawyer' || p.kind === 'cabinetmaker') {
       // Sierra adelante y atrás sobre el tronco del caballete; caen virutas
       const saw = Math.sin(t * 5 + p.phase);
       r.torso.rotation.x = 0.45 + saw * 0.05;
@@ -4483,24 +4691,26 @@ export function createVillage(container: HTMLElement): Village {
       r.torso.rotation.x = 0.1 - pull * 0.25;
       r.armR.rotation.x = -1.5 + pull * 0.5;
       r.armL.rotation.x = -1.2 + pull * 0.3;
-    } else if (p.kind === 'vintner') {
-      // Vendimia: agachado ante la cepa, corta racimos y los echa al cesto
+    } else if (p.kind === 'vintner' || p.kind === 'agronomist' || p.kind === 'forestEngineer' || p.kind === 'solarTech') {
+      // Vendimia: agachado ante la cepa, corta racimos y los echa al cesto. Igual se agachan el
+      // agrónomo ante las tomateras, el ingeniero forestal ante los plantones y el técnico solar.
       const cut = Math.sin(t * 2.2 + p.phase);
       r.torso.rotation.x = ease(r.torso.rotation.x, 0.55, dt);
       r.armR.rotation.x = -1.3 + cut * 0.25;
       r.armL.rotation.x = -1.1 - cut * 0.2;
-      if (fx() < dt * 0.8) {
+      const bit = p.kind === 'vintner' ? grapeMat : p.kind === 'agronomist' ? tomatoMat : p.kind === 'forestEngineer' ? leafMat8 : null;
+      if (bit && fx() < dt * 0.8) {
         const v = spot.face;
-        emit(grapeMat, v.x, heightAt(v.x, v.z) + 0.6, v.z, 1, 0.4, 0.06, 0.3);
+        emit(bit, v.x, heightAt(v.x, v.z) + 0.6, v.z, 1, 0.4, 0.06, 0.3);
       }
-    } else if (p.kind === 'banker' || p.kind === 'clockmaker' || p.kind === 'bookbinder') {
+    } else if (p.kind === 'banker' || p.kind === 'clockmaker' || p.kind === 'bookbinder' || DESK_WORK.has(p.kind)) {
       // Trabajo de mesa: cuenta monedas, lima ruedas o cose pliegos con gestos cortos
       const k = Math.sin(t * (p.kind === 'banker' ? 3.2 : 4.5) + p.phase);
       r.torso.rotation.x = ease(r.torso.rotation.x, p.kind === 'banker' ? 0.2 : 0.4, dt);
       r.armR.rotation.x = -1.1 + k * 0.15;
       r.armL.rotation.x = -1.0 - k * 0.1;
       r.armR.rotation.z = 0.12 + Math.max(0, k) * 0.2;
-    } else if (p.kind === 'merchant') {
+    } else if (p.kind === 'merchant' || p.kind === 'stockbroker') {
       // Regatea tras el puesto: señala la mercancía y abre los brazos
       const talk = Math.sin(t * 2.4 + p.phase);
       r.torso.rotation.x = 0.05;
@@ -4510,14 +4720,16 @@ export function createVillage(container: HTMLElement): Village {
     } else {
       // Cincel o tenazas en una mano, martillo en la otra: golpes cortos y rápidos.
       // El molinero trilla con el mayal y el guardabosques corta leña con el hacha.
-      const metal = p.kind === 'blacksmith' || p.kind === 'bronzesmith' || p.kind === 'armorer' || p.kind === 'bellfounder' || p.kind === 'gunsmith';
+      const metal = p.kind === 'blacksmith' || p.kind === 'bronzesmith' || p.kind === 'armorer' || p.kind === 'bellfounder' || p.kind === 'gunsmith' || p.kind === 'boilermaker' || p.kind === 'puddler' || p.kind === 'mechanic' || p.kind === 'welder';
       const ph = (t * (metal ? 2.2 : 2.6) + p.phase) % 1, raise = ph < 0.6 ? ph / 0.6 : (1 - ph) / 0.4;
       r.torso.rotation.x = 0.55;
       r.armL.rotation.x = -1.2;
       r.armR.rotation.x = -0.8 - raise * 1.3;
       if (ph < 0.08 && fx() < 0.5) {
         const b = spot.face;
-        if (metal) emit(sparkMat, b.x, heightAt(b.x, b.z) + 0.85, b.z, 3, 1.3, 0.035, 1.2, false);
+        if (metal) emit(p.kind === 'welder' ? weldMat : sparkMat, b.x, heightAt(b.x, b.z) + 0.85, b.z, 3, 1.3, 0.035, 1.2, false);
+        else if (p.kind === 'engineer') emit(coalMat, b.x, heightAt(b.x, b.z) + 0.6, b.z, 2, 0.8, 0.05, 0.6);
+        else if (p.kind === 'brickmaker') emit(brickChipMat, b.x, heightAt(b.x, b.z) + 0.9, b.z, 2, 0.7, 0.04, 0.5);
         else if (p.kind === 'miller') emit(chaffMat, b.x, heightAt(b.x, b.z) + 0.3, b.z, 3, 0.8, 0.04, 0.6);
         else if (p.kind === 'ranger' || p.kind === 'shipwright') emit(chipMat, b.x, heightAt(b.x, b.z) + 1, b.z, 2, 0.9, 0.05);
         else emit(p.kind === 'marbler' || p.kind === 'sculptor' ? marbleChipMat : stoneChipMat, b.x, heightAt(b.x, b.z) + 0.8, b.z, 2, 0.9, 0.05);
@@ -4570,7 +4782,8 @@ export function createVillage(container: HTMLElement): Village {
 
   /** Boca, montón y mineral de cada mina: cobre en la Edad del Bronce, hierro en la Antigüedad. */
   const mineOf = (kind: BuildingId) =>
-    kind === 'goldMiner' ? { mouth: GOLD_MOUTH, heap: GOLD_ORE_HEAP, ore: goldOreMat }
+    kind === 'coalMiner' ? { mouth: COAL_MOUTH, heap: COAL_TIP, ore: coalMat }
+    : kind === 'goldMiner' ? { mouth: GOLD_MOUTH, heap: GOLD_ORE_HEAP, ore: goldOreMat }
     : kind === 'ironMiner' ? { mouth: IRON_MOUTH, heap: IRON_ORE_HEAP, ore: ironOreMat } : { mouth: COPPER_MOUTH, heap: ORE_HEAP, ore: oreMat };
   function updateCopperMiner(p: Person, dt: number, t: number): void {
     const r = p.rig;
@@ -4672,7 +4885,7 @@ export function createVillage(container: HTMLElement): Village {
   const daylightAt = (t: number) => ramp(t, 0.12, 0.2) * (1 - ramp(t, 0.75, 0.83));
   /** Tono dorado del amanecer y del atardecer. */
   const glowAt = (t: number) => Math.max(1 - Math.min(1, Math.abs(t - 0.165) / 0.06), 1 - Math.min(1, Math.abs(t - 0.79) / 0.07));
-  let day = daylightAt(tod), warm = 0, warmTarget = 0, med = 0, medTarget = 0, zoom = 1, zoomTarget = 1;
+  let day = daylightAt(tod), warm = 0, warmTarget = 0, med = 0, medTarget = 0, smog = 0, smogTarget = 0, zoom = 1, zoomTarget = 1;
   const nightFog = new THREE.Color(0x3a2a52), dayFog = new THREE.Color(0xcfdde6);
   const hemiSky = [new THREE.Color(0x8a7ac8), new THREE.Color(0xfff0d8)], hemiGround = [new THREE.Color(0x2a1a10), new THREE.Color(0x6e5a3a)];
   const lightCol = [new THREE.Color(0x9aa8ff), new THREE.Color(0xffefd0)];
@@ -4685,6 +4898,8 @@ export function createVillage(container: HTMLElement): Village {
   const skyMed = skyGradient(new THREE.Color(0x2a66b8), new THREE.Color(0x7ab4e8), new THREE.Color(0xe6eef0));
   const medFog = new THREE.Color(0xd6e3ec), medLight = new THREE.Color(0xfff8ec), medSky = new THREE.Color(0xf2f6ff);
   const medMountain = new THREE.Color(0x7d90b2);
+  // Revolución Industrial: un velo pardo de humo sobre el cielo y la niebla
+  const smogSky = [0.62, 0.58, 0.52], smogFog = new THREE.Color(0xa89c8c);
   const sunDir = new THREE.Vector3(), moonDir = new THREE.Vector3();
   /** Ventanas encendidas de noche: un solo material para todas las casas. */
   function applyDay(k: number, w = warm, m = med): void {
@@ -4695,10 +4910,11 @@ export function createVillage(container: HTMLElement): Village {
     for (let i = 0; i < skyNight.length; i++) {
       const dayC = skyDay[i] + (skyGold[i] - skyDay[i]) * g;
       const lit = dayC + (skyMed[i] - dayC) * c;
-      (colors.array as Float32Array)[i] = skyNight[i] + (lit - skyNight[i]) * e;
+      const hazy = lit + (smogSky[i % 3] - lit) * smog * 0.45;
+      (colors.array as Float32Array)[i] = skyNight[i] + (hazy - skyNight[i]) * e;
     }
     colors.needsUpdate = true;
-    (scene.fog as THREE.Fog).color.copy(nightFog).lerp(dayFog, e).lerp(goldFog, ge).lerp(medFog, ce);
+    (scene.fog as THREE.Fog).color.copy(nightFog).lerp(dayFog, e).lerp(goldFog, ge).lerp(medFog, ce).lerp(smogFog, smog * e * 0.5);
     hemi.color.copy(hemiSky[0]).lerp(hemiSky[1], e).lerp(goldSky, ge).lerp(medSky, ce);
     hemi.groundColor.copy(hemiGround[0]).lerp(hemiGround[1], e);
     hemi.intensity = 1.6 + e * 0.2 + ce * 0.1;
@@ -4782,7 +4998,7 @@ export function createVillage(container: HTMLElement): Village {
   const plazaBuilt = new Set<Plaza>();
   const bonfires = new Map<Plaza, THREE.Group>();
   const bonfireFlames: THREE.Mesh[] = [];
-  const PAVING: Record<number, number> = { 3: 0x8a7a50, 4: 0xcfc6b2, 5: 0x9a8a72, 6: 0xb4785a };
+  const PAVING: Record<number, number> = { 3: 0x8a7a50, 4: 0xcfc6b2, 5: 0x9a8a72, 6: 0xb4785a, 7: 0x6e6460, 8: 0xb4b2ac };
   function buildPlaza(pl: Plaza): void {
     plazaBuilt.add(pl);
     if (!pl.pit) return;
@@ -4848,10 +5064,19 @@ export function createVillage(container: HTMLElement): Village {
       const arm = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 0.2), castleStoneMat);
       arm.position.y = 2.2;
       deco.add(step, shaft, arm);
-    } else {
+    } else if (pl.era === 6) {
       const ped = new THREE.Mesh(new THREE.BoxGeometry(1, 1.2, 1), marbleShadeMat);
       ped.position.y = 0.6;
       deco.add(ped, makeStatue(marbleMat, 1.1).translateY(1.2));
+    } else if (pl.era === 7) {
+      // Farola de hierro fundido con cuatro faroles, que de noche se encienden como las ventanas
+      deco.add(meshOf([new THREE.CylinderGeometry(0.45, 0.55, 0.4, 8).translate(0, 0.2, 0), new THREE.CylinderGeometry(0.07, 0.11, 3.4, 6).translate(0, 2, 0), boxAt(1.3, 0.06, 0.06, 0, 3.4, 0), boxAt(0.06, 0.06, 1.3, 0, 3.4, 0)], greenIronMat));
+      for (const [x, z] of [[0.62, 0], [-0.62, 0], [0, 0.62], [0, -0.62]]) deco.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.32, 0.2).translate(x, 3.2, z), windowMat));
+    } else {
+      // Fuente moderna: un estanque cuadrado y un arco de acero pulido
+      deco.add(new THREE.Mesh(new THREE.BoxGeometry(2, 0.4, 2).translate(0, 0.2, 0), concreteMat));
+      const water = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8).rotateX(-Math.PI / 2).translate(0, 0.38, 0), waterMat);
+      deco.add(water, new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.08, 6, 16, Math.PI).translate(0, 0.4, 0), tinMat));
     }
     faceCenter(deco, { x: -edge.x, z: -edge.z });
     deco.rotation.y += Math.PI;
@@ -5418,7 +5643,7 @@ export function createVillage(container: HTMLElement): Village {
     const pick = <T,>(list: T[]) => list[Math.floor(rnd() * list.length) % list.length];
     if (o.type === 'hamlet') {
       // Tres o cuatro casas de la era alrededor de un pozo, con un huerto detrás
-      const n = 3 + Math.floor(rnd() * 2), make = era >= 6 ? makeRenHouse : era === 5 ? makeTimberHouse : era === 4 ? makeVilla : era === 3 ? makeHouse : makeHut;
+      const n = 3 + Math.floor(rnd() * 2), make = era >= 8 ? makeModernHouse : era === 7 ? makeBrickHouse : era >= 6 ? makeRenHouse : era === 5 ? makeTimberHouse : era === 4 ? makeVilla : era === 3 ? makeHouse : makeHut;
       for (let k = 0; k < n; k++) {
         const a = (k / n) * Math.PI * 2 + rnd() * 0.4, p = around(o, Math.cos(a) * 2.7, Math.sin(a) * 2.7);
         const s = 0.6 + rnd() * 0.08;
@@ -5438,7 +5663,7 @@ export function createVillage(container: HTMLElement): Village {
     }
     if (o.type === 'field') {
       // Un campo arado con surcos y, según la era, cereal, lino, coles o viñas en hileras
-      const crop = pick(era <= 2 ? ['grain', 'flax'] : era === 3 ? ['grain', 'flax', 'cabbage'] : era === 4 ? ['grain', 'vine', 'cabbage'] : era === 5 ? ['grain', 'cabbage', 'flax'] : ['vine', 'grain', 'cabbage']);
+      const crop = pick(era <= 2 ? ['grain', 'flax'] : era === 3 ? ['grain', 'flax', 'cabbage'] : era === 4 ? ['grain', 'vine', 'cabbage'] : era === 5 ? ['grain', 'cabbage', 'flax'] : era === 6 ? ['vine', 'grain', 'cabbage'] : ['grain', 'cabbage', 'grain']);
       const side = o.r * 1.3, rows = 6, g = new THREE.Group();
       g.add(groundPatch(o, side, side, fieldSoilMat));
       const plants: THREE.BufferGeometry[] = [], extra: THREE.BufferGeometry[] = [], posts: THREE.BufferGeometry[] = [];
@@ -5512,7 +5737,7 @@ export function createVillage(container: HTMLElement): Village {
     }
     if (o.type === 'grove') {
       // Árboles de la época: abedules y robles al norte; olivos y cipreses en el Mediterráneo
-      const kinds = era <= 3 ? ['oak', 'birch', 'birch'] : era === 4 ? ['olive', 'cypress', 'olive'] : era === 5 ? ['oak', 'oak', 'birch'] : ['cypress', 'stonePine', 'olive', 'cypress'];
+      const kinds = era <= 3 ? ['oak', 'birch', 'birch'] : era === 4 ? ['olive', 'cypress', 'olive'] : era === 5 ? ['oak', 'oak', 'birch'] : era === 6 ? ['cypress', 'stonePine', 'olive', 'cypress'] : ['birch', 'oak', 'birch', 'oak'];
       const n = 5 + Math.floor(rnd() * 2);
       for (let k = 0; k < n; k++) {
         const a = (k / n) * Math.PI * 2 + rnd() * 0.5, d = k === 0 ? 0 : 1.6 + rnd() * (o.r - 2.4);
@@ -5526,7 +5751,7 @@ export function createVillage(container: HTMLElement): Village {
     }
     if (o.type === 'herd') {
       // Cercado con animales que pastan: cabras, vacas, ovejas, cerdos o caballos
-      const kind = pick(era === 2 ? ['goat'] : era === 3 ? ['cow', 'goat'] : era === 4 ? ['goat', 'sheep'] : era === 5 ? ['cow', 'pig'] : ['horse', 'cow']);
+      const kind = pick(era === 2 ? ['goat'] : era === 3 ? ['cow', 'goat'] : era === 4 ? ['goat', 'sheep'] : era === 5 ? ['cow', 'pig'] : era === 6 ? ['horse', 'cow'] : ['cow', 'horse', 'sheep']);
       const fence: THREE.BufferGeometry[] = [], n = 18, rr = o.r - 0.3;
       for (let k = 0; k < n; k++) {
         const a = (k / n) * Math.PI * 2, a2 = ((k + 1) / n) * Math.PI * 2;
@@ -5597,7 +5822,7 @@ export function createVillage(container: HTMLElement): Village {
         ivy.add(meshOf([partAt(o, new THREE.IcosahedronGeometry(0.6, 0).scale(0.6, 1.4, 0.6), 0.9, 0.6, 1.2), partAt(o, new THREE.IcosahedronGeometry(0.5, 0).scale(0.6, 1, 0.6), -1.0, 0.2, 0.9)], oakLeafMat));
         g.add(ivy);
       }
-    } else {
+    } else if (era === 6) {
       m = marbleMat;
       if (variant) {
         // Templete del Renacimiento: columnas en corro, cúpula y linterna
@@ -5617,6 +5842,50 @@ export function createVillage(container: HTMLElement): Village {
         st.position.set(p.x, heightAt(p.x, p.z) + 2.05, p.z);
         st.rotation.y = Math.atan2(-tz, tx) + Math.PI / 2;
         g.add(st);
+      }
+    } else if (era === 7) {
+      if (variant) {
+        // Depósito de agua de hierro sobre cuatro patas
+        m = rustMat;
+        parts.push(partAt(o, new THREE.CylinderGeometry(1.3, 1.3, 1.6, 12), 0, 0, 4.4), partAt(o, new THREE.ConeGeometry(1.4, 0.6, 12), 0, 0, 5.5));
+        for (const [u, v] of [[0.9, 0.9], [-0.9, 0.9], [0.9, -0.9], [-0.9, -0.9]]) parts.push(partAt(o, new THREE.BoxGeometry(0.18, 3.6, 0.18), u, v, 1.8));
+      } else {
+        // Torre del reloj de ladrillo con tejado de pizarra
+        m = brickMat;
+        parts.push(partAt(o, new THREE.BoxGeometry(1.4, 5.5, 1.4), 0, 0, 2.75));
+        const roofG = new THREE.Group();
+        roofG.add(meshOf([partAt(o, new THREE.ConeGeometry(1.15, 1.4, 4).rotateY(Math.PI / 4), 0, 0, 6.2)], slate7Mat));
+        const face = new THREE.Group();
+        face.add(meshOf([partAt(o, new THREE.CircleGeometry(0.45, 12).translate(0, 0, 0.72), 0, 0, 4.6, Math.PI / 2)], paperMat));
+        g.add(roofG, face);
+      }
+    } else {
+      m = whiteMat;
+      if (variant) {
+        // Aerogenerador: torre blanca, góndola y tres palas que giran de cara a la ciudad
+        parts.push(partAt(o, new THREE.CylinderGeometry(0.18, 0.32, 11, 8), 0, 0, 5.5), partAt(o, new THREE.BoxGeometry(0.5, 0.5, 1.3), 0, 0, 11.1));
+        const p = around(o, 0, -0.75), { tx, tz } = radial(o);
+        const rotor = new THREE.Group();
+        for (let k = 0; k < 3; k++) {
+          const blade = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.2, 0.06).translate(0, 2.2, 0), whiteMat);
+          blade.rotation.z = (k / 3) * Math.PI * 2;
+          rotor.add(blade);
+        }
+        rotor.add(new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 4), whiteMat));
+        const holder = new THREE.Group();
+        holder.position.set(p.x, heightAt(o.x, o.z) + 11.1, p.z);
+        holder.rotation.y = Math.atan2(-tz, tx);
+        holder.add(rotor);
+        rotor.userData.phase = rnd() * 6;
+        rotors.push(rotor);
+        g.add(holder);
+      } else {
+        // Escultura moderna: un anillo de acero sobre una losa
+        m = concreteMat;
+        parts.push(partAt(o, new THREE.BoxGeometry(2.2, 0.3, 2.2), 0, 0, 0.15));
+        const ring = new THREE.Group();
+        ring.add(meshOf([partAt(o, new THREE.TorusGeometry(1.2, 0.18, 6, 18), 0, 0, 1.5)], tinMat));
+        g.add(ring);
       }
     }
     g.add(meshOf(parts, m));
@@ -6093,6 +6362,1166 @@ export function createVillage(container: HTMLElement): Village {
     treadBoost = Math.max(0, treadBoost - dt);
   }
 
+  // ---------- Revolución Industrial: pozo de carbón, fábricas de ladrillo, calderería, altos hornos,
+  // la bolsa, el periódico, la estación y el ferrocarril que rodea la ciudad ----------
+  // Se construye la primera vez que la ciudad entra en la era 7; la Era Moderna levanta lo suyo más
+  // allá de la vía. Las dos eras comparten el humo, el tren y las piezas de los talleres.
+  const indStatics: THREE.Object3D[] = [], modStatics: THREE.Object3D[] = [];
+  let indBuilt = false, modBuilt = false;
+  const brickMat = mat(0x9a4a32), darkBrickMat = mat(0x6e3426), sootMat = mat(0x2e2a28), slate7Mat = mat(0x3e4450);
+  const steelMat = mat(0x5a6068, { metalness: 0.5, roughness: 0.5 }), rustMat = mat(0x7a4a2e), coalMat = mat(0x1e1c1c, { roughness: 0.7 });
+  const tinMat = mat(0xc8ccd0, { metalness: 0.7, roughness: 0.3 }), posterMat = mat(0xe8dcb8), greenIronMat = mat(0x2f4a3a, { metalness: 0.3 });
+  const concreteMat = mat(0xb8b4ac), whiteMat = mat(0xeeeeea), towerMat = mat(0xc8c4bc);
+  const glassMat = mat(0x6a94b0, { metalness: 0.5, roughness: 0.2 }), solarMat = mat(0x1e3a6a, { metalness: 0.5, roughness: 0.25 });
+  const yellowMat = mat(0xe8b02a), orangeMat = mat(0xe86a2a), redMat = mat(0xb8322a), tomatoMat = mat(0xd83a2a), leafMat8 = mat(0x4a8a3a);
+  const brickChipMat = mat(0xb4583a);
+  const greenhouseMat = new THREE.MeshStandardMaterial({ color: 0xd8efe8, transparent: true, opacity: 0.35, roughness: 0.1, depthWrite: false, side: THREE.DoubleSide });
+  const furnaceGlow = new THREE.MeshBasicMaterial({ color: 0xff7a2a }), weldMat = new THREE.MeshBasicMaterial({ color: 0x9ad8ff });
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb040, transparent: true, opacity: 0.9 });
+
+  // Puestos de trabajo de la era 7 (x de lado, z hacia la villa, como en la geometría local)
+  const COAL_MOUTH = zoneAt(COLLIERY, 0, 1.2);
+  const COAL_TIP = zoneAt(COLLIERY, 3.9, 2.4);
+  const CAN_TABLES = [zoneAt(CANNERY, -1.6, 2.3), zoneAt(CANNERY, 1.6, 2.3)];
+  const CAN_PILE = zoneAt(CANNERY, 3.9, 2.6);
+  const CAB_BENCHES = [zoneAt(CABINET, -1.6, 2.3), zoneAt(CABINET, 1.6, 2.3)];
+  const CHAIR_PILE = zoneAt(CABINET, -3.9, 2.6);
+  const BRICK_TABLES = [zoneAt(BRICKWORKS, -1.8, 2.8), zoneAt(BRICKWORKS, 1.8, 2.8)];
+  const BRICK_PILE = zoneAt(BRICKWORKS, 4.3, 2.9);
+  const BOILERS = [zoneAt(BOILERSHOP, -1.7, 1.7), zoneAt(BOILERSHOP, 1.7, 1.7)];
+  const BOILER_PILE = zoneAt(BOILERSHOP, -4, 2.6);
+  const PUDDLE = [zoneAt(IRONWORKS, -2, 0.7), zoneAt(IRONWORKS, 2, 0.7)];
+  const IRON7_PILE = zoneAt(IRONWORKS, -4.3, 2.8);
+  const TICKERS = [zoneAt(EXCHANGE, -1.6, 3.6), zoneAt(EXCHANGE, 1.6, 3.6)];
+  const CERT_PILE = zoneAt(EXCHANGE, 4.3, 3.4);
+  const NEWS_DESKS = [zoneAt(NEWSPAPER, -1.8, 2.5), zoneAt(NEWSPAPER, 1.8, 2.5)];
+  const BUNDLE_PILE = zoneAt(NEWSPAPER, -4.1, 2.7);
+  const BUNKERS = [zoneAt(STATION, -5.4, 1.3), zoneAt(STATION, 5.4, 1.3)];
+  const COAL_STAGE = zoneAt(STATION, 6.9, 3.1);
+  // Puestos de la era 8
+  const TRANSFORMERS = [zoneAt(POWER, -2.3, 4.2), zoneAt(POWER, 2.3, 4.2)];
+  const CABLE_PILE = zoneAt(POWER, 5.4, 4.6);
+  const DESKS8 = [zoneAt(OFFICES, -1.6, 3.6), zoneAt(OFFICES, 1.6, 3.6)];
+  const CASE_PILE = zoneAt(OFFICES, 4.4, 4.2);
+  const PANELS = [-1, 1.4, 3.8].flatMap((z) => [-4.2, -1.4, 1.4, 4.2].map((x) => zoneAt(SOLAR, x, z - 2.2)));
+  const PANEL_PILE = zoneAt(SOLAR, 5.8, 4.4);
+  const EXCAVATORS = [zoneAt(OPEN_PIT, -6.4, 4.6), zoneAt(OPEN_PIT, 6.4, 4.6)];
+  const PIT_HEAP = zoneAt(OPEN_PIT, 9.3, 2.2);
+  const SAPLINGS8 = [-2.6, 0, 2.6].flatMap((z) => [-3.3, -1.1, 1.1, 3.3].map((x) => zoneAt(NURSERY8, x, z - 1)));
+  const LOG8_PILE = zoneAt(NURSERY8, 5, 3.4);
+  const CARS = [zoneAt(GARAGE, -1.9, 2.1), zoneAt(GARAGE, 1.9, 2.1)];
+  const TIRE_PILE = zoneAt(GARAGE, -4.6, 2.8);
+  const BENCHES8 = [zoneAt(LAB, -1.5, 2.4), zoneAt(LAB, 1.5, 2.4)];
+  const FLASK_PILE = zoneAt(LAB, 4.2, 3);
+  const BEDS = [zoneAt(GREENHOUSES, -2.4, 2.6), zoneAt(GREENHOUSES, 2.4, 2.6)];
+  const CRATE_PILE = zoneAt(GREENHOUSES, -5.3, 3.6);
+  const FORMS = [zoneAt(SITE, -1.2, 2.6), zoneAt(SITE, 2.4, 2.6)];
+  const SLAB_PILE = zoneAt(SITE, 5, 3.4);
+  const WELD_SPOTS = [zoneAt(STEELWORKS, -2.2, 1.6), zoneAt(STEELWORKS, 2.2, 1.6)];
+  const BEAM_PILE = zoneAt(STEELWORKS, -4.6, 2.6);
+
+  let coalLumps: THREE.Object3D[] = [], cans: THREE.Object3D[] = [], chairs: THREE.Object3D[] = [], bricks7: THREE.Object3D[] = [];
+  let drums: THREE.Object3D[] = [], pigIron: THREE.Object3D[] = [], strongboxes: THREE.Object3D[] = [], bundles: THREE.Object3D[] = [], coalStage: THREE.Object3D[] = [];
+  let cableDrums: THREE.Object3D[] = [], briefcases: THREE.Object3D[] = [], panelStack: THREE.Object3D[] = [], pitCoal: THREE.Object3D[] = [];
+  let logs8: THREE.Object3D[] = [], tires: THREE.Object3D[] = [], flasks: THREE.Object3D[] = [], crates: THREE.Object3D[] = [], slabs: THREE.Object3D[] = [], beams: THREE.Object3D[] = [];
+  let crystalPalace: THREE.Object3D | null = null, antenna: THREE.Object3D | null = null, extraPanels: THREE.Object3D | null = null;
+  let pressRolls: THREE.Object3D[] = [], headWheel: THREE.Object3D | null = null, craneJib: THREE.Object3D | null = null, mixerDrum: THREE.Object3D | null = null;
+  let truck: THREE.Object3D | null = null, rocket: THREE.Object3D | null = null, rocketFlame: THREE.Object3D | null = null, plane: THREE.Object3D | null = null;
+  const excavatorArms: THREE.Object3D[] = [], rotors: THREE.Object3D[] = [];
+  let rocketT = -1, rocketBase = 0;
+
+  function placeIn(list: THREE.Object3D[], o: THREE.Object3D, at: { x: number; z: number }, dy = 0, face = true, solid = true): THREE.Object3D {
+    if (face) faceCenter(o, at);
+    add(o, at.x, groundY(at.x, at.z, footprint(o)) + dy, at.z);
+    spawn(o);
+    if (!solid) for (let k = solids.length - 1; k >= 0; k--) if (solids[k].obj === o) solids.splice(k, 1);
+    list.push(o);
+    return o;
+  }
+  function heapIn(list: THREE.Object3D[], at: { x: number; z: number }, n: number, make: (k: number) => THREE.Object3D): THREE.Object3D[] {
+    const g = new THREE.Group(), items = Array.from({ length: n }, (_, k) => {
+      const o = make(k);
+      g.add(o);
+      return o;
+    });
+    faceCenter(g, at);
+    list.push(spawn(add(g, at.x, heightAt(at.x, at.z), at.z)));
+    return items;
+  }
+  function tableIn(list: THREE.Object3D[], at: { x: number; z: number }, top: THREE.Material, extra?: THREE.Object3D, legs: THREE.Material = timberMat): void {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.1, 0.75).translate(0, 0.8, 0), top));
+    const ls: THREE.BufferGeometry[] = [];
+    for (const sx of [-0.55, 0.55]) for (const sz of [-0.3, 0.3]) ls.push(boxAt(0.08, 0.8, 0.08, sx, 0.4, sz));
+    g.add(new THREE.Mesh(mergeGeometries(ls)!, legs));
+    if (extra) g.add(extra);
+    placeIn(list, g, at);
+  }
+  /** Chimenea de ladrillo con su remate, como geometrías para unir. */
+  const stackGeos = (x: number, z: number, h: number, r: number) => [
+    new THREE.CylinderGeometry(r * 0.7, r, h, 8).translate(x, h / 2, z),
+    new THREE.CylinderGeometry(r * 0.9, r * 0.8, 0.5, 8).translate(x, h, z),
+  ];
+  /** Ventanas en filas sobre la fachada que mira a la villa (z = zf). */
+  function windowRows(g: THREE.Object3D, w: number, zf: number, rows: number[], n: number, ww = 0.55, wh = 0.8): void {
+    for (const y of rows) for (let k = 0; k < n; k++) pane(g, -w / 2 + (k + 0.5) * (w / n), y, zf, ww, wh);
+  }
+
+  // ---------- Humo y vapor ----------
+  // Bocanadas instanciadas que suben, crecen y se deshacen: humo negro del carbón y vapor blanco
+  interface Puff8 { age: number; x: number; y: number; z: number; s: number; life: number }
+  interface Smoke { obj: THREE.Object3D; x: number; y: number; z: number; rate: number; size: number; white: boolean; acc: number }
+  const SMOKE_N = 110;
+  const smokeKinds = [0x4a4644, 0xf2f2ee].map((color, k) => {
+    const m = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color, flatShading: true, transparent: true, opacity: k ? 0.62 : 0.5, depthWrite: false }), SMOKE_N);
+    m.frustumCulled = false;
+    m.visible = false;
+    for (let i = 0; i < SMOKE_N; i++) m.setMatrixAt(i, tmpM4.makeScale(0, 0, 0));
+    scene.add(m);
+    return { mesh: m, puffs: Array.from({ length: SMOKE_N }, (): Puff8 => ({ age: 1, x: 0, y: 0, z: 0, s: 1, life: 6 })), next: 0 };
+  });
+  const smokeSources: Smoke[] = [];
+  function smokeAt(x: number, y: number, z: number, size: number, white: boolean, life = 6): void {
+    const kind = smokeKinds[white ? 1 : 0];
+    const p = kind.puffs[kind.next];
+    kind.next = (kind.next + 1) % SMOKE_N;
+    Object.assign(p, { age: 0, x, y, z, s: size, life });
+  }
+  /** Una chimenea que echa humo mientras su edificio se ve: `local` es la boca en la pieza. */
+  function smokeFrom(obj: THREE.Object3D, local: THREE.Vector3, rate: number, size: number, white = false): void {
+    obj.updateMatrixWorld(true);
+    const w = obj.localToWorld(local.clone());
+    smokeSources.push({ obj, x: w.x, y: w.y, z: w.z, rate, size, white, acc: fx() });
+  }
+  function animateSmoke(dt: number): void {
+    for (const s of smokeSources) {
+      if (!s.obj.visible || !s.obj.parent) continue;
+      s.acc += dt * s.rate;
+      while (s.acc >= 1) {
+        s.acc -= 1;
+        smokeAt(s.x + (fx() - 0.5) * 0.3, s.y, s.z + (fx() - 0.5) * 0.3, s.size, s.white);
+      }
+    }
+    for (const kind of smokeKinds) {
+      kind.puffs.forEach((p, i) => {
+        if (p.age >= 1) return;
+        p.age = Math.min(1, p.age + dt / p.life);
+        p.y += dt * (1.4 + p.s * 0.3);
+        p.x += dt * 0.5;
+        p.z += dt * 0.2;
+        const k = p.age >= 1 ? 0 : p.s * (0.35 + p.age * 1.5) * (p.age > 0.75 ? (1 - p.age) / 0.25 : 1);
+        kind.mesh.setMatrixAt(i, tmpM4.compose(tmpV3.set(p.x, p.y, p.z), tmpQ4.identity(), tmpS3.setScalar(k)));
+      });
+      kind.mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  // ---------- El ferrocarril ----------
+  // La vía da la vuelta a la ciudad en el anillo TRACK_R. Su altura sigue el terreno suavizado y,
+  // sobre el valle del río, va por un puente de hierro con pilares.
+  const TRACK_N = 720;
+  const trackH: number[] = [];
+  function buildTrackHeights(): void {
+    const raw: number[] = [];
+    for (let k = 0; k < TRACK_N; k++) {
+      const a = (k / TRACK_N) * Math.PI * 2, x = Math.cos(a) * TRACK_R, z = Math.sin(a) * TRACK_R;
+      raw.push(riverDist(x, z) < RIVER_W + 11 ? Math.max(heightAt(x, z), 1.7) : heightAt(x, z));
+    }
+    for (let k = 0; k < TRACK_N; k++) {
+      let s = 0;
+      for (let j = -6; j <= 6; j++) s += raw[(k + j + TRACK_N) % TRACK_N];
+      trackH[k] = Math.max(s / 13, raw[k] - 0.25) + 0.12;
+    }
+  }
+  const trackY = (a: number) => {
+    const f = ((((a / (Math.PI * 2)) % 1) + 1) % 1) * TRACK_N, k = Math.floor(f) % TRACK_N;
+    return THREE.MathUtils.lerp(trackH[k], trackH[(k + 1) % TRACK_N], f - Math.floor(f));
+  };
+  const ringAt = (a: number, r = TRACK_R) => new THREE.Vector3(Math.cos(a) * r, trackY(a), Math.sin(a) * r);
+  /** Caja de sección w × h tendida de a hasta b. */
+  const beamM = new THREE.Matrix4();
+  function beamGeo(a: THREE.Vector3, b: THREE.Vector3, w: number, h: number): THREE.BufferGeometry {
+    const len = a.distanceTo(b);
+    const g = new THREE.BoxGeometry(w, h, len + 0.02);
+    g.applyMatrix4(beamM.identity().lookAt(b, a, tmpUp));
+    return g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  }
+  function buildTrack(): void {
+    buildTrackHeights();
+    const sleepers: THREE.BufferGeometry[] = [], rails: THREE.BufferGeometry[] = [], girders: THREE.BufferGeometry[] = [], piers: THREE.BufferGeometry[] = [];
+    const SEG = 360;
+    for (let k = 0; k < SEG; k++) {
+      const a0 = (k / SEG) * Math.PI * 2, a1 = ((k + 1) / SEG) * Math.PI * 2, am = (a0 + a1) / 2;
+      for (const off of [-0.72, 0.72]) {
+        const p0 = ringAt(a0, TRACK_R + off), p1 = ringAt(a1, TRACK_R + off);
+        p0.y += 0.16;
+        p1.y += 0.16;
+        rails.push(beamGeo(p0, p1, 0.1, 0.12));
+      }
+      for (const a of [a0, am]) {
+        const i0 = ringAt(a, TRACK_R - 1.1), o0 = ringAt(a, TRACK_R + 1.1);
+        sleepers.push(beamGeo(i0, o0, 0.32, 0.12));
+      }
+      // Puente: donde el suelo queda muy por debajo de la vía
+      const mid = ringAt(am), ground = heightAt(mid.x, mid.z);
+      if (ground < mid.y - 0.45) {
+        for (const off of [-1.25, 1.25]) {
+          const p0 = ringAt(a0, TRACK_R + off), p1 = ringAt(a1, TRACK_R + off);
+          p0.y -= 0.15;
+          p1.y -= 0.15;
+          girders.push(beamGeo(p0, p1, 0.18, 0.7));
+          p0.y += 0.75;
+          p1.y += 0.75;
+          girders.push(beamGeo(p0, p1, 0.12, 0.12));
+        }
+        girders.push(beamGeo(ringAt(a0, TRACK_R - 1.3).setY(mid.y - 0.45), ringAt(a0, TRACK_R + 1.3).setY(mid.y - 0.45), 0.5, 0.25));
+        if (k % 5 === 0) {
+          const h = mid.y + 2;
+          piers.push(new THREE.BoxGeometry(2.6, h, 0.9).rotateY(-am).translate(mid.x, mid.y - 0.5 - h / 2, mid.z));
+        }
+      }
+    }
+    // Balasto: una cinta de grava bajo las traviesas
+    const pos: number[] = [], idx: number[] = [];
+    for (let k = 0; k <= SEG; k++) {
+      const a = (k / SEG) * Math.PI * 2;
+      for (const off of [-1.45, 1.45]) {
+        const p = ringAt(a, TRACK_R + off), g = heightAt(p.x, p.z);
+        pos.push(p.x, Math.max(g, p.y - 0.6) + 0.04, p.z);
+      }
+      if (k < SEG) idx.push(k * 2, k * 2 + 2, k * 2 + 1, k * 2 + 1, k * 2 + 2, k * 2 + 3);
+    }
+    const ballast = new THREE.BufferGeometry();
+    ballast.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    ballast.setIndex(idx);
+    ballast.computeVertexNormals();
+    const g = new THREE.Group();
+    const ballastMesh = new THREE.Mesh(ballast, mat(0x6a6260, { side: THREE.DoubleSide }));
+    g.add(ballastMesh, meshOf(sleepers, barrelMat), meshOf(rails, steelMat));
+    if (girders.length) g.add(meshOf(girders, rustMat), meshOf(piers, castleStoneMat));
+    add(g);
+    g.traverse((c) => (c.castShadow = false));
+    indStatics.push(g);
+  }
+  /** Locomotora de vapor: caldera, cabina, chimenea, ruedas rojas y el quitapiedras delante (+z). */
+  function makeLoco(): THREE.Group {
+    const g = new THREE.Group();
+    const boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 2.7, 10).rotateX(Math.PI / 2), sootMat);
+    boiler.position.set(0, 1.25, 0.45);
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.5, 1.2), mat(0x2f4a3a));
+    cab.position.set(0, 1.45, -1.35);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 1.4), sootMat);
+    roof.position.set(0, 2.25, -1.35);
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.25, 4.2), sootMat);
+    frame.position.set(0, 0.6, 0);
+    const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.14, 0.75, 8), sootMat);
+    stack.position.set(0, 1.95, 1.45);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), brassMat);
+    dome.position.set(0, 1.78, 0.2);
+    const catcher = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.6, 4).rotateX(-Math.PI / 2).rotateZ(Math.PI / 4), redMat);
+    catcher.position.set(0, 0.45, 2.25);
+    const wheels: THREE.BufferGeometry[] = [];
+    for (const sx of [-0.66, 0.66]) for (const z of [-1.1, 0, 1.1]) wheels.push(new THREE.CylinderGeometry(0.42, 0.42, 0.12, 10).rotateZ(Math.PI / 2).translate(sx, 0.45, z));
+    g.add(boiler, cab, roof, frame, stack, dome, catcher, meshOf(wheels, redMat));
+    pane(g, 0.71, 1.6, -1.35, 0.5, 0.5, Math.PI / 2);
+    pane(g, -0.71, 1.6, -1.35, 0.5, 0.5, Math.PI / 2);
+    g.userData.stack = new THREE.Vector3(0, 2.4, 1.45);
+    return g;
+  }
+  function makeCar(kind: number): THREE.Group {
+    const g = new THREE.Group();
+    const wheels: THREE.BufferGeometry[] = [];
+    for (const sx of [-0.66, 0.66]) for (const z of [-1.2, 1.2]) wheels.push(new THREE.CylinderGeometry(0.3, 0.3, 0.1, 8).rotateZ(Math.PI / 2).translate(sx, 0.35, z));
+    g.add(meshOf(wheels, sootMat));
+    if (kind === 0) {
+      // Ténder de carbón
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(1.4, 1, 2.8).translate(0, 1.05, 0), mat(0x2f4a3a)));
+      g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 0).scale(1, 0.4, 1.7).translate(0, 1.6, 0), coalMat));
+    } else {
+      // Vagón de pasajeros con ventanillas y techo curvo
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.4, 3.6).translate(0, 1.25, 0), kind === 1 ? mat(0x6a1a22) : mat(0x2a3a5a)));
+      const roofG = new THREE.CylinderGeometry(0.85, 0.85, 3.7, 10, 1, false, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).scale(1, 0.3, 1).translate(0, 1.95, 0);
+      g.add(new THREE.Mesh(roofG, sootMat));
+      for (const sx of [-0.77, 0.77]) for (const z of [-1.2, 0, 1.2]) pane(g, sx, 1.45, z, 0.6, 0.5, Math.PI / 2);
+    }
+    return g;
+  }
+  /** Tren de alta velocidad de la Era Moderna: blanco, con el morro afilado y una franja azul. */
+  function makeBullet(front: boolean): THREE.Group {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 4.6).translate(0, 1.15, 0), whiteMat));
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.18, 4.6).translate(0, 0.95, 0), mat(0x1e5aa8)));
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.35, 4.2).translate(0, 1.55, 0), windowMat));
+    if (front) {
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2).scale(1, 1, 2.2), whiteMat);
+      nose.position.set(0, 1.15, 2.3);
+      g.add(nose);
+    }
+    return g;
+  }
+  interface Train { cars: THREE.Group[]; a: number; speed: number; steam: boolean; gap: number }
+  const trains: Train[] = [];
+  function makeTrain(kinds: number[], a: number, speed: number, steam: boolean): Train {
+    const cars = kinds.map((k, j) => {
+      const c = k < 0 ? makeLoco() : k >= 10 ? makeBullet(j === 0) : makeCar(k);
+      add(c);
+      c.traverse((o) => (o.castShadow = false));
+      return c;
+    });
+    const t: Train = { cars, a, speed, steam, gap: steam ? 4.4 : 4.9 };
+    trains.push(t);
+    placeTrain(t);
+    return t;
+  }
+  function placeTrain(t: Train): void {
+    t.cars.forEach((c, j) => {
+      const a = t.a - (j * t.gap) / TRACK_R;
+      c.position.copy(ringAt(a));
+      c.position.y += 0.14;
+      c.rotation.y = Math.atan2(-Math.sin(a), Math.cos(a));
+    });
+  }
+
+  function buildIndustrial(): void {
+    indBuilt = true;
+    buildTrack();
+    // Pozo de carbón: castillete de hierro sobre el pozo con su rueda, casa de máquinas con chimenea
+    // y la escombrera de carbón; los mineros bajan por el pozo y suben con el carbón
+    {
+      const g = new THREE.Group();
+      const legs: THREE.BufferGeometry[] = [];
+      for (const sx of [-1.3, 1.3]) {
+        legs.push(beamGeo(new THREE.Vector3(sx, 0, 0.6), new THREE.Vector3(sx * 0.45, 7, -0.2), 0.2, 0.2));
+        legs.push(beamGeo(new THREE.Vector3(sx, 0, -1.4), new THREE.Vector3(sx * 0.45, 7, -0.2), 0.2, 0.2));
+        for (const y of [2.2, 4.4]) legs.push(boxAt(0.12, 0.12, 1.8, sx * (1 - y / 10), y, -0.4));
+      }
+      legs.push(boxAt(1.4, 0.2, 0.4, 0, 7, -0.2));
+      g.add(meshOf(legs, steelMat));
+      const shaft = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 1.6), new THREE.MeshBasicMaterial({ color: 0x0a0806 }));
+      shaft.position.set(0, 0.06, -0.2);
+      const curb = new THREE.Mesh(mergeGeometries([boxAt(2, 0.3, 0.2, 0, 0.15, 0.7), boxAt(2, 0.3, 0.2, 0, 0.15, -1.1), boxAt(0.2, 0.3, 1.8, -0.9, 0.15, -0.2), boxAt(0.2, 0.3, 1.8, 0.9, 0.15, -0.2)])!, castleStoneMat);
+      const wheel = new THREE.Group();
+      wheel.position.set(0, 7.3, -0.2);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.07, 4, 16).rotateY(Math.PI / 2), steelMat);
+      const spokes = new THREE.Mesh(mergeGeometries([boxAt(0.06, 1.8, 0.06, 0, 0, 0), boxAt(0.06, 0.06, 1.8, 0, 0, 0)])!, steelMat);
+      wheel.add(rim, spokes);
+      headWheel = wheel;
+      g.add(shaft, curb, wheel);
+      placeIn(indStatics, g, zoneAt(COLLIERY, 0, 1.4), 0, true, false);
+      const eng = new THREE.Group();
+      eng.add(new THREE.Mesh(new THREE.BoxGeometry(4, 3.4, 3).translate(0, 1.7, 0), brickMat));
+      eng.add(new THREE.Mesh(gableGeo(3.4, 4.4, 1.2).rotateY(Math.PI / 2).translate(0, 3.4, 0), slate7Mat));
+      eng.add(meshOf(stackGeos(1.4, -0.9, 9, 0.55), darkBrickMat));
+      windowRows(eng, 4, 1.53, [2.2], 3, 0.5, 1);
+      placeIn(indStatics, eng, zoneAt(COLLIERY, -3.6, -2.4));
+      smokeFrom(eng, new THREE.Vector3(1.4, 9.3, -0.9), 0.9, 0.8);
+      coalLumps = heapIn(indStatics, COAL_TIP, 10, (k) => {
+        const b = new THREE.Mesh(new THREE.DodecahedronGeometry(0.32 + (k % 3) * 0.06, 0), coalMat);
+        b.position.set(Math.cos(k * 2.4) * (0.55 - k * 0.04), 0.2 + Math.floor(k / 4) * 0.3, Math.sin(k * 2.4) * (0.55 - k * 0.04));
+        return b;
+      });
+      // Vagonetas en su vía corta junto a la escombrera
+      const tubs = new THREE.Group();
+      for (const x of [-0.8, 0.8]) {
+        tubs.add(new THREE.Mesh(new THREE.BoxGeometry(1, 0.6, 0.8).translate(x, 0.55, 0), rustMat));
+        tubs.add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.4, 0).scale(1.1, 0.5, 0.9).translate(x, 0.9, 0), coalMat));
+      }
+      tubs.add(new THREE.Mesh(mergeGeometries([boxAt(3.4, 0.06, 0.06, 0, 0.12, -0.3), boxAt(3.4, 0.06, 0.06, 0, 0.12, 0.3)])!, steelMat));
+      placeIn(indStatics, tubs, zoneAt(COLLIERY, -3.4, 2.8));
+    }
+    // Fábrica de conservas: nave de ladrillo con tejado en diente de sierra, chimenea y mesas de enlatar
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(7, 3, 3.6).translate(0, 1.5, -1.6), brickMat));
+      const saw: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 4; k++) saw.push(new THREE.CylinderGeometry(0.75, 0.75, 3.6, 3, 1).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).scale(1, 0.9, 1).translate(-2.62 + k * 1.75, 3.35, -1.6));
+      g.add(meshOf(saw, slate7Mat));
+      g.add(meshOf(stackGeos(2.6, -2.9, 8, 0.45), darkBrickMat));
+      windowRows(g, 7, 0.23, [1.7], 5, 0.7, 1.1);
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.5, 0.06), posterMat);
+      sign.position.set(0, 2.6, 0.26);
+      g.add(sign);
+      placeIn(indStatics, g, CANNERY);
+      smokeFrom(g, new THREE.Vector3(2.6, 8.3, -2.9), 0.7, 0.6);
+      for (const at of CAN_TABLES) {
+        const c = new THREE.Group();
+        for (let k = 0; k < 4; k++) c.add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.16, 8).translate(-0.4 + k * 0.27, 0.93, 0), tinMat));
+        tableIn(indStatics, at, plankMat, c);
+      }
+      cans = heapIn(indStatics, CAN_PILE, 10, (k) => {
+        const b = new THREE.Group();
+        for (let q = 0; q < 4; q++) b.add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.2, 8).translate((q % 2) * 0.22 - 0.11, 0.1, Math.floor(q / 2) * 0.22 - 0.11), tinMat));
+        b.add(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.04, 0.48).translate(0, 0.22, 0), plankMat));
+        b.position.set((k % 3) * 0.52 - 0.52, Math.floor(k / 3) * 0.26, 0);
+        if (k >= 9) b.position.set(0, 0.78, 0);
+        return b;
+      });
+    }
+    // Ebanistería: taller de madera con tejado a dos aguas, bancos de carpintero y las sillas hechas
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(6.4, 3, 3.4).translate(0, 1.5, -1.6), mat(0x8a6a48)));
+      g.add(new THREE.Mesh(gableGeo(3.9, 6.8, 1.3).rotateY(Math.PI / 2).translate(0, 3, -1.6), slate7Mat));
+      g.add(new THREE.Mesh(mergeGeometries([boxAt(6.5, 0.4, 3.5, 0, 0.2, -1.6), boxAt(0.3, 3, 0.1, -3.05, 1.5, 0.12), boxAt(0.3, 3, 0.1, 3.05, 1.5, 0.12)])!, brickMat));
+      const door = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.2, 0.06), beamMat);
+      door.position.set(0, 1.1, 0.12);
+      g.add(door);
+      windowRows(g, 6.4, 0.13, [1.7], 4, 0.6, 0.9);
+      placeIn(indStatics, g, CABINET);
+      CAB_BENCHES.forEach((at) => {
+        const plank = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.06, 0.3), plankMat);
+        plank.position.set(0, 0.88, 0.1);
+        tableIn(indStatics, at, timberMat, plank);
+      });
+      chairs = heapIn(indStatics, CHAIR_PILE, 6, (k) => {
+        const c = new THREE.Group();
+        c.add(meshOf([boxAt(0.45, 0.06, 0.45, 0, 0.45, 0), boxAt(0.45, 0.5, 0.06, 0, 0.72, -0.2), ...[-0.19, 0.19].flatMap((x) => [boxAt(0.05, 0.45, 0.05, x, 0.22, 0.19), boxAt(0.05, 0.45, 0.05, x, 0.22, -0.19)])], barrelMat));
+        c.position.set((k % 3) * 0.6 - 0.6, Math.floor(k / 3) * 0.52, 0);
+        c.rotation.y = (k % 2) * Math.PI;
+        return c;
+      });
+    }
+    // Ladrillar: horno Hoffmann alargado con su chimenea alta en el centro y las eras de moldeo
+    {
+      const g = new THREE.Group();
+      const kiln = new THREE.CylinderGeometry(1.7, 1.9, 2.2, 14).scale(2.4, 1, 1).translate(0, 1.1, -2);
+      g.add(new THREE.Mesh(kiln, darkBrickMat));
+      const arches: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 6; k++) arches.push(new THREE.CylinderGeometry(0.35, 0.35, 0.08, 8, 1, false, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2).translate(-2.8 + k * 1.12, 0.9, -0.12 + Math.abs(k - 2.5) * -0.12));
+      g.add(meshOf(arches, new THREE.MeshBasicMaterial({ color: 0x1a0c06 })));
+      g.add(meshOf([...stackGeos(0, -2, 12, 0.7), new THREE.CylinderGeometry(4.3, 4.3, 0.2, 14).scale(1, 1, 0.45).translate(0, 2.3, -2)], brickMat));
+      placeIn(indStatics, g, BRICKWORKS);
+      smokeFrom(g, new THREE.Vector3(0, 12.3, -2), 1.1, 0.9);
+      for (const at of BRICK_TABLES) {
+        const b = new THREE.Group();
+        for (let k = 0; k < 4; k++) b.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.12).translate(-0.4 + k * 0.27, 0.9, 0), brickChipMat));
+        tableIn(indStatics, at, plankMat, b);
+      }
+      bricks7 = heapIn(indStatics, BRICK_PILE, 8, (k) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, 0.5), k % 2 ? brickMat : brickChipMat);
+        b.position.set((k % 2) * 0.74 - 0.37, 0.15 + Math.floor(k / 2) * 0.31, 0);
+        return b;
+      });
+    }
+    // Calderería: cobertizo de hierro abierto por delante y dos calderas a medio remachar
+    {
+      const g = new THREE.Group();
+      const cols: THREE.BufferGeometry[] = [];
+      for (const x of [-3.2, 0, 3.2]) cols.push(boxAt(0.2, 3.4, 0.2, x, 1.7, 0.2));
+      cols.push(boxAt(6.6, 3.2, 0.25, 0, 1.6, -2.1), boxAt(0.25, 3.2, 2.3, -3.2, 1.6, -1), boxAt(0.25, 3.2, 2.3, 3.2, 1.6, -1));
+      g.add(meshOf(cols, steelMat));
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(7, 0.12, 3.1), rustMat);
+      roof.position.set(0, 3.5, -0.9);
+      roof.rotation.x = 0.12;
+      g.add(roof);
+      g.add(meshOf(stackGeos(-2.4, -2.6, 6.5, 0.35), darkBrickMat));
+      placeIn(indStatics, g, BOILERSHOP);
+      smokeFrom(g, new THREE.Vector3(-2.4, 6.8, -2.6), 0.6, 0.5);
+      for (const at of BOILERS) {
+        const b = new THREE.Group();
+        b.add(new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.8, 12).rotateZ(Math.PI / 2).translate(0, 0.75, 0), steelMat));
+        b.add(new THREE.Mesh(mergeGeometries([boxAt(0.2, 0.25, 0.9, -0.6, 0.12, 0), boxAt(0.2, 0.25, 0.9, 0.6, 0.12, 0)])!, timberMat));
+        const rivets: THREE.BufferGeometry[] = [];
+        for (const x of [-0.6, 0, 0.6]) rivets.push(new THREE.TorusGeometry(0.56, 0.025, 3, 14).rotateY(Math.PI / 2).translate(x, 0.75, 0));
+        b.add(meshOf(rivets, brassMat));
+        placeIn(indStatics, b, at);
+      }
+      drums = heapIn(indStatics, BOILER_PILE, 6, (k) => {
+        const d = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.6, 10), k % 2 ? steelMat : rustMat);
+        d.position.set((k % 3) * 0.64 - 0.64, 0.3 + Math.floor(k / 3) * 0.6, 0);
+        return d;
+      });
+    }
+    // Ferrería: alto horno de ladrillo detrás y dos hornos de pudelar con la boca encendida
+    {
+      const g = new THREE.Group();
+      const blast = new THREE.CylinderGeometry(1.2, 1.8, 6, 10).translate(0, 3, -3.4);
+      g.add(meshOf([blast, ...stackGeos(0, -3.4, 9, 0.5)], darkBrickMat));
+      g.add(meshOf([beamGeo(new THREE.Vector3(0, 6, -3.4), new THREE.Vector3(3, 2.6, -3.2), 0.4, 0.4), boxAt(0.6, 2.6, 0.6, 3, 1.3, -3.2)], rustMat));
+      placeIn(indStatics, g, IRONWORKS);
+      smokeFrom(g, new THREE.Vector3(0, 9.3, -3.4), 1, 0.85);
+      PUDDLE.forEach((at) => {
+        const f = new THREE.Group();
+        f.add(new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.5, 1.6).translate(0, 0.75, 0), brickMat));
+        f.add(meshOf(stackGeos(0.4, -0.5, 4.5, 0.3), darkBrickMat));
+        const mouth = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), furnaceGlow);
+        mouth.position.set(0, 0.7, 0.81);
+        f.add(mouth);
+        placeIn(indStatics, f, at);
+        smokeFrom(f, new THREE.Vector3(0.4, 4.8, -0.5), 0.5, 0.45);
+      });
+      pigIron = heapIn(indStatics, IRON7_PILE, 9, (k) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.14, 0.18), k % 3 ? ironMat : rustMat);
+        b.position.set(0, 0.07 + Math.floor(k / 3) * 0.15, (k % 3) * 0.24 - 0.24);
+        b.rotation.y = Math.floor(k / 3) % 2 ? Math.PI / 2 : 0;
+        return b;
+      });
+    }
+    // La bolsa: edificio de piedra con pórtico de columnas, frontón y reloj; delante, los teletipos
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(8, 4.4, 4).translate(0, 2.2, -2), creamMat));
+      const cols: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 6; k++) cols.push(...columnGeos(-3.2 + k * 1.28, 0.9, 3.8, 0.2));
+      cols.push(boxAt(8.4, 0.4, 2.2, 0, 4.1, -0.1), boxAt(8.6, 0.35, 5, 0, 0.17, -1.4), boxAt(8.4, 0.2, 4.4, 0, 4.5, -2));
+      g.add(meshOf(cols, marbleMat));
+      // Frontón triangular sobre el pórtico, con el reloj en el tímpano
+      const ped = new THREE.Mesh(gableGeo(8.4, 2.2, 1.3).translate(0, 4.3, -0.1), marbleShadeMat);
+      g.add(ped);
+      const clock = new THREE.Mesh(new THREE.CircleGeometry(0.38, 14), paperMat);
+      clock.position.set(0, 4.75, 1.02);
+      g.add(clock);
+      windowRows(g, 6, 0.03, [1.4, 3.1], 4, 0.55, 1);
+      placeIn(indStatics, g, EXCHANGE);
+      for (const at of TICKERS) {
+        const t = new THREE.Group();
+        t.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 1, 6).translate(0, 0.5, 0), brassMat));
+        t.add(new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 1, 0), glassMat));
+        t.add(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.9).translate(0.1, 1.02, 0.45), paperMat));
+        placeIn(indStatics, t, at);
+      }
+      strongboxes = heapIn(indStatics, CERT_PILE, 6, (k) => {
+        const b = new THREE.Group();
+        b.add(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, 0.45).translate(0, 0.22, 0), greenIronMat));
+        b.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.02).translate(0, 0.3, 0.235), brassMat));
+        b.position.set((k % 2) * 0.66 - 0.33, Math.floor(k / 2) * 0.46, 0);
+        return b;
+      });
+    }
+    // El periódico: casa de ladrillo de tres plantas con el rótulo, la rotativa y las mesas de redacción
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(6.4, 5.4, 3.4).translate(0, 2.7, -1.8), brickMat));
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.3, 3.6).translate(0, 5.5, -1.8), slate7Mat));
+      windowRows(g, 6.4, -0.07, [1.6, 3.2, 4.6], 4, 0.6, 0.9);
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.7, 0.08), posterMat);
+      sign.position.set(0, 6.0, -0.4);
+      g.add(sign);
+      placeIn(indStatics, g, NEWSPAPER);
+      // Rotativa: bastidor de hierro, rodillos que giran y la bobina de papel
+      const press = new THREE.Group();
+      press.add(meshOf([boxAt(0.15, 1.4, 1.2, -0.75, 0.7, 0), boxAt(0.15, 1.4, 1.2, 0.75, 0.7, 0)], greenIronMat));
+      pressRolls = [0.5, 1.0].map((y, k) => {
+        const r = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.4, 10).rotateZ(Math.PI / 2), k ? inkMat : steelMat);
+        r.position.set(0, y, k ? -0.2 : 0.2);
+        press.add(r);
+        return r;
+      });
+      press.add(new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.02, 1.3).translate(0, 0.75, 0.75).rotateX(0.2), paperMat));
+      placeIn(indStatics, press, zoneAt(NEWSPAPER, 0, 1.5));
+      for (const at of NEWS_DESKS) {
+        const typewriter = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.14, 0.3), sootMat);
+        typewriter.position.y = 0.92;
+        tableIn(indStatics, at, barrelMat, typewriter);
+      }
+      bundles = heapIn(indStatics, BUNDLE_PILE, 8, (k) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.25, 0.4), paperMat);
+        b.position.set((k % 2) * 0.6 - 0.3, 0.12 + Math.floor(k / 2) * 0.26, 0);
+        b.rotation.y = (k % 3) * 0.12;
+        return b;
+      });
+    }
+    // Estación: edificio de ladrillo con reloj, andén con marquesina junto a la vía, carboneras y
+    // un depósito de agua para las locomotoras
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(7, 3.2, 2.6).translate(0, 1.6, 0.6), brickMat));
+      g.add(new THREE.Mesh(gableGeo(3.2, 7.4, 1.2).rotateY(Math.PI / 2).translate(0, 3.2, 0.6), slate7Mat));
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(14, 0.7, 1.7).translate(0, 0.35, -2.4), castleStoneMat));
+      const posts: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 5; k++) posts.push(boxAt(0.12, 3, 0.12, -5.6 + k * 2.8, 2.2, -2));
+      g.add(meshOf(posts, greenIronMat));
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(12.4, 0.12, 2.4), greenIronMat);
+      canopy.position.set(0, 3.6, -2.1);
+      canopy.rotation.x = -0.1;
+      g.add(canopy);
+      const clock = new THREE.Mesh(new THREE.CircleGeometry(0.4, 14), paperMat);
+      clock.position.set(0, 2.7, 1.92);
+      g.add(clock);
+      windowRows(g, 7, 1.92, [1.4], 4, 0.6, 1.2);
+      for (const x of [-2.6, 2.6]) pane(g, x, 1.4, -0.72, 0.6, 1.2);
+      placeIn(indStatics, g, STATION, 0, true, false);
+      for (const p of [zoneAt(STATION, -2.2, 0.6), zoneAt(STATION, 2.2, 0.6)]) solids.push({ obj: g, x: p.x, z: p.z, r: 1.6 });
+      for (const at of BUNKERS) {
+        const b = new THREE.Group();
+        b.add(meshOf([boxAt(1.6, 0.9, 0.1, 0, 0.45, -0.6), boxAt(0.1, 0.9, 1.2, -0.8, 0.45, 0), boxAt(0.1, 0.9, 1.2, 0.8, 0.45, 0)], timberMat));
+        b.add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 0).scale(1.1, 0.45, 0.8).translate(0, 0.35, -0.1), coalMat));
+        placeIn(indStatics, b, at);
+      }
+      const water = new THREE.Group();
+      water.add(new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1.4, 10).translate(0, 4, 0), rustMat));
+      water.add(meshOf([0, 1, 2, 3].map((k) => boxAt(0.14, 3.4, 0.14, Math.cos(k * 1.57 + 0.78) * 0.7, 1.7, Math.sin(k * 1.57 + 0.78) * 0.7)), timberMat));
+      placeIn(indStatics, water, zoneAt(STATION, -7.4, 0.4));
+      coalStage = heapIn(indStatics, COAL_STAGE, 6, (k) => {
+        const b = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3, 0), coalMat);
+        b.position.set((k % 3) * 0.45 - 0.45, 0.2 + Math.floor(k / 3) * 0.3, 0);
+        return b;
+      });
+    }
+    // Palacio de Cristal de la Gran Exposición (mejora): nave de hierro y vidrio con bóveda y crucero
+    {
+      const g = new THREE.Group();
+      const vault = (len: number, r: number, along: boolean, y: number) => {
+        const c = new THREE.CylinderGeometry(r, r, len, 12, 1, true, -Math.PI / 2, Math.PI).rotateZ(Math.PI / 2);
+        if (along) c.rotateY(Math.PI / 2);
+        return c.translate(0, y, 0);
+      };
+      g.add(new THREE.Mesh(mergeGeometries([new THREE.BoxGeometry(9, 2.4, 3.6).translate(0, 1.2, 0), new THREE.BoxGeometry(3, 2.4, 6.4).translate(0, 1.2, 0)])!, greenhouseMat));
+      g.add(new THREE.Mesh(mergeGeometries([vault(9, 1.8, false, 2.4), vault(6.4, 1.5, true, 2.4)])!, greenhouseMat));
+      const ribs: THREE.BufferGeometry[] = [];
+      for (let k = 0; k <= 8; k++) ribs.push(new THREE.TorusGeometry(1.8, 0.05, 3, 10, Math.PI).rotateY(Math.PI / 2).translate(-4.5 + k * 1.125, 2.4, 0));
+      for (let k = 0; k <= 10; k++) ribs.push(boxAt(0.08, 2.4, 0.08, -4.5 + k * 0.9, 1.2, 1.8), boxAt(0.08, 2.4, 0.08, -4.5 + k * 0.9, 1.2, -1.8));
+      ribs.push(boxAt(9.2, 0.12, 3.8, 0, 2.4, 0), boxAt(9.2, 0.3, 3.8, 0, 0.15, 0));
+      g.add(meshOf(ribs, mat(0xd8dde0, { metalness: 0.4 })));
+      const flags: THREE.BufferGeometry[] = [];
+      for (const x of [-4.5, 4.5]) flags.push(boxAt(0.05, 1.6, 0.05, x, 4.6, 0), boxAt(0.6, 0.35, 0.02, x + 0.3, 5.2, 0));
+      g.add(meshOf(flags, redMat));
+      crystalPalace = placeIn(indStatics, g, EXHIBITION);
+      crystalPalace.visible = false;
+    }
+    makeTrain([-1, 0, 1, 2, 1], 0.3, 0.05, true);
+  }
+  /** Segundo tren de vapor (Ferrocarril): de mercancías, media vuelta por detrás del primero. */
+  let freight = false;
+  function addFreight(): void {
+    if (freight) return;
+    freight = true;
+    makeTrain([-1, 0, 0, 0], Math.PI + 0.3, 0.05, true);
+  }
+
+  // Casas obreras de ladrillo de la Revolución Industrial: dos plantas, tejado de pizarra a dos
+  // aguas, una chimenea en cada hastial y ventanas de guillotina con el alféizar blanco.
+  const BRICK_TONES = [brickMat, darkBrickMat, mat(0xa85a3a), mat(0x8a5040)];
+  function makeBrickHouse(x: number, z: number, s: number, tone: number) {
+    const g = new THREE.Group();
+    const w = 2.4 * s, d = 2 * s, h = 2.7 * s;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), BRICK_TONES[(tone + Math.round(Math.abs(x * 3 + z * 7))) % BRICK_TONES.length]);
+    wall.position.y = h / 2;
+    const roof = new THREE.Mesh(gableGeo(d + 0.3 * s, w + 0.2 * s, 0.9 * s).rotateY(Math.PI / 2), slate7Mat);
+    roof.position.y = h;
+    const stacks = [boxAt(0.35 * s, 1.1 * s, 0.4 * s, -w * 0.4, h + 0.5 * s, 0), boxAt(0.35 * s, 1.1 * s, 0.4 * s, w * 0.4, h + 0.5 * s, 0)];
+    g.add(wall, roof, new THREE.Mesh(mergeGeometries(stacks)!, darkBrickMat));
+    const sills: THREE.BufferGeometry[] = [boxAt(w + 0.06, 0.1 * s, d + 0.06, 0, h * 0.5, 0)];
+    for (const sx of [-1, 1]) {
+      for (const [zz, yy] of [[d / 2 + 0.03, h * 0.74], [-d / 2 - 0.03, h * 0.74], [-d / 2 - 0.03, h * 0.28]] as const) {
+        pane(g, sx * w * 0.27, yy, zz, 0.36 * s, 0.56 * s);
+        sills.push(boxAt(0.46 * s, 0.06 * s, 0.12 * s, sx * w * 0.27, yy - 0.31 * s, zz));
+      }
+    }
+    pane(g, w * 0.27, h * 0.28, d / 2 + 0.03, 0.36 * s, 0.56 * s);
+    sills.push(boxAt(0.46 * s, 0.06 * s, 0.12 * s, w * 0.27, h * 0.28 - 0.31 * s, d / 2 + 0.03));
+    g.add(new THREE.Mesh(mergeGeometries(sills)!, posterMat));
+    const poles = new THREE.Group(); // humo de la chimenea
+    poles.position.set(-w * 0.4, h + 1.15 * s, 0);
+    g.add(poles);
+    const door = new THREE.Group();
+    door.position.set(-w * 0.22, 1.0 * s, d / 2 + 0.04);
+    const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.55 * s, 1.0 * s), mat(0x2f4a3a, { side: THREE.DoubleSide }));
+    leaf.position.y = -0.5 * s;
+    door.add(leaf);
+    g.add(door);
+    g.userData.door = door;
+    g.userData.poles = poles;
+    g.userData.phase = fx() * 6;
+    const gy = groundY(x, z, 1.2 * s);
+    add(g, x, gy, z);
+    g.lookAt(0, gy, 0);
+    return g;
+  }
+  // Casas de la Era Moderna: bloques de dos plantas enlucidos de colores claros, azotea con su
+  // pretil y una placa solar, ventanales y un balcón con barandilla de cristal.
+  const MODERN_WALLS = [mat(0xf2efe8), mat(0xd8e2e8), mat(0xe8dcc8), mat(0xc8d8c8)];
+  function makeModernHouse(x: number, z: number, s: number, tone: number) {
+    const g = new THREE.Group();
+    const w = 2.5 * s, d = 2.1 * s, h = 2.8 * s;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), MODERN_WALLS[(tone + Math.round(Math.abs(x * 3 + z * 7))) % MODERN_WALLS.length]);
+    wall.position.y = h / 2;
+    const trim = [boxAt(w + 0.1, 0.25 * s, d + 0.1, 0, h + 0.1 * s, 0), boxAt(w * 0.9, 0.08 * s, 0.5 * s, 0, h * 0.5, d / 2 + 0.25 * s)];
+    g.add(wall, new THREE.Mesh(mergeGeometries(trim)!, towerMat));
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.35 * s, 0.03), greenhouseMat);
+    rail.position.set(0, h * 0.5 + 0.2 * s, d / 2 + 0.5 * s);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(w * 0.6, 0.05, d * 0.45), solarMat);
+    panel.position.set(0, h + 0.4 * s, -d * 0.15);
+    panel.rotation.x = -0.35;
+    g.add(rail, panel);
+    pane(g, -w * 0.18, h * 0.74, d / 2 + 0.03, w * 0.5, 0.6 * s);
+    pane(g, w * 0.3, h * 0.26, d / 2 + 0.03, 0.6 * s, 0.6 * s);
+    pane(g, 0, h * 0.74, -d / 2 - 0.03, w * 0.6, 0.6 * s);
+    pane(g, 0, h * 0.26, -d / 2 - 0.03, w * 0.6, 0.6 * s);
+    const poles = new THREE.Group();
+    poles.position.set(w * 0.35, h + 0.3 * s, -d * 0.3);
+    g.add(poles);
+    const door = new THREE.Group();
+    door.position.set(-w * 0.22, 1.0 * s, d / 2 + 0.04);
+    const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.55 * s, 1.0 * s), mat(0x3a3a3e, { side: THREE.DoubleSide }));
+    leaf.position.y = -0.5 * s;
+    door.add(leaf);
+    g.add(door);
+    g.userData.door = door;
+    g.userData.poles = poles;
+    g.userData.phase = fx() * 6;
+    const gy = groundY(x, z, 1.2 * s);
+    add(g, x, gy, z);
+    g.lookAt(0, gy, 0);
+    return g;
+  }
+
+  // ---------- Era Moderna: central eléctrica, oficinas de cristal, campo solar, mina a cielo
+  // abierto, vivero forestal, taller, laboratorio, invernaderos, rampa del cohete, obra y acería ----------
+  /** Torre de refrigeración: hiperboloide hueco, más estrecho a dos tercios de la altura. */
+  const coolingGeo = new THREE.LatheGeometry([[2.8, 0], [2.2, 3], [1.75, 5.6], [1.9, 8]].map(([x, y]) => new THREE.Vector2(x, y)), 18);
+  /** Excavadora amarilla de orugas con la pluma y el cazo, que giran hacia el hoyo. */
+  function makeExcavator(): THREE.Group {
+    const g = new THREE.Group();
+    g.add(meshOf([boxAt(0.6, 0.6, 2.8, -0.85, 0.3, 0), boxAt(0.6, 0.6, 2.8, 0.85, 0.3, 0)], sootMat));
+    const top = new THREE.Group();
+    top.position.y = 0.6;
+    top.add(new THREE.Mesh(new THREE.BoxGeometry(2, 0.9, 2.2).translate(0, 0.45, -0.2), yellowMat));
+    top.add(new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9).translate(-0.45, 1.35, 0.4), yellowMat));
+    pane(top, -0.45, 1.4, 0.86, 0.7, 0.6);
+    const arm = new THREE.Group();
+    arm.position.set(0.5, 0.9, 0.7);
+    arm.add(meshOf([beamGeo(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 2, 2.2), 0.3, 0.35), beamGeo(new THREE.Vector3(0, 2, 2.2), new THREE.Vector3(0, 0.2, 3.6), 0.25, 0.3)], yellowMat));
+    arm.add(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.5).translate(0, 0, 3.75), sootMat));
+    top.add(arm);
+    g.add(top);
+    g.userData.top = top;
+    g.userData.arm = arm;
+    return g;
+  }
+  function makeModernCar(color: number): THREE.Group {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.55, 1.15).translate(0, 0.5, 0), mat(color, { metalness: 0.4, roughness: 0.4 })));
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.45, 1.05).translate(-0.15, 0.98, 0), windowMat));
+    const w: THREE.BufferGeometry[] = [];
+    for (const x of [-0.75, 0.75]) for (const z of [-0.55, 0.55]) w.push(new THREE.CylinderGeometry(0.25, 0.25, 0.16, 10).rotateX(Math.PI / 2).translate(x, 0.25, z));
+    g.add(meshOf(w, sootMat));
+    return g;
+  }
+  /** Una torre de oficinas: cristal azul con franjas de ventanas que se encienden de noche. */
+  function officeTower(g: THREE.Group, x: number, z: number, w: number, d: number, floors: number): void {
+    const h = floors * 1.1;
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d).translate(x, h / 2, z), glassMat));
+    const bands: THREE.BufferGeometry[] = [];
+    for (let f = 1; f < floors; f++) bands.push(boxAt(w + 0.04, 0.45, d + 0.04, x, f * 1.1 - 0.3, z));
+    g.add(meshOf(bands, windowMat));
+    const slabs: THREE.BufferGeometry[] = [];
+    for (let f = 0; f <= floors; f += 3) slabs.push(boxAt(w + 0.12, 0.14, d + 0.12, x, f * 1.1, z));
+    slabs.push(boxAt(w * 0.5, 0.8, d * 0.5, x, h + 0.4, z));
+    g.add(meshOf(slabs, towerMat));
+  }
+
+  function buildModern(): void {
+    modBuilt = true;
+    // Central eléctrica: dos torres de refrigeración con vapor, la sala de turbinas y la chimenea
+    // a franjas; delante, los transformadores donde trabajan los electricistas
+    {
+      for (const x of [-4, 4]) {
+        const t = new THREE.Group();
+        t.add(new THREE.Mesh(coolingGeo, mat(0xd8d4cc, { side: THREE.DoubleSide })));
+        placeIn(modStatics, t, zoneAt(POWER, x, -2.8));
+        smokeFrom(t, new THREE.Vector3(0, 8.3, 0), 1.3, 1.6, true);
+      }
+      const hall = new THREE.Group();
+      hall.add(new THREE.Mesh(new THREE.BoxGeometry(4.4, 4.2, 3).translate(0, 2.1, 0), concreteMat));
+      hall.add(new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.3, 3.2).translate(0, 4.3, 0), steelMat));
+      const stripes: THREE.BufferGeometry[] = [], white: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 6; k++) (k % 2 ? white : stripes).push(new THREE.CylinderGeometry(0.45 - k * 0.02, 0.5 - k * 0.02, 2.2, 10).translate(0, 4.4 + 1.1 + k * 2.2, -2.6));
+      hall.add(meshOf(stripes, redMat), meshOf(white, whiteMat));
+      windowRows(hall, 4.4, 1.53, [2.8], 4, 0.7, 0.6);
+      placeIn(modStatics, hall, zoneAt(POWER, 0, 0.6));
+      smokeFrom(hall, new THREE.Vector3(0, 17.8, -2.6), 0.5, 0.7, true);
+      for (const at of TRANSFORMERS) {
+        const t = new THREE.Group();
+        t.add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.9).translate(0, 0.6, 0), mat(0x6a7a6a)));
+        const fins: THREE.BufferGeometry[] = [];
+        for (let k = 0; k < 5; k++) fins.push(boxAt(0.04, 0.9, 0.5, -0.5 + k * 0.25, 0.6, -0.65));
+        for (const x of [-0.35, 0, 0.35]) fins.push(new THREE.CylinderGeometry(0.06, 0.08, 0.6, 6).translate(x, 1.5, 0));
+        t.add(meshOf(fins, steelMat));
+        placeIn(modStatics, t, at);
+      }
+      cableDrums = heapIn(modStatics, CABLE_PILE, 4, (k) => {
+        const d = new THREE.Group();
+        d.add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 10).rotateX(Math.PI / 2).translate(0, 0.42, 0.25), barrelMat));
+        d.add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 10).rotateX(Math.PI / 2).translate(0, 0.42, -0.25), barrelMat));
+        d.add(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.45, 10).rotateX(Math.PI / 2).translate(0, 0.42, 0), sootMat));
+        d.position.set((k % 2) * 0.95 - 0.47, Math.floor(k / 2) * 0.82, 0);
+        return d;
+      });
+    }
+    // Oficinas: tres torres de cristal y, en la explanada, las mesas de los empresarios
+    {
+      const heights = [[-3.3, -2, 2.8, 2.8, 12], [0.4, -2.9, 3.2, 3, 20], [3.6, -1.6, 2.6, 2.4, 9]] as const;
+      heights.forEach(([x, z, w, d, f], k) => {
+        const g = new THREE.Group();
+        officeTower(g, 0, 0, w, d, f);
+        if (k === 1) {
+          // Antena de telecomunicaciones (Internet)
+          const ant = new THREE.Group();
+          ant.add(meshOf([new THREE.CylinderGeometry(0.06, 0.12, 4, 5).translate(0, f * 1.1 + 2.8, 0), boxAt(0.5, 0.08, 0.08, 0, f * 1.1 + 2.5, 0), boxAt(0.08, 0.08, 0.5, 0, f * 1.1 + 3.4, 0)], steelMat));
+          ant.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4).translate(0, f * 1.1 + 4.85, 0), new THREE.MeshBasicMaterial({ color: 0xff3a2a })));
+          ant.visible = false;
+          g.add(ant);
+          antenna = ant;
+        }
+        placeIn(modStatics, g, zoneAt(OFFICES, x, z));
+      });
+      for (const at of DESKS8) {
+        const laptop = new THREE.Group();
+        laptop.add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.03, 0.28).translate(0, 0.87, 0.05), steelMat));
+        laptop.add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.26, 0.02).translate(0, 1.0, -0.1), windowMat));
+        tableIn(modStatics, at, whiteMat, laptop, steelMat);
+      }
+      briefcases = heapIn(modStatics, CASE_PILE, 6, (k) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.4, 0.16), k % 2 ? mat(0x3a2418) : sootMat);
+        b.position.set((k % 3) * 0.6 - 0.6, 0.2 + Math.floor(k / 3) * 0.41, 0);
+        return b;
+      });
+    }
+    // Campo solar: placas inclinadas hacia el sol, cada una sobre su poste
+    {
+      const panel = () => {
+        const g = new THREE.Group();
+        const top = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 1.2), solarMat);
+        top.position.set(0, 1.0, 0);
+        top.rotation.x = -0.5;
+        const lines = new THREE.Mesh(mergeGeometries([0, 1, 2, 3].map((k) => boxAt(0.03, 0.07, 1.2, -0.75 + k * 0.5, 0, 0)))!, steelMat);
+        lines.position.copy(top.position);
+        lines.rotation.copy(top.rotation);
+        g.add(top, lines, new THREE.Mesh(mergeGeometries([boxAt(0.1, 0.9, 0.1, -0.7, 0.45, 0.1), boxAt(0.1, 0.9, 0.1, 0.7, 0.45, 0.1)])!, steelMat));
+        return g;
+      };
+      for (const at of PANELS) placeIn(modStatics, panel(), at);
+      // Células de silicio (mejora): una hilera más de placas detrás
+      const more = new THREE.Group();
+      for (const x of [-4.2, -1.4, 1.4, 4.2]) {
+        const p = panel();
+        p.position.set(x, 0, -5.4);
+        more.add(p);
+      }
+      extraPanels = placeIn(modStatics, more, SOLAR, 0, true, false);
+      extraPanels.visible = false;
+      panelStack = heapIn(modStatics, PANEL_PILE, 6, (k) => {
+        const p = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.06, 0.65), solarMat);
+        p.position.set(0, 0.04 + k * 0.08, 0);
+        p.rotation.y = (k % 2) * 0.08;
+        return p;
+      });
+    }
+    // Mina a cielo abierto: el hoyo en gradas (en el terreno), dos excavadoras y un volquete
+    {
+      for (const at of EXCAVATORS) {
+        const e = makeExcavator();
+        // La excavadora mira al centro del hoyo; solo estorba su cuerpo, no la pluma
+        placeIn(modStatics, e, at, 0, true, false);
+        e.rotation.y = Math.atan2(OPEN_PIT.x - at.x, OPEN_PIT.z - at.z);
+        solids.push({ obj: e, x: at.x, z: at.z, r: 1.5 });
+        excavatorArms.push(e);
+      }
+      pitCoal = heapIn(modStatics, PIT_HEAP, 9, (k) => {
+        const b = new THREE.Mesh(new THREE.DodecahedronGeometry(0.34, 0), coalMat);
+        b.position.set(Math.cos(k * 2.2) * 0.5, 0.22 + Math.floor(k / 4) * 0.3, Math.sin(k * 2.2) * 0.5);
+        return b;
+      });
+      const t = new THREE.Group();
+      t.add(new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.1, 1.2).translate(0, 1.0, 1.3), yellowMat));
+      pane(t, 0, 1.25, 1.92, 1, 0.45);
+      const bed = new THREE.Group();
+      bed.position.set(0, 0.85, -1.2);
+      bed.add(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 2.2).translate(0, 0.45, 0.4), yellowMat));
+      bed.add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 0).scale(1, 0.4, 1.3).translate(0, 0.9, 0.4), coalMat));
+      t.add(bed);
+      const tw: THREE.BufferGeometry[] = [];
+      for (const z of [-1.2, 1.2]) for (const x of [-0.75, 0.75]) tw.push(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 10).rotateZ(Math.PI / 2).translate(x, 0.42, z));
+      t.add(meshOf(tw, sootMat));
+      t.userData.bed = bed;
+      add(t, OPEN_PIT.x, 0, OPEN_PIT.z);
+      t.traverse((c) => (c.castShadow = false));
+      modStatics.push(t);
+      truck = t;
+    }
+    // Vivero forestal: plantones en filas y troncos de repoblación
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(5, 2.4, 2.2).translate(0, 1.2, 0), mat(0x6a8a5a)));
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(5.3, 0.15, 2.5).translate(0, 2.45, 0), whiteMat));
+      windowRows(g, 5, 1.13, [1.3], 3, 0.8, 0.8);
+      placeIn(modStatics, g, zoneAt(NURSERY8, 0, -5));
+      SAPLINGS8.forEach((at, k) => {
+        const s = new THREE.Group();
+        s.add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.17, 0.3, 8).translate(0, 0.15, 0), mat(0x2a2a2a)));
+        s.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.6, 4).translate(0, 0.55, 0), trunkMat));
+        s.add(new THREE.Mesh(new THREE.ConeGeometry(0.32 + (k % 3) * 0.06, 0.8 + (k % 3) * 0.15, 6).translate(0, 1.1, 0), stonePineMat));
+        placeIn(modStatics, s, at);
+      });
+      logs8 = heapIn(modStatics, LOG8_PILE, 8, (k) => {
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 1.4, 7).rotateX(Math.PI / 2), barrelMat);
+        b.position.set((k % 3) * 0.36 - 0.36 + (k >= 3 && k < 6 ? 0.18 : 0), 0.17 + Math.floor(k / 3) * 0.31, 0);
+        return b;
+      });
+    }
+    // Taller mecánico: nave con dos portones, el cartel y los coches en reparación
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(7, 3.4, 3.4).translate(0, 1.7, 0), whiteMat));
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.25, 3.8).translate(0, 3.5, 0.1), redMat));
+      g.add(meshOf([boxAt(2.4, 2.4, 0.06, -1.9, 1.2, 1.72), boxAt(2.4, 2.4, 0.06, 1.9, 1.2, 1.72)], mat(0x8a9098, { metalness: 0.4 })));
+      placeIn(modStatics, g, zoneAt(GARAGE, 0, -2.2));
+      CARS.forEach((at, k) => {
+        const c = makeModernCar(k ? 0x2a5aa8 : 0xc83a2a);
+        placeIn(modStatics, c, at);
+      });
+      tires = heapIn(modStatics, TIRE_PILE, 8, (k) => {
+        const t = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.12, 6, 12).rotateX(Math.PI / 2), sootMat);
+        t.position.set((k % 2) * 0.75 - 0.37, 0.12 + Math.floor(k / 2) * 0.24, 0);
+        return t;
+      });
+    }
+    // Laboratorio: edificio blanco con observatorio de cúpula y bancos con matraces
+    {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(6, 3.6, 3.4).translate(0, 1.8, 0), whiteMat));
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.4, 3.6).translate(0, 3.6, 0), mat(0x2a6a8a)));
+      windowRows(g, 6, 1.73, [1.2, 2.7], 5, 0.7, 0.8);
+      g.add(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 1.4, 12).translate(-1.6, 4.5, -0.3), whiteMat));
+      g.add(new THREE.Mesh(new THREE.SphereGeometry(1.25, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).translate(-1.6, 5.2, -0.3), tinMat));
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.9, 1.3).translate(-1.6, 5.5, 0.3), sootMat));
+      placeIn(modStatics, g, zoneAt(LAB, 0, -2.2));
+      for (const at of BENCHES8) {
+        const kit = new THREE.Group();
+        const fl = [mat(0x3ad8a8, { transparent: true, opacity: 0.8 }), mat(0x8a5ad8, { transparent: true, opacity: 0.8 })];
+        for (let k = 0; k < 3; k++) kit.add(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.25, 8).translate(-0.4 + k * 0.4, 0.97, 0), fl[k % 2]));
+        kit.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.25).translate(0.45, 1.0, -0.15), windowMat));
+        tableIn(modStatics, at, whiteMat, kit, steelMat);
+      }
+      flasks = heapIn(modStatics, FLASK_PILE, 6, (k) => {
+        const c = new THREE.Group();
+        c.add(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.3, 0.4).translate(0, 0.15, 0), mat(0xd8d4c8)));
+        for (let q = 0; q < 2; q++) c.add(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.2, 6).translate(-0.12 + q * 0.24, 0.4, 0), mat(0x3ad8a8)));
+        c.position.set((k % 3) * 0.6 - 0.6, Math.floor(k / 3) * 0.32, 0);
+        return c;
+      });
+    }
+    // Invernaderos: dos naves de vidrio con tomateras dentro y, delante, los bancales al aire libre
+    {
+      for (const x of [-2.4, 2.4]) {
+        const g = new THREE.Group();
+        const plants: THREE.BufferGeometry[] = [], fruit: THREE.BufferGeometry[] = [];
+        for (const px of [-0.8, 0.8]) for (let z = -2; z <= 2; z += 0.8) {
+          plants.push(new THREE.IcosahedronGeometry(0.3, 0).scale(0.8, 1.4, 0.8).translate(px, 0.55, z));
+          fruit.push(new THREE.IcosahedronGeometry(0.08, 0).translate(px + 0.2, 0.55, z + 0.15));
+        }
+        g.add(meshOf(plants, leafMat8), meshOf(fruit, tomatoMat));
+        const frame: THREE.BufferGeometry[] = [];
+        for (let z = -2.5; z <= 2.51; z += 1.25) frame.push(new THREE.TorusGeometry(1.6, 0.04, 3, 10, Math.PI).translate(0, 0.6, z));
+        frame.push(boxAt(0.06, 0.6, 5, -1.6, 0.3, 0), boxAt(0.06, 0.6, 5, 1.6, 0.3, 0));
+        g.add(meshOf(frame, mat(0xd8dde0, { metalness: 0.4 })));
+        // La bóveda de vidrio va a lo largo de z, sobre un murete también de vidrio
+        g.add(new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 5, 12, 1, true, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2).translate(0, 0.6, 0), greenhouseMat));
+        g.add(new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.6, 5).translate(0, 0.3, 0), greenhouseMat));
+        placeIn(modStatics, g, zoneAt(GREENHOUSES, x, -2.2));
+      }
+      for (const at of BEDS) {
+        const b = new THREE.Group();
+        b.add(new THREE.Mesh(new THREE.BoxGeometry(2, 0.4, 0.8).translate(0, 0.2, 0), barrelMat));
+        const plants: THREE.BufferGeometry[] = [], fruit: THREE.BufferGeometry[] = [];
+        for (let k = 0; k < 4; k++) {
+          plants.push(new THREE.IcosahedronGeometry(0.22, 0).scale(1, 1.3, 1).translate(-0.75 + k * 0.5, 0.65, 0));
+          fruit.push(new THREE.IcosahedronGeometry(0.07, 0).translate(-0.65 + k * 0.5, 0.6, 0.18));
+        }
+        b.add(meshOf(plants, leafMat8), meshOf(fruit, tomatoMat));
+        placeIn(modStatics, b, at);
+      }
+      crates = heapIn(modStatics, CRATE_PILE, 6, (k) => {
+        const c = new THREE.Group();
+        c.add(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.3, 0.4).translate(0, 0.15, 0), plankMat));
+        c.add(new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.06, 0.3).translate(0, 0.3, 0), tomatoMat));
+        c.position.set((k % 3) * 0.6 - 0.6, Math.floor(k / 3) * 0.32, 0);
+        return c;
+      });
+    }
+    // Rampa de lanzamiento: losa de hormigón, torre de servicio roja y el cohete blanco
+    {
+      const pad = new THREE.Group();
+      // La losa baja hasta el suelo aunque la ladera caiga
+      pad.add(new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.6, 2.1, 16).translate(0, -0.45, 0), concreteMat));
+      pad.add(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 1.6).translate(0, 0.62, 0), new THREE.MeshBasicMaterial({ color: 0x1a1a1a })));
+      const lattice: THREE.BufferGeometry[] = [];
+      for (const sx of [-0.6, 0.6]) for (const sz of [-0.6, 0.6]) lattice.push(boxAt(0.12, 15, 0.12, 2.6 + sx, 7.5, sz));
+      for (let y = 1; y < 15; y += 1.5) lattice.push(boxAt(1.3, 0.08, 0.08, 2.6, y, 0.6), boxAt(1.3, 0.08, 0.08, 2.6, y, -0.6), boxAt(0.08, 0.08, 1.3, 2.0, y, 0), boxAt(0.08, 0.08, 1.3, 3.2, y, 0));
+      lattice.push(boxAt(2, 0.15, 0.3, 1.5, 11, 0), boxAt(2, 0.15, 0.3, 1.5, 6, 0));
+      pad.add(meshOf(lattice, redMat));
+      const padAt = zoneAt(LAUNCH, 0, -1.5);
+      faceCenter(pad, padAt);
+      add(pad, padAt.x, heightAt(padAt.x, padAt.z), padAt.z);
+      modStatics.push(spawn(pad));
+      const r = new THREE.Group();
+      r.add(new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.8, 10, 14).translate(0, 5.6, 0), whiteMat));
+      r.add(new THREE.Mesh(new THREE.ConeGeometry(0.75, 2.2, 14).translate(0, 11.7, 0), redMat));
+      const fins: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 4; k++) fins.push(new THREE.BoxGeometry(0.08, 1.6, 1).translate(0, 1.4, 1.1).rotateY((k * Math.PI) / 2));
+      r.add(meshOf(fins, sootMat));
+      r.add(new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.5, 14).translate(0, 7.8, 0), sootMat));
+      const flame = new THREE.Group();
+      flame.add(new THREE.Mesh(new THREE.ConeGeometry(0.7, 3, 10).rotateX(Math.PI).translate(0, -1.1, 0), flameMat));
+      flame.add(new THREE.Mesh(new THREE.ConeGeometry(0.4, 2, 10).rotateX(Math.PI).translate(0, -0.6, 0), new THREE.MeshBasicMaterial({ color: 0xfff2c0 })));
+      flame.position.y = 0.6;
+      flame.visible = false;
+      r.add(flame);
+      rocketFlame = flame;
+      rocketBase = pad.position.y + 0.65;
+      add(r, padAt.x, rocketBase, padAt.z);
+      modStatics.push(r);
+      rocket = r;
+    }
+    // Obra: grúa torre que gira, un edificio de hormigón a medio levantar y la hormigonera
+    {
+      const crane = new THREE.Group();
+      const mast: THREE.BufferGeometry[] = [];
+      for (const sx of [-0.4, 0.4]) for (const sz of [-0.4, 0.4]) mast.push(boxAt(0.1, 17, 0.1, sx, 8.5, sz));
+      for (let y = 0.8; y < 17; y += 1.2) mast.push(boxAt(0.85, 0.06, 0.06, 0, y, 0.4), boxAt(0.85, 0.06, 0.06, 0, y, -0.4), boxAt(0.06, 0.06, 0.85, 0.4, y, 0), boxAt(0.06, 0.06, 0.85, -0.4, y, 0));
+      crane.add(meshOf(mast, yellowMat));
+      const jib = new THREE.Group();
+      jib.position.y = 17;
+      jib.add(meshOf([boxAt(0.6, 0.6, 14, 0, 0.3, 3), boxAt(0.9, 0.9, 0.9, 0, 0.9, 0), new THREE.ConeGeometry(0.5, 2.2, 4).translate(0, 1.6, 0)], yellowMat));
+      jib.add(new THREE.Mesh(new THREE.BoxGeometry(1.4, 1, 1.4).translate(0, -0.2, -3.4), concreteMat));
+      jib.add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 7, 0.04).translate(0, -3.4, 7.5), sootMat));
+      jib.add(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 0.5).translate(0, -7, 7.5), steelMat));
+      crane.add(jib);
+      craneJib = jib;
+      // La pluma gira por encima de todo: solo el mástil es un obstáculo
+      const craneAt = zoneAt(SITE, -5, -3.4);
+      placeIn(modStatics, crane, craneAt, 0, true, false);
+      solids.push({ obj: crane, x: craneAt.x, z: craneAt.z, r: 0.7 });
+      const frame = new THREE.Group();
+      const slabsG: THREE.BufferGeometry[] = [], cols: THREE.BufferGeometry[] = [];
+      for (let f = 0; f < 4; f++) {
+        slabsG.push(boxAt(5.6, 0.25, 4, 0, f * 2.4 + 0.12, 0));
+        if (f < 3) for (const x of [-2.6, 0, 2.6]) for (const z of [-1.8, 1.8]) cols.push(boxAt(0.3, 2.4, 0.3, x, f * 2.4 + 1.3, z));
+      }
+      frame.add(meshOf(slabsG, concreteMat), meshOf(cols, mat(0x9a968e)));
+      placeIn(modStatics, frame, zoneAt(SITE, 1.4, -2.8));
+      FORMS.forEach((at) => {
+        const f = new THREE.Group();
+        f.add(meshOf([boxAt(1.4, 0.5, 0.06, 0, 0.25, 0.45), boxAt(1.4, 0.5, 0.06, 0, 0.25, -0.45), boxAt(0.06, 0.5, 0.9, -0.7, 0.25, 0), boxAt(0.06, 0.5, 0.9, 0.7, 0.25, 0)], plankMat));
+        f.add(new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.3, 0.84).translate(0, 0.2, 0), concreteMat));
+        placeIn(modStatics, f, at);
+      });
+      const mixer = new THREE.Group();
+      mixer.add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 1).translate(0, 0.9, 1.4), orangeMat));
+      mixer.add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 3.6).translate(0, 0.5, 0.1), sootMat));
+      const drum = new THREE.Group();
+      drum.position.set(0, 1.6, -0.5);
+      drum.rotation.x = 0.35;
+      drum.add(new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.75, 2.2, 10).rotateX(Math.PI / 2), whiteMat));
+      drum.add(new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.05, 3, 10).translate(0, 0, 0.2), orangeMat));
+      mixer.add(drum);
+      const mw: THREE.BufferGeometry[] = [];
+      for (const z of [-1.1, 1.3]) for (const x of [-0.6, 0.6]) mw.push(new THREE.CylinderGeometry(0.35, 0.35, 0.25, 10).rotateZ(Math.PI / 2).translate(x, 0.35, z));
+      mixer.add(meshOf(mw, sootMat));
+      mixerDrum = drum;
+      placeIn(modStatics, mixer, zoneAt(SITE, -4.6, 2.6));
+      slabs = heapIn(modStatics, SLAB_PILE, 6, (k) => {
+        const s = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.18, 0.6), concreteMat);
+        s.position.set(0, 0.09 + k * 0.19, 0);
+        s.rotation.y = (k % 2) * 0.1;
+        return s;
+      });
+    }
+    // Acería: un esqueleto de vigas de acero y, delante, los soldadores con sus chispas azules
+    {
+      const g = new THREE.Group();
+      const iron: THREE.BufferGeometry[] = [];
+      for (const x of [-3, -1, 1, 3]) for (const z of [-1.6, 1.6]) iron.push(boxAt(0.25, 9, 0.25, x, 4.5, z));
+      for (let y = 3; y <= 9; y += 3) {
+        iron.push(boxAt(6.3, 0.3, 0.2, 0, y, -1.6), boxAt(6.3, 0.3, 0.2, 0, y, 1.6));
+        for (const x of [-3, -1, 1, 3]) iron.push(boxAt(0.2, 0.3, 3.4, x, y, 0));
+      }
+      g.add(meshOf(iron, mat(0x8a4a2a, { metalness: 0.3 })));
+      placeIn(modStatics, g, zoneAt(STEELWORKS, 0, -2.6));
+      WELD_SPOTS.forEach((at) => {
+        const t = new THREE.Group();
+        t.add(meshOf([boxAt(0.2, 0.7, 0.2, -0.6, 0.35, 0), boxAt(0.2, 0.7, 0.2, 0.6, 0.35, 0)], steelMat));
+        t.add(new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.25, 0.3).translate(0, 0.82, 0), mat(0x8a4a2a, { metalness: 0.3 })));
+        placeIn(modStatics, t, at);
+      });
+      beams = heapIn(modStatics, BEAM_PILE, 6, (k) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.2, 0.25), mat(0x8a4a2a, { metalness: 0.3 }));
+        b.position.set(0, 0.1 + Math.floor(k / 2) * 0.21, (k % 2) * 0.3 - 0.15);
+        return b;
+      });
+    }
+    // Un avión cruza el cielo en círculos
+    {
+      const p = new THREE.Group();
+      p.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.35, 6, 10).rotateX(Math.PI / 2), whiteMat));
+      p.add(new THREE.Mesh(new THREE.ConeGeometry(0.5, 1, 10).rotateX(Math.PI / 2).translate(0, 0, 3.5), whiteMat));
+      p.add(new THREE.Mesh(mergeGeometries([boxAt(7, 0.1, 1.2, 0, 0, 0.3), boxAt(2.4, 0.1, 0.7, 0, 0.2, -2.6), boxAt(0.1, 1.2, 0.8, 0, 0.7, -2.6)])!, mat(0x1e5aa8)));
+      add(p, Math.cos(1) * 85, 52, Math.sin(1) * 85, false);
+      p.rotation.set(0, Math.atan2(-Math.sin(1), Math.cos(1)), 0.25);
+      p.userData.a = 1;
+      modStatics.push(p);
+      plane = p;
+    }
+    makeTrain([10, 11, 11, 10], 1.2, 0.09, false);
+  }
+
+  /** El tren, el humo, las máquinas y el cohete de las dos últimas eras. */
+  function animateIndustry(t: number, dt: number): void {
+    if (shownEra < 7 || !indBuilt) return;
+    animateSmoke(dt);
+    for (const tr of trains) {
+      if (!tr.cars[0].visible) continue;
+      tr.a += tr.speed * dt;
+      placeTrain(tr);
+      if (tr.steam && fx() < dt * 3) {
+        const c = tr.cars[0], s = c.userData.stack as THREE.Vector3;
+        const w = c.localToWorld(s.clone());
+        smokeAt(w.x, w.y, w.z, 0.55, fx() < 0.4, 3.5);
+      }
+    }
+    if (headWheel) headWheel.rotation.x = t * 1.4;
+    for (const r of pressRolls) r.rotation.x = t * 4;
+    furnaceGlow.color.setRGB(1, 0.42 + Math.sin(t * 6) * 0.08, 0.12);
+    if (shownEra < 8 || !modBuilt) return;
+    if (craneJib) craneJib.rotation.y = Math.sin(t * 0.12) * 1.3;
+    if (mixerDrum) mixerDrum.rotation.z = t * 2;
+    for (const e of excavatorArms) {
+      const k = Math.sin(t * 0.7 + e.position.x);
+      (e.userData.top as THREE.Object3D).rotation.y = k * 0.5;
+      (e.userData.arm as THREE.Object3D).rotation.x = 0.15 + Math.max(0, k) * 0.35;
+    }
+    if (truck) {
+      // El volquete va y viene entre el borde del hoyo y el montón de carbón
+      const a = zoneAt(OPEN_PIT, -1.6, 6.4), b = zoneAt(OPEN_PIT, 7, 4.6);
+      const ph = (t * 0.06) % 1, go = ph < 0.4 ? ph / 0.4 : ph < 0.5 ? 1 : ph < 0.9 ? 1 - (ph - 0.5) / 0.4 : 0;
+      const s = go * go * (3 - 2 * go);
+      truck.position.set(a.x + (b.x - a.x) * s, 0, a.z + (b.z - a.z) * s);
+      truck.position.y = heightAt(truck.position.x, truck.position.z);
+      truck.rotation.y = Math.atan2(b.x - a.x, b.z - a.z) + (ph >= 0.5 && ph < 0.9 ? Math.PI : 0);
+      (truck.userData.bed as THREE.Object3D).rotation.x = ph >= 0.4 && ph < 0.5 ? -Math.sin(((ph - 0.4) / 0.1) * Math.PI) * 0.7 : 0;
+    }
+    if (plane) {
+      plane.userData.a += dt * 0.05;
+      const a = plane.userData.a as number;
+      plane.position.set(Math.cos(a) * 85, 52, Math.sin(a) * 85);
+      plane.rotation.set(0, Math.atan2(-Math.sin(a), Math.cos(a)), 0.25);
+    }
+    for (const r of rotors) r.rotation.z = t * 1.6 + r.userData.phase;
+    if (rocket && rocketT >= 0) {
+      // ¡Despegue! El cohete acelera hacia el cielo dejando una columna de humo blanco
+      rocketT += dt;
+      const lift = Math.max(0, rocketT - 2);
+      rocket.position.y = rocketBase + lift * lift * 1.6;
+      if (rocketFlame) {
+        rocketFlame.visible = rocketT > 0.5;
+        rocketFlame.scale.set(1, 0.85 + Math.sin(t * 30) * 0.15, 1);
+      }
+      if (rocketT < 14 && fx() < dt * 14) smokeAt(rocket.position.x + (fx() - 0.5) * 2, rocket.position.y + 0.4, rocket.position.z + (fx() - 0.5) * 2, 1.4, true, 5);
+      if (rocket.position.y > 190) rocket.visible = false;
+    }
+  }
+
   // ---------- El agua y el terreno de cada era ----------
   // Puente sobre el río, en el tramo más cercano a la ciudad: de madera en la Edad del Bronce y de
   // piedra desde la Antigüedad. El eje x del puente cruza el río; el z va a lo largo del agua.
@@ -6130,7 +7559,7 @@ export function createVillage(container: HTMLElement): Village {
   }
   /** Agua y colinas de la era: charca, lago o río, y en el Renacimiento las colinas más lejos. */
   function setLand(era: number): void {
-    const stage = era >= 3 ? 3 : era === 2 ? 2 : 1, hills = era >= 6 ? 80 : 64;
+    const stage = era >= 3 ? 3 : era === 2 ? 2 : 1, hills = era >= 8 ? 110 : era >= 7 ? 96 : era >= 6 ? 80 : 64;
     if (stage !== waterStage || hills !== hillsR) {
       waterStage = stage;
       hillsR = hills;
@@ -6171,15 +7600,18 @@ export function createVillage(container: HTMLElement): Village {
       shownEra = state.era;
       // La tarde dorada es de la Edad del Bronce (y algo de la Toscana en el Renacimiento); en la
       // Antigüedad luce un mediodía claro.
-      warmTarget = state.era === 3 ? 1 : state.era === 6 ? 0.35 : 0;
+      warmTarget = state.era === 3 ? 1 : state.era === 6 ? 0.35 : state.era === 7 ? 0.12 : 0;
+      // En la Revolución Industrial el humo de las chimeneas vela el cielo; la Era Moderna vuelve a ser clara.
+      smogTarget = state.era === 7 ? 1 : 0;
       // En la Edad Media vuelve el cielo templado del norte, sin la luz blanca del Mediterráneo.
-      medTarget = state.era === 4 ? 1 : 0;
+      medTarget = state.era === 4 ? 1 : state.era === 8 ? 0.6 : 0;
       // La sombra del sol cubre todo el claro de la era.
-      const reach = state.era >= 6 ? 78 : state.era >= 5 ? 64 : 46;
-      Object.assign(moonLight.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach });
+      const reach = state.era >= 8 ? 108 : state.era >= 7 ? 92 : state.era >= 6 ? 78 : state.era >= 5 ? 64 : 46;
+      Object.assign(moonLight.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, far: Math.max(130, reach + 70) });
       moonLight.shadow.camera.updateProjectionMatrix();
       zoomTarget = Math.min(MAX_ZOOM, state.era);
       if (first || reduceMotion) {
+        smog = smogTarget;
         applyDay(day, (warm = warmTarget), (med = medTarget));
         zoom = zoomTarget;
       }
@@ -6210,6 +7642,17 @@ export function createVillage(container: HTMLElement): Village {
         if (!renBuilt) buildRenaissance();
         else for (const o of renStatics) o.visible = true;
       } else for (const o of renStatics) o.visible = false;
+      if (state.era >= 7) {
+        if (!indBuilt) buildIndustrial();
+        else for (const o of indStatics) o.visible = true;
+      } else for (const o of indStatics) o.visible = false;
+      if (state.era >= 8) {
+        if (!modBuilt) buildModern();
+        else for (const o of modStatics) o.visible = true;
+      } else for (const o of modStatics) o.visible = false;
+      for (const k of smokeKinds) k.mesh.visible = state.era >= 7;
+      // Las nubes suben para no tapar la ciudad, que ya se ve desde muy alto
+      for (const c of clouds) c.position.y = c.userData.y + (state.era >= 8 ? 30 : state.era >= 7 ? 18 : 0);
       wheatInst.visible = neolithic && neoBuilt;
       // Cada era nueva empieza con todos en su oficio, y con las plazas que ya tiene.
       resetLives();
@@ -6231,14 +7674,14 @@ export function createVillage(container: HTMLElement): Village {
     // Tiendas de piel en el Paleolítico, casas de barro en el Neolítico, casas de piedra en la
     // Edad del Bronce y villas en la Antigüedad. Cada era empieza con unas pocas y crecen con los
     // oficios de esa era.
-    const style = Math.min(6, state.era);
+    const style = Math.min(8, state.era);
     if (dwellingStyle !== style) {
       for (const t of tents) scene.remove(t);
       tents.length = 0;
       dwellingStyle = style;
     }
     // Nunca hay menos viviendas que al final de la era anterior: la aldea solo crece.
-    const slots = style === 6 ? REN_SLOTS : style === 5 ? TIMBER_SLOTS : style === 4 ? VILLA_SLOTS : style === 3 ? HOUSE_SLOTS : style === 2 ? HUT_SLOTS : TENT_SLOTS;
+    const slots = style === 8 ? MODERN_SLOTS : style === 7 ? BRICK_SLOTS : style === 6 ? REN_SLOTS : style === 5 ? TIMBER_SLOTS : style === 4 ? VILLA_SLOTS : style === 3 ? HOUSE_SLOTS : style === 2 ? HUT_SLOTS : TENT_SLOTS;
     const units = (n: number) => BUILDINGS_OF[n].reduce((a, b) => a + state.buildings[b], 0);
     let wantTents = Math.min(TENT_SLOTS.length, 1 + Math.floor(units(1) / 6));
     if (style >= 2) wantTents = Math.min(HUT_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(2) / 12));
@@ -6246,9 +7689,11 @@ export function createVillage(container: HTMLElement): Village {
     if (style >= 4) wantTents = Math.min(VILLA_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(4) / 9));
     if (style >= 5) wantTents = Math.min(TIMBER_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(5) / 9));
     if (style >= 6) wantTents = Math.min(REN_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(6) / 9));
+    if (style >= 7) wantTents = Math.min(BRICK_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(7) / 9));
+    if (style >= 8) wantTents = Math.min(MODERN_SLOTS.length, Math.max(5, wantTents) + Math.floor(units(8) / 9));
     while (tents.length < wantTents) {
       const t = slots[tents.length];
-      const home = spawn(style === 6 ? makeRenHouse(t.x, t.z, t.s * 0.7, t.tone) : style === 5 ? makeTimberHouse(t.x, t.z, t.s * 0.72, t.tone) : style === 4 ? makeVilla(t.x, t.z, t.s * 0.72, t.tone) : style === 3 ? makeHouse(t.x, t.z, t.s * 0.72, t.tone) : style === 2 ? makeHut(t.x, t.z, t.s * 0.8, t.tone) : makeTent(t.x, t.z, t.s, t.tone));
+      const home = spawn(style === 8 ? makeModernHouse(t.x, t.z, t.s * 0.7, t.tone) : style === 7 ? makeBrickHouse(t.x, t.z, t.s * 0.7, t.tone) : style === 6 ? makeRenHouse(t.x, t.z, t.s * 0.7, t.tone) : style === 5 ? makeTimberHouse(t.x, t.z, t.s * 0.72, t.tone) : style === 4 ? makeVilla(t.x, t.z, t.s * 0.72, t.tone) : style === 3 ? makeHouse(t.x, t.z, t.s * 0.72, t.tone) : style === 2 ? makeHut(t.x, t.z, t.s * 0.8, t.tone) : makeTent(t.x, t.z, t.s, t.tone));
       // La puerta mira al centro de la aldea: ahí entra la gente a dormir.
       const back = 1.6 * t.s + 0.3, tl = Math.hypot(t.x, t.z) || 1;
       home.userData.doorAt = { x: t.x - (t.x / tl) * back, z: t.z - (t.z / tl) * back };
@@ -6346,6 +7791,47 @@ export function createVillage(container: HTMLElement): Village {
       if (cellar) cellar.visible = state.upgrades.includes('barrels');
     }
     setCaravels(state.era >= 6 && state.upgrades.includes('caravels'));
+    if (indBuilt && state.era >= 7) {
+      const coal = Math.min(coalLumps.length, Math.round(Math.log10(state.resources.coal + 1) * 0.5));
+      coalLumps.forEach((b, k) => (b.visible = k < coal));
+      cans.forEach((b, k) => (b.visible = k < 2 + state.buildings.canner));
+      chairs.forEach((b, k) => (b.visible = k < 1 + state.buildings.cabinetmaker));
+      bricks7.forEach((b, k) => (b.visible = k < 2 + state.buildings.brickmaker));
+      drums.forEach((b, k) => (b.visible = k < 1 + state.buildings.boilermaker));
+      pigIron.forEach((b, k) => (b.visible = k < 2 + state.buildings.puddler));
+      strongboxes.forEach((b, k) => (b.visible = k < 1 + state.buildings.stockbroker));
+      bundles.forEach((b, k) => (b.visible = k < 2 + state.buildings.journalist));
+      coalStage.forEach((b, k) => (b.visible = k < 1 + state.buildings.engineer));
+      if (crystalPalace) crystalPalace.visible = state.upgrades.includes('great-exhibition');
+      if (state.upgrades.includes('railway')) addFreight();
+    }
+    // Un tren de vapor en la era 7 (dos con el Ferrocarril); en la Era Moderna, el de alta velocidad
+    for (const tr of trains) for (const c of tr.cars) c.visible = tr.steam ? state.era === 7 && (tr === trains[0] || state.upgrades.includes('railway')) : state.era >= 8;
+    if (modBuilt && state.era >= 8) {
+      const energy = Math.min(cableDrums.length, Math.round(Math.log10(state.resources.energy + 1) * 0.3));
+      cableDrums.forEach((b, k) => (b.visible = k < energy));
+      briefcases.forEach((b, k) => (b.visible = k < 1 + state.buildings.entrepreneur));
+      panelStack.forEach((b, k) => (b.visible = k < 1 + state.buildings.solarTech));
+      pitCoal.forEach((b, k) => (b.visible = k < 3 + state.buildings.excavator));
+      logs8.forEach((b, k) => (b.visible = k < 2 + state.buildings.forestEngineer));
+      tires.forEach((b, k) => (b.visible = k < 2 + state.buildings.mechanic));
+      flasks.forEach((b, k) => (b.visible = k < 1 + state.buildings.scientist));
+      crates.forEach((b, k) => (b.visible = k < 1 + state.buildings.agronomist));
+      slabs.forEach((b, k) => (b.visible = k < 1 + state.buildings.concreter));
+      beams.forEach((b, k) => (b.visible = k < 1 + state.buildings.welder));
+      if (antenna) antenna.visible = state.upgrades.includes('internet');
+      if (extraPanels) extraPanels.visible = state.upgrades.includes('silicon-cells');
+      // Alcanzada la meta final, el cohete despega (con movimiento reducido ya ha partido)
+      if (state.goalReached && rocket && rocketT < 0) {
+        rocketT = 0;
+        if (reduceMotion) rocket.visible = false;
+      } else if (!state.goalReached && rocket && rocketT >= 0) {
+        rocketT = -1;
+        rocket.visible = true;
+        rocket.position.y = rocketBase;
+        if (rocketFlame) rocketFlame.visible = false;
+      }
+    }
     dropDelay = 0;
   }
 
@@ -6810,6 +8296,7 @@ export function createVillage(container: HTMLElement): Village {
     day = daylightAt(tod);
     warm = warmTarget > warm ? Math.min(warmTarget, warm + dt / 4) : Math.max(warmTarget, warm - dt / 4);
     med = medTarget > med ? Math.min(medTarget, med + dt / 4) : Math.max(medTarget, med - dt / 4);
+    smog = smogTarget > smog ? Math.min(smogTarget, smog + dt / 4) : Math.max(smogTarget, smog - dt / 4);
     applyDay(day, Math.max(warm, glowAt(tod) * 0.9), med);
     // La torre del reloj (Renacimiento): esfera de doce horas, la aguja corta da dos vueltas por
     // día y la larga, una por hora
@@ -6825,6 +8312,7 @@ export function createVillage(container: HTMLElement): Village {
       animateBonfires(t);
       animateBeasts(dt, t);
       animateRenaissance(t, dt);
+      animateIndustry(t, dt);
       // La agenda del día se revisa unas pocas veces por segundo: basta y ahorra trabajo.
       schedTimer -= dt;
       if (schedTimer <= 0) {
@@ -6845,7 +8333,7 @@ export function createVillage(container: HTMLElement): Village {
           else if (kind === 'miner') updateMiner(p, dt, t);
           else if (CRAFTERS.has(kind)) updateCrafter(p, dt, t);
           else if (kind === 'charcoaler') updateCharcoaler(p, dt, t);
-          else if (kind === 'copperMiner' || kind === 'ironMiner' || kind === 'goldMiner') updateCopperMiner(p, dt, t);
+          else if (kind === 'copperMiner' || kind === 'ironMiner' || kind === 'goldMiner' || kind === 'coalMiner') updateCopperMiner(p, dt, t);
           else if (kind === 'oliveGrower') updateOliveGrower(p, dt, t);
           else if (kind === 'plowman') updatePlowman(p, dt, t);
           else updateStriker(p, dt, t);
@@ -6960,7 +8448,13 @@ export function createVillage(container: HTMLElement): Village {
     update,
     pulse() {
       flash = 1;
-      if (shownEra >= 6 && renBuilt) {
+      if (shownEra >= 8 && modBuilt) {
+        // Cosechar el invernadero: saltan tomates de los bancales
+        for (const b of BEDS) emit(tomatoMat, b.x, heightAt(b.x, b.z) + 0.8, b.z, 3, 1.2, 0.07, 1.1);
+      } else if (shownEra >= 7 && indBuilt) {
+        // Enlatar conservas: saltan latas brillantes de las mesas de la fábrica
+        for (const b of CAN_TABLES) emit(tinMat, b.x, heightAt(b.x, b.z) + 1, b.z, 3, 1.2, 0.07, 1.1);
+      } else if (shownEra >= 6 && renBuilt) {
         // Pisar uvas: salpica mosto morado del lagar
         emit(grapeMat, WINE_PRESS.x, heightAt(WINE_PRESS.x, WINE_PRESS.z) + 0.8, WINE_PRESS.z, 6, 1.3, 0.06, 1.1);
         treadBoost = 1;

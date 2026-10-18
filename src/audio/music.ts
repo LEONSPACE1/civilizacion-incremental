@@ -2,14 +2,16 @@
 // Cada era tiene su escala, su tempo y sus instrumentos (flauta de hueso y tambor en el Paleolítico,
 // caramillo y vasija de barro en el Neolítico, lira y crótalos en la Edad del Bronce, aulós y lira en
 // la Antigüedad, flauta dulce, laúd y gaita en la Edad Media, y en el Renacimiento una pavana con
-// flauta dulce, laúd y viola de gamba). La pieza va por frases de cuatro
+// flauta dulce, laúd y viola de gamba; en la Revolución Industrial un vals de organillo con piano,
+// tuba y caja; y en la Era Moderna un tema pop suave con sintetizador, piano eléctrico, colchón de
+// cuerdas y batería). La pieza va por frases de cuatro
 // compases que se alternan (entrada, tema, variación y respiro), y la melodía se inventa en cada
 // frase repitiendo un motivo, así suena distinta cada vez pero con forma de canción.
 
-type Lead = 'bone' | 'pipe' | 'reed' | 'aulos' | 'recorder';
-type Pluck = 'none' | 'harp' | 'lyre' | 'lute';
-type Drone = 'hum' | 'reed' | 'bagpipe' | 'viol';
-type Perc = 'frame' | 'udu' | 'tympanon' | 'tabor';
+type Lead = 'bone' | 'pipe' | 'reed' | 'aulos' | 'recorder' | 'organ' | 'synth';
+type Pluck = 'none' | 'harp' | 'lyre' | 'lute' | 'piano' | 'epiano';
+type Drone = 'hum' | 'reed' | 'bagpipe' | 'viol' | 'tuba' | 'pad';
+type Perc = 'frame' | 'udu' | 'tympanon' | 'tabor' | 'snare' | 'kit';
 
 interface EraStyle {
   bpm: number;
@@ -79,6 +81,22 @@ const ERA_STYLES: Record<number, EraStyle> = {
     lead: 'recorder', pluck: 'lute', drone: 'viol', perc: 'tabor',
     low: 'x.......x...x...', high: '........o...o...', fill: '....o...o.o.o.o.', shaker: 0,
     rhythms: [[8, 4, 4], [4, 4, 8], [6, 2, 4, 4], [4, 4, 4, 4], [8, 8]],
+  },
+  // Revolución Industrial: un vals de organillo de feria, con el «um-pa-pa» de la tuba y la caja,
+  // y un piano de taberna en arpegios.
+  7: {
+    bpm: 138, steps: 12, root: 130.81, scale: [0, 2, 4, 5, 7, 9, 11], progression: [0, 4, 4, 0],
+    lead: 'organ', pluck: 'piano', drone: 'tuba', perc: 'snare',
+    low: 'x...........', high: '....o...o...', fill: '....o...o.oo', shaker: 0,
+    rhythms: [[8, 4], [4, 4, 4], [6, 2, 4], [12], [4, 2, 2, 4]],
+  },
+  // Era Moderna: pop tranquilo con sintetizador suave, piano eléctrico, un colchón de cuerdas que
+  // sigue los acordes y batería con bombo, palmada y charles.
+  8: {
+    bpm: 100, steps: 16, root: 146.83, scale: [0, 2, 4, 5, 7, 9, 11], progression: [0, 5, 3, 4],
+    lead: 'synth', pluck: 'epiano', drone: 'pad', perc: 'kit',
+    low: 'x.......x.x.....', high: '....x.......x...', fill: '....x.......x.xx', shaker: 2,
+    rhythms: [[4, 4, 8], [2, 2, 4, 8], [6, 2, 8], [4, 4, 4, 4], [3, 3, 2, 8]],
   },
 };
 
@@ -252,7 +270,9 @@ export class Music {
     const st = this.style;
     const tones = [chord, chord + 2, chord + 4, chord + 7];
     let pattern: number[]; // índice del tono en cada paso, -1 = silencio
-    if (st.pluck === 'lute' && st.steps === 16) pattern = [0, -1, 2, -1, 1, -1, 3, -1, 0, -1, 2, -1, 3, -1, 1, -1];
+    if (st.pluck === 'piano') pattern = [-1, -1, -1, -1, 1, -1, 2, -1, 1, -1, 2, -1];
+    else if (st.pluck === 'epiano') pattern = [0, -1, -1, 1, -1, -1, 2, -1, -1, -1, 1, -1, 3, -1, -1, -1];
+    else if (st.pluck === 'lute' && st.steps === 16) pattern = [0, -1, 2, -1, 1, -1, 3, -1, 0, -1, 2, -1, 3, -1, 1, -1];
     else if (st.pluck === 'lute') pattern = [0, -1, 2, -1, 1, -1, 3, -1, 2, -1, 1, -1];
     else if (st.pluck === 'harp') pattern = [0, -1, -1, -1, 1, -1, -1, -1, 2, -1, -1, -1, 3, -1, 1, -1];
     else pattern = [0, -1, 1, -1, 2, -1, 3, -1, 2, -1, 1, -1, 2, -1, 3, -1];
@@ -296,16 +316,20 @@ export class Music {
       : kind === 'pipe' ? [['triangle', 1, 0.8], ['sine', 2, 0.2]]
       : kind === 'recorder' ? [['triangle', 1, 0.7], ['sine', 1, 0.5], ['sine', 2, 0.12]]
       : kind === 'aulos' ? [['sawtooth', 1, 0.45], ['sawtooth', 1.006, 0.35]]
+      // Organillo: tubos cuadrados con una octava encima, algo desafinados entre sí
+      : kind === 'organ' ? [['square', 1, 0.35], ['square', 2.004, 0.18], ['triangle', 1, 0.3]]
+      // Sintetizador: dos dientes de sierra muy suaves y un seno, por un filtro cerrado
+      : kind === 'synth' ? [['sawtooth', 1, 0.3], ['sawtooth', 1.004, 0.25], ['sine', 0.5, 0.3]]
       : [['sawtooth', 1, 0.5], ['square', 1, 0.15]];
-    const reedy = kind === 'reed' || kind === 'aulos';
+    const reedy = kind === 'reed' || kind === 'aulos' || kind === 'organ' || kind === 'synth';
     const peak = (reedy ? 0.07 : 0.11) * level;
-    const g = this.env(t, peak, reedy ? 0.03 : 0.06, Math.max(0, dur - 0.1), 0.25);
+    const g = this.env(t, peak, kind === 'synth' ? 0.08 : reedy ? 0.03 : 0.06, Math.max(0, dur - 0.1), kind === 'synth' ? 0.5 : 0.25);
     let into: AudioNode = g;
     if (reedy) {
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
-      lp.frequency.value = Math.min(4000, freq * 4);
-      lp.Q.value = 2;
+      lp.frequency.value = Math.min(4000, freq * (kind === 'synth' ? 2.5 : 4));
+      lp.Q.value = kind === 'synth' ? 4 : 2;
       lp.connect(g);
       into = lp;
     }
@@ -330,10 +354,15 @@ export class Music {
   /** Cuerda pulsada con el algoritmo de Karplus-Strong: lira, arpa o laúd. */
   private pluck(t: number, freq: number, level: number): void {
     const kind = this.style.pluck;
+    if (kind === 'epiano') {
+      // Piano eléctrico: un seno con un toque de campana que se apaga despacio
+      for (const [mult, g, d] of [[1, 0.09, 1.2], [2, 0.025, 0.5], [4.01, 0.012, 0.15]] as const) this.ring(t, freq * mult, d, g * level);
+      return;
+    }
     const key = `${kind}:${freq.toFixed(1)}`;
     let buf = this.plucks.get(key);
     if (!buf) {
-      buf = this.makePluck(freq, kind === 'lute' ? 0.992 : kind === 'harp' ? 0.996 : 0.997, kind === 'lute' ? 0.5 : 0.8);
+      buf = this.makePluck(freq, kind === 'lute' ? 0.992 : kind === 'harp' ? 0.996 : kind === 'piano' ? 0.995 : 0.997, kind === 'lute' ? 0.5 : kind === 'piano' ? 0.95 : 0.8);
       this.plucks.set(key, buf);
     }
     const src = this.ctx.createBufferSource();
@@ -366,18 +395,39 @@ export class Music {
   private drone(t: number, dur: number, chord: number, swell: boolean): void {
     const ctx = this.ctx;
     const kind = this.style.drone;
-    // La viola de gamba no es un bordón fijo: toca el bajo de cada acorde
-    const root = this.freq(kind === 'viol' ? chord : 0, -1);
-    const pitches = kind === 'hum' || kind === 'viol' ? [root, root * 1.5] : [root, root * 1.5, root * 2];
-    const peak = kind === 'bagpipe' ? 0.035 : kind === 'reed' ? 0.03 : kind === 'viol' ? 0.032 : 0.05;
+    if (kind === 'tuba') {
+      // Tuba: una nota corta y redonda en el primer tiempo del compás, el «um» del vals
+      const f = this.freq(chord, -2);
+      const g = this.env(t, 0.12, 0.02, 0.12, 0.25);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 420;
+      lp.connect(g);
+      for (const [type, mult] of [['sawtooth', 1], ['sine', 1]] as const) {
+        const o = ctx.createOscillator();
+        o.type = type;
+        o.frequency.value = f * mult;
+        o.connect(lp);
+        o.start(t);
+        o.stop(t + 0.5);
+      }
+      void swell;
+      void dur;
+      return;
+    }
+    // La viola de gamba y el colchón de cuerdas no son un bordón fijo: siguen el bajo de cada acorde
+    const follows = kind === 'viol' || kind === 'pad';
+    const root = this.freq(follows ? chord : 0, -1);
+    const pitches = kind === 'pad' ? [root, this.freq(chord + 2, -1), this.freq(chord + 4, -1), root * 2] : kind === 'hum' || kind === 'viol' ? [root, root * 1.5] : [root, root * 1.5, root * 2];
+    const peak = kind === 'bagpipe' ? 0.035 : kind === 'reed' ? 0.03 : kind === 'viol' ? 0.032 : kind === 'pad' ? 0.022 : 0.05;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(peak, t + (swell ? 1.5 : 0.25));
+    g.gain.linearRampToValueAtTime(peak, t + (swell ? 1.5 : kind === 'pad' ? 0.6 : 0.25));
     g.gain.setValueAtTime(peak, t + dur - 0.05);
     g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.3);
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = kind === 'hum' ? 500 : kind === 'bagpipe' ? 1400 : kind === 'viol' ? 650 : 900;
+    lp.frequency.value = kind === 'hum' ? 500 : kind === 'bagpipe' ? 1400 : kind === 'viol' ? 650 : kind === 'pad' ? 1100 : 900;
     lp.connect(g).connect(this.bus);
     // En el último grado del compás el bordón no cambia: solo cambia de color con el acorde
     lp.frequency.setValueAtTime(lp.frequency.value * (chord === 0 ? 1 : 1.2), t);
@@ -385,7 +435,7 @@ export class Music {
       const o = ctx.createOscillator();
       o.type = kind === 'hum' ? 'sine' : 'sawtooth';
       o.frequency.value = f;
-      o.detune.value = (Math.random() - 0.5) * 8;
+      o.detune.value = (Math.random() - 0.5) * (kind === 'pad' ? 18 : 8);
       o.connect(lp);
       o.start(t);
       o.stop(t + dur + 0.35);
@@ -394,6 +444,21 @@ export class Music {
 
   private drum(t: number, which: 'low' | 'high', level: number): void {
     const perc = this.style.perc;
+    if (perc === 'kit') {
+      // Batería: bombo grave y palmada con cuerpo
+      if (which === 'low') this.thump(t, 120, 45, 0.3, 0.36 * level);
+      else {
+        this.noiseHit(t, 1600, 0.7, 0.12, 0.1 * level);
+        this.thump(t, 220, 180, 0.05, 0.05 * level);
+      }
+      return;
+    }
+    if (perc === 'snare') {
+      // Bombo de banda y caja con bordones
+      if (which === 'low') this.thump(t, 100, 55, 0.3, 0.3 * level);
+      else this.noiseHit(t, 2800, 0.8, 0.08, 0.09 * level);
+      return;
+    }
     if (which === 'low') {
       const [from, to] = perc === 'udu' ? [110, 160] : perc === 'tabor' ? [150, 90] : perc === 'tympanon' ? [130, 70] : [110, 55];
       this.thump(t, from, to, 0.35, 0.32 * level);
@@ -415,6 +480,11 @@ export class Music {
   /** Sonajero de semillas o, desde la Edad del Bronce, crótalos de metal. */
   private shake(t: number, level: number): void {
     const era = this.era;
+    if (era === 8) {
+      // Charles cerrado
+      this.noiseHit(t, 9000, 1.5, 0.03, 0.035 * level);
+      return;
+    }
     if (era === 3 || era === 4) {
       if (level < 1) return;
       for (const [f, g] of [[2630, 0.02], [3910, 0.012], [5270, 0.006]] as const) this.ring(t, f, 0.9, g);

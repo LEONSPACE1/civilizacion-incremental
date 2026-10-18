@@ -60,6 +60,7 @@ export class Sound {
   private anvilTimer: number | undefined;
   private cicadaTimer: number | undefined;
   private churchTimer: number | undefined;
+  private industryTimer: number | undefined;
   private era = 1;
   /** Si la pestaña se ve. */
   private pageVisible = true;
@@ -151,7 +152,8 @@ export class Sound {
 
   /** El ambiente cambia con la era y con la hora: grillos de noche y pájaros de día en todas, martillos
    *  sobre el yunque desde la Edad del Bronce, cigarras en la Antigüedad y campanas lejanas desde la
-   *  Edad Media. Encima suena la música de la era. */
+   *  Edad Media, silbatos de fábrica y resoplidos de vapor en la Revolución Industrial y, en la Era
+   *  Moderna, el rumor del tráfico y algún avión a lo lejos. Encima suena la música de la era. */
   setEra(era: number): void {
     this.era = era;
     this.music?.setEra(era);
@@ -346,6 +348,25 @@ export class Sound {
       this.churchTimer = window.setTimeout(church, 22000 + Math.random() * 20000);
     };
     this.churchTimer = window.setTimeout(church, 8000);
+
+    // Revolución Industrial: el silbato de la fábrica (dos tonos que se rozan) y resoplidos de vapor.
+    // En la Era Moderna, un claxon lejano y el paso de un avión.
+    const industry = () => {
+      if (this.era === 7 && this.audible) {
+        if (Math.random() < 0.35 && this.daylight > 0.3) {
+          for (const f of [440, 523]) this.tone({ type: 'sawtooth', freq: f * 0.98, to: f, attack: 0.25, decay: 1.6, gain: 0.008, out: this.ambience });
+        } else {
+          const puffs = 2 + Math.floor(Math.random() * 4);
+          for (let i = 0; i < puffs; i++) this.noiseBurst({ freq: 900 + Math.random() * 400, q: 0.7, decay: 0.22, gain: 0.07, out: this.ambience, delay: i * 0.3 });
+        }
+      } else if (this.era >= 8 && this.audible) {
+        if (Math.random() < 0.5) {
+          for (const f of [392, 494]) this.tone({ type: 'square', freq: f, decay: 0.25, gain: 0.006, out: this.ambience });
+        } else this.noiseBurst({ freq: 300, q: 0.5, decay: 3.5, gain: 0.05, out: this.ambience });
+      }
+      this.industryTimer = window.setTimeout(industry, 7000 + Math.random() * 12000);
+    };
+    this.industryTimer = window.setTimeout(industry, 5000);
   }
 
   dispose(): void {
@@ -355,6 +376,7 @@ export class Sound {
     window.clearTimeout(this.anvilTimer);
     window.clearTimeout(this.cicadaTimer);
     window.clearTimeout(this.churchTimer);
+    window.clearTimeout(this.industryTimer);
     this.music?.dispose();
     void this.ctx?.close();
   }

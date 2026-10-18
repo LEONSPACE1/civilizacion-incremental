@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <!-- Motivos de la Revolución Industrial, muy tenues: una fábrica con chimeneas y humo, engranajes,
+       una locomotora de vapor, un manómetro, una vía de tren y una cenefa de remaches -->
+  <g opacity=".12" fill="none" stroke="#2e2a28" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Cenefa de remaches arriba y abajo -->
+    <g stroke-width="3">
+      <path d="M0 22h250M390 618h250"/>
+      <path d="M20 22a5 5 0 1 1 0 .1M60 22a5 5 0 1 1 0 .1M100 22a5 5 0 1 1 0 .1M140 22a5 5 0 1 1 0 .1M180 22a5 5 0 1 1 0 .1M220 22a5 5 0 1 1 0 .1"/>
+      <path d="M410 618a5 5 0 1 1 0 .1M450 618a5 5 0 1 1 0 .1M490 618a5 5 0 1 1 0 .1M530 618a5 5 0 1 1 0 .1M570 618a5 5 0 1 1 0 .1M610 618a5 5 0 1 1 0 .1"/>
+    </g>
+
+    <!-- Fábrica con tejado en diente de sierra, dos chimeneas y humo -->
+    <g transform="translate(450 190)" stroke-width="4">
+      <path d="M-130 90V20l40-30v30l40-30v30l40-30v30l40-30v100z"/>
+      <path d="M40 90V-90h22V90M80 90V-60h18V90"/>
+      <path d="M51-100c-20-20 10-40 30-30 20-30 60-10 50 20 30 0 30 40 0 40"/>
+      <path d="M-110 50h20v20h-20zM-70 50h20v20h-20zM-30 50h20v20h-20z"/>
+    </g>
+
+    <!-- Dos engranajes que encajan -->
+    <g transform="translate(140 330)" stroke-width="4">
+      <circle r="50"/><circle r="16"/>
+      <path d="M-8-50v-14h16v14M-8 50v14h16v-14M-50-8h-14v16h14M50-8h14v16h-14M27-40l9-11 12 10-9 11M-27 40l-9 11-12-10 9-11M40 27l11 9-10 12-11-9M-40-27l-11-9 10-12 11 9"/>
+      <g transform="translate(86 62)"><circle r="30"/><circle r="10"/><path d="M-6-30v-10h12v10M-6 30v10h12v-10M-30-6h-10v12h10M30-6h10v12h-10"/></g>
+    </g>
+
+    <!-- Locomotora de vapor sobre la vía -->
+    <g transform="translate(320 500)" stroke-width="4">
+      <path d="M-120 20h170V-30H-60v-30h-30v30h-30zM50 20V-50h50v70z"/>
+      <path d="M-104-60v-24h24v24M40-56h70"/>
+      <circle cx="-90" cy="34" r="18"/><circle cx="-40" cy="34" r="18"/><circle cx="20" cy="30" r="24"/><circle cx="80" cy="34" r="16"/>
+      <path d="M-90 34h110M-160 58h300M-150 58v10M-110 58v10M-70 58v10M-30 58v10M10 58v10M50 58v10M90 58v10M130 58v10"/>
+    </g>
+
+    <!-- Manómetro con su aguja -->
+    <g transform="translate(520 400)" stroke-width="4">
+      <circle r="44"/><circle r="36"/>
+      <path d="M-26 18l6-4M-30-6h8M-18-26l5 6M0-34v8M18-26l-5 6M30-6h-8M26 18l-6-4M0 0l20-20"/>
+      <path d="M-10 44v18h20V44"/>
+    </g>
+
+    <!-- Chispas y vapor -->
+    <g stroke-width="3">
+      <path d="M90 120c-14-10-6-30 10-26 6-16 30-14 32 2 16-2 22 20 6 26"/>
+      <path d="M560 560c-10-8-4-22 8-18 4-12 22-10 24 2 12-2 16 14 4 18"/>
+    </g>
+  </g>
+</svg>
