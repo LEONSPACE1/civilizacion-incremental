@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <!-- Motivos de la Edad Media, muy tenues: un castillo con almenas, escudos con blasón, una flor de
+       lis, una campana, un rosetón, un molino de viento, una espada y una cenefa de cuadrifolios -->
+  <g opacity=".13" fill="none" stroke="#7a1a1e" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Cenefa de cuadrifolios arriba y abajo -->
+    <g stroke-width="3">
+      <path d="M0 22h240M400 618h240"/>
+      <path d="M20 22a6 6 0 1 1 0 .1M60 22a6 6 0 1 1 0 .1M100 22a6 6 0 1 1 0 .1M140 22a6 6 0 1 1 0 .1M180 22a6 6 0 1 1 0 .1M220 22a6 6 0 1 1 0 .1"/>
+      <path d="M420 618a6 6 0 1 1 0 .1M460 618a6 6 0 1 1 0 .1M500 618a6 6 0 1 1 0 .1M540 618a6 6 0 1 1 0 .1M580 618a6 6 0 1 1 0 .1M620 618a6 6 0 1 1 0 .1"/>
+    </g>
+
+    <!-- Castillo con dos torres, almenas y puerta -->
+    <g transform="translate(470 170)" stroke-width="4">
+      <path d="M-110 90V-40h-12v-20h12v8h12v-8h12v8h12v-8h12v20h-12V0h80V-40h-12v-20h12v8h12v-8h12v8h12v-8h12v20h-12v130z"/>
+      <path d="M-20 90V50a20 20 0 0 1 40 0v40"/>
+      <path d="M-86-20v16M86-20v16M-40 20h12M28 20h12"/>
+      <path d="M-74-60v-30l18 8-18 8"/>
+    </g>
+
+    <!-- Escudo partido con una banda -->
+    <g transform="translate(120 330)" stroke-width="4">
+      <path d="M-50-60h100v50c0 40-24 64-50 76-26-12-50-36-50-76z"/>
+      <path d="M-50-30L50 30M0-60v136" opacity=".8"/>
+    </g>
+
+    <!-- Flor de lis -->
+    <g transform="translate(300 470)" stroke-width="4">
+      <path d="M0-60c14 18 14 40 0 60-14-20-14-42 0-60z"/>
+      <path d="M-6 0c-10-14-30-14-36 0s6 26 20 18M6 0c10-14 30-14 36 0s-6 26-20 18"/>
+      <path d="M-26 8h52M0 8v40M-12 48h24"/>
+    </g>
+
+    <!-- Campana -->
+    <g transform="translate(520 430)" stroke-width="4">
+      <path d="M0-56c-22 0-32 20-32 44 0 22-8 32-16 38h96c-8-6-16-16-16-38 0-24-10-44-32-44z"/>
+      <path d="M0-56v-12M-6 38a6 6 0 0 0 12 0"/>
+    </g>
+
+    <!-- Rosetón -->
+    <g transform="translate(120 110)" stroke-width="3.5">
+      <circle r="52"/>
+      <circle r="14"/>
+      <path d="M0-14v-38M0 14v38M-14 0h-38M14 0h38M-10-10L-37-37M10 10L37 37M10-10L37-37M-10 10L-37 37"/>
+    </g>
+
+    <!-- Molino de viento -->
+    <g transform="translate(330 220)" stroke-width="4">
+      <path d="M-18 70l6-60h24l6 60z"/>
+      <path d="M-14 10h28L0-4z"/>
+      <path d="M0 2L-46-44M0 2L46-44M0 2L-46 48M0 2L46 48"/>
+      <path d="M-44-42l10 22M44-42l-22 10M-44 46l22-10M44 46l-10-22"/>
+    </g>
+
+    <!-- Espada -->
+    <g transform="translate(560 300) rotate(30)" stroke-width="4">
+      <path d="M0-80v110M-24 30h48M0 30v26"/>
+      <circle cy="62" r="6"/>
+    </g>
+
+    <!-- Escudo pequeño con una cruz -->
+    <g transform="translate(250 590)" stroke-width="3.5">
+      <path d="M-28-34h56v28c0 22-14 36-28 42-14-6-28-20-28-42z"/>
+      <path d="M0-34v76M-28 -6h56"/>
+    </g>
+  </g>
+</svg>

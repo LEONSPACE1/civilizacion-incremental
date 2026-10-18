@@ -2,6 +2,8 @@
 // El navegador solo deja sonar audio después de que el jugador toca algo, así que el
 // contexto se crea con el primer clic.
 
+import { Music } from './music';
+
 const SETTINGS_KEY = 'civilizacion-incremental:sound';
 
 export interface SoundSettings {
@@ -12,9 +14,11 @@ export interface SoundSettings {
   effects: number;
   /** Sonido de fondo de la era: fogata y grillos de noche, pájaros de día. */
   ambience: number;
+  /** Música de la era. */
+  music: number;
 }
 
-const DEFAULTS: SoundSettings = { muted: false, volume: 0.7, effects: 0.9, ambience: 0.6 };
+const DEFAULTS: SoundSettings = { muted: false, volume: 0.7, effects: 0.9, ambience: 0.6, music: 0.6 };
 const clamp01 = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);
 
 function loadSettings(): SoundSettings {
@@ -25,6 +29,7 @@ function loadSettings(): SoundSettings {
       volume: clamp01(s.volume, DEFAULTS.volume),
       effects: clamp01(s.effects, DEFAULTS.effects),
       ambience: clamp01(s.ambience, DEFAULTS.ambience),
+      music: clamp01(s.music, DEFAULTS.music),
     };
   } catch {
     return { ...DEFAULTS };
@@ -45,13 +50,15 @@ export class Sound {
   private master!: GainNode;
   private sfx!: GainNode;
   private ambience!: GainNode;
+  private musicBus!: GainNode;
+  private music: Music | null = null;
   private noise!: AudioBuffer;
   private crackleTimer: number | undefined;
   private cricketTimer: number | undefined;
   private birdTimer: number | undefined;
   private anvilTimer: number | undefined;
   private cicadaTimer: number | undefined;
-  private lyreTimer: number | undefined;
+  private churchTimer: number | undefined;
   private era = 1;
   /** Si la pestaña se ve. */
   private pageVisible = true;
@@ -72,6 +79,10 @@ export class Sound {
     return this.settings.ambience;
   }
 
+  get musicVolume(): number {
+    return this.settings.music;
+  }
+
   /** Llamar desde un gesto del jugador (clic o tecla). */
   unlock(): void {
     if (!this.ctx) {
@@ -84,9 +95,13 @@ export class Sound {
       this.sfx.connect(this.master);
       this.ambience = this.ctx.createGain();
       this.ambience.connect(this.master);
+      this.musicBus = this.ctx.createGain();
+      this.musicBus.connect(this.master);
       this.noise = this.makeNoise(2);
       this.applyVolume();
       this.startAmbience();
+      this.music = new Music(this.ctx, this.musicBus, this.noise, () => this.audible && this.settings.music > 0);
+      this.music.setEra(this.era);
     }
     this.syncRunning();
   }
@@ -122,6 +137,10 @@ export class Sound {
     this.set({ ambience });
   }
 
+  setMusic(music: number): void {
+    this.set({ music });
+  }
+
   private set(change: Partial<SoundSettings>): void {
     Object.assign(this.settings, change);
     saveSettings(this.settings);
@@ -130,9 +149,10 @@ export class Sound {
   }
 
   /** El ambiente cambia con la era: noche en el Paleolítico, día en el Neolítico, martillos sobre el yunque
-   *  en la Edad del Bronce y, en la Antigüedad, cigarras, una lira lejana y el hierro de la forja. */
+   *  en la Edad del Bronce y, en la Antigüedad, cigarras y el hierro de la forja, y en la Edad Media, campanas lejanas. Encima suena la música de la era. */
   setEra(era: number): void {
     this.era = era;
+    this.music?.setEra(era);
   }
 
   /** Pausa el ambiente cuando la pestaña no se ve. */
@@ -181,6 +201,7 @@ export class Sound {
     this.sfx.gain.setTargetAtTime(this.settings.effects, now, 0.05);
     // El ambiente se mezcla bajo para no tapar los efectos.
     this.ambience.gain.setTargetAtTime(this.settings.ambience * 0.55, now, 0.05);
+    this.musicBus.gain.setTargetAtTime(this.settings.music * 0.8, now, 0.05);
   }
 
   private makeNoise(seconds: number): AudioBuffer {
@@ -291,7 +312,7 @@ export class Sound {
 
     // Antigüedad: el canto de las cigarras al mediodía, pulsos muy rápidos que suben y se apagan.
     const cicada = () => {
-      if (this.era >= 4 && this.audible) {
+      if (this.era === 4 && this.audible) {
         const f = 5600 + Math.random() * 900, pulses = 18 + Math.floor(Math.random() * 20);
         for (let i = 0; i < pulses; i++) {
           const k = Math.sin((i / pulses) * Math.PI);
@@ -302,21 +323,20 @@ export class Sound {
     };
     this.cicadaTimer = window.setTimeout(cicada, 1500);
 
-    // Y a lo lejos alguien toca la lira: tres o cuatro notas pulsadas de una escala antigua.
-    const LYRE = [293.7, 329.6, 349.2, 392, 440, 523.3];
-    const lyre = () => {
-      if (this.era >= 4 && this.audible) {
-        const notes = 3 + Math.floor(Math.random() * 2);
-        let n = Math.floor(Math.random() * LYRE.length);
-        for (let i = 0; i < notes; i++) {
-          n = Math.max(0, Math.min(LYRE.length - 1, n + (Math.random() < 0.5 ? -1 : 1) * (1 + Math.floor(Math.random() * 2))));
-          this.tone({ type: 'triangle', freq: LYRE[n], attack: 0.003, decay: 1.1, gain: 0.05, delay: i * 0.38, out: this.ambience });
-          this.tone({ type: 'sine', freq: LYRE[n] * 2, attack: 0.003, decay: 0.6, gain: 0.015, delay: i * 0.38, out: this.ambience });
+    // Edad Media: a lo lejos dan la hora las campanas de la iglesia. Los parciales de una campana
+    // no son armónicos (0,5, 1, 1,2, 1,5, 2…), por eso suena a metal y no a flauta.
+    const church = () => {
+      if (this.era >= 5 && this.audible) {
+        const base = 220 + Math.floor(Math.random() * 3) * 27.5, strokes = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < strokes; i++) {
+          for (const [k, g, d] of [[0.5, 0.03, 3.5], [1, 0.035, 2.8], [1.19, 0.018, 2], [1.5, 0.012, 1.6], [2, 0.01, 1.2], [2.66, 0.006, 0.8]] as const) {
+            this.tone({ type: 'sine', freq: base * k, attack: 0.004, decay: d, gain: g, delay: i * 1.6, out: this.ambience });
+          }
         }
       }
-      this.lyreTimer = window.setTimeout(lyre, 9000 + Math.random() * 12000);
+      this.churchTimer = window.setTimeout(church, 22000 + Math.random() * 20000);
     };
-    this.lyreTimer = window.setTimeout(lyre, 6000);
+    this.churchTimer = window.setTimeout(church, 8000);
   }
 
   dispose(): void {
@@ -325,7 +345,8 @@ export class Sound {
     window.clearTimeout(this.birdTimer);
     window.clearTimeout(this.anvilTimer);
     window.clearTimeout(this.cicadaTimer);
-    window.clearTimeout(this.lyreTimer);
+    window.clearTimeout(this.churchTimer);
+    this.music?.dispose();
     void this.ctx?.close();
   }
 }

@@ -22,7 +22,7 @@ import {
   upgradeAvailable,
 } from './game/logic';
 import { BUILDING_CAP, MAX_OFFLINE_SECONDS, MILESTONES } from './game/balance';
-import { deleteSave, deserialize, loadGame, saveGame, serialize } from './game/save';
+import { deleteSave, exportFileName, exportFileText, importFileText, loadGame, saveGame } from './game/save';
 import { newGame, RESOURCES, type Cost, type GameState } from './game/state';
 import { formatDuration, formatNumber, getNumberFormat, NUMBER_FORMATS, setNumberFormat, type NumberFormat } from './game/format';
 import { BUILDING_ICONS, ERA_ICONS, ICONS, RESOURCE_ICONS, UPGRADE_ICONS } from './ui/icons';
@@ -129,6 +129,7 @@ const sliders = [
   { id: 'volume', get: () => sound.volume, set: (v: number) => sound.setVolume(v) },
   { id: 'effects', get: () => sound.effects, set: (v: number) => sound.setEffects(v) },
   { id: 'ambience', get: () => sound.ambienceVolume, set: (v: number) => sound.setAmbience(v) },
+  { id: 'music', get: () => sound.musicVolume, set: (v: number) => sound.setMusic(v) },
 ].map((s) => {
   const input = $<HTMLInputElement>(`set-${s.id}`);
   const out = $<HTMLOutputElement>(`out-${s.id}`);
@@ -724,22 +725,33 @@ $('gather').addEventListener('click', (event) => {
   render();
 });
 
-$('export').addEventListener('click', async () => {
-  const text = serialize(state);
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast('Partida copiada al portapapeles.');
-  } catch {
-    window.prompt('Copia este texto para guardar tu partida:', text);
-  }
+// Exportar descarga un archivo con la partida; importar lo vuelve a cargar desde el dispositivo.
+$('export').addEventListener('click', () => {
+  save();
+  const blob = new Blob([exportFileText(state)], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = exportFileName(state);
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+  showToast('Partida exportada: busca el archivo en tus descargas.');
 });
 
+const importInput = $<HTMLInputElement>('import-file');
 $('import').addEventListener('click', () => {
-  const text = window.prompt('Pega el texto de tu partida:');
-  if (!text) return;
-  const loaded = deserialize(text);
+  importInput.value = '';
+  importInput.click();
+});
+importInput.addEventListener('change', async () => {
+  const file = importInput.files?.[0];
+  if (!file) return;
+  // Una partida ocupa unos pocos KB: un archivo enorme no puede ser una partida.
+  const loaded = file.size < 1_000_000 ? importFileText(await file.text().catch(() => '')) : null;
   if (!loaded) {
-    showToast('Ese texto no es una partida válida.');
+    showToast('Ese archivo no es una partida válida.');
     return;
   }
   state = loaded;

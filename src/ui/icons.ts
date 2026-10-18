@@ -67,6 +67,24 @@ export const ICONS = {
   aqueduct: svg('<path d="M2 8h44v8H2z" stroke="none"/><path d="M2 16h44v28h-6V28a6 6 0 0 0-12 0v16h-8V28a6 6 0 0 0-12 0v16H2z" stroke="none" opacity=".8"/>'),
   castle: svg('<path d="M4 44V14h6v5h5v-5h6v5h6v-5h6v5h5v-5h6v30z" stroke="none"/><path d="M19 44V33a5 5 0 0 1 10 0v11z" fill="#000" fill-opacity=".4" stroke="none"/><path d="M24 14V2l9 3-9 3" stroke-width="2" fill="currentColor"/>'),
   temple: svg('<path d="M24 3L4 14h40z" stroke="none"/><path d="M4 16h40v4H4zM3 40h42v6H3z" stroke="none"/><path d="M8 21h5v19H8zM17 21h5v19h-5zM26 21h5v19h-5zM35 21h5v19h-5z" stroke="none" opacity=".75"/>'),
+  // Edad Media
+  goldCoins: svg('<ellipse cx="24" cy="38" rx="16" ry="5" stroke="none"/><path d="M8 38v-5c0 3 7 5 16 5s16-2 16-5v5" stroke="none" opacity=".75"/><ellipse cx="24" cy="31" rx="16" ry="5" stroke="none"/><ellipse cx="22" cy="20" rx="12" ry="4" stroke="none" opacity=".9"/><ellipse cx="22" cy="14" rx="12" ry="4" stroke="none"/>'),
+  scales: svg(line('M24 6v34M10 12h28M16 44h16', 3.2) + line('M10 12l-6 14M10 12l6 14M38 12l-6 14M38 12l6 14', 2) + '<path d="M3 26h14a7 5 0 0 1-14 0zM31 26h14a7 5 0 0 1-14 0z" stroke="none"/>'),
+  windmill: svg('<path d="M18 46l3-24h6l3 24z" stroke="none"/><path d="M17 22h14l-7-6z" stroke="none"/>' + line('M24 18L8 4M24 18L40 4M24 18L8 32M24 18L40 32', 3) + '<path d="M9 5l7 3-2 4-7-4zM39 5l-7 3 2 4 7-4z" stroke="none" opacity=".7"/>'),
+  acorn: svg('<path d="M12 20c0-8 24-8 24 0z" stroke="none"/>' + line('M24 13V6M24 6c4-2 7 0 8 2', 3) + '<path d="M14 21h20c0 12-5 20-10 22-5-2-10-10-10-22z" stroke="none" opacity=".8"/>'),
+  trowel: svg('<path d="M6 30L26 10l12 12-20 20c-4 4-9 2-12-1s-4-7 0-11z" stroke="none"/>' + line('M32 16l8-8', 4) + '<path d="M38 4l6 6-3 3-6-6z" stroke="none"/>'),
+  bell: svg('<path d="M24 6c-8 0-12 7-12 16 0 8-3 12-6 14h36c-3-2-6-6-6-14 0-9-4-16-12-16z" stroke="none"/><circle cx="24" cy="41" r="4" stroke="none"/>' + line('M24 2v4', 3)),
+  helmet: svg('<path d="M8 30c0-14 7-24 16-24s16 10 16 24v12h-9V30h-4v12h-6V30h-4v12H8z" stroke="none"/><path d="M14 24h20" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="3"/>'),
+  goldOre: svg('<path d="M6 42l5-16 11-6 9 7 9-5 3 20z" stroke="none" opacity=".7"/><path d="M14 33l4-4 4 4-4 3zM27 36l5-4 3 4-4 3zM22 26l3-2 2 3-3 2z" stroke="none"/>' + line('M12 18L30 4', 3.5) + '<path d="M26 2c6 0 10 3 12 8-5-1-9-3-12-8z" stroke="none"/>'),
+  fields: svg('<path d="M4 40L16 12h6L14 40z" stroke="none"/><path d="M16 40l8-28h6l-4 28z" stroke="none" opacity=".65"/><path d="M28 40l2-28h6l8 28z" stroke="none" opacity=".35"/>'),
+  scroll: svg('<path d="M12 8h24v30a4 4 0 0 1-4 4H8a4 4 0 0 0 4-4z" stroke="none"/><path d="M36 8a4 4 0 0 1 4 4v4h-4z" stroke="none" opacity=".7"/>' + '<path d="M17 16h14M17 22h14M17 28h9" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2.4"/>'),
+  pennant: svg('<path d="M4 44l10-26 10 26zM24 44l10-26 10 26z" stroke="none" opacity=".8"/>' + line('M14 18V4M34 18V4', 2.5) + '<path d="M14 4l10 3-10 3zM34 4l10 3-10 3z" stroke="none"/>'),
+  arch: svg('<path d="M6 44V22c0-10 8-18 18-18s18 8 18 18v22h-8V22c0-6-4-10-10-10s-10 4-10 10v22z" stroke="none"/><path d="M42 26l4 18h-4z" stroke="none" opacity=".6"/>'),
+  tripHammer: svg('<circle cx="34" cy="32" r="10" fill="none" stroke-width="3.5"/>' + line('M34 22v20M24 32h20', 2.4) + line('M4 18h26', 4) + '<path d="M4 18v14h8V18z" stroke="none"/><path d="M2 40h18v5H2z" stroke="none"/>'),
+  horseshoe: svg('<path d="M10 42V22a14 14 0 0 1 28 0v20h-8V22a6 6 0 0 0-12 0v20z" stroke="none"/><circle cx="14" cy="26" r="1.6" fill="#000" fill-opacity=".4" stroke="none"/><circle cx="34" cy="26" r="1.6" fill="#000" fill-opacity=".4" stroke="none"/>'),
+  cathedral: svg('<path d="M4 44V24l6-14 6 14v20zM32 44V24l6-14 6 14v20z" stroke="none"/><path d="M16 44V26l8-10 8 10v18z" stroke="none" opacity=".75"/><circle cx="24" cy="28" r="3.5" fill="#000" fill-opacity=".35" stroke="none"/>' + line('M10 10V3M38 10V3', 2)),
+  book: svg('<path d="M4 10c7-2 14-1 19 3v31c-5-4-12-5-19-3z" stroke="none"/><path d="M44 10c-7-2-14-1-19 3v31c5-4 12-5 19-3z" stroke="none" opacity=".75"/>'),
+  sack: svg('<path d="M16 10h16l-3 6c8 4 12 12 11 20-1 6-6 9-16 9s-15-3-16-9c-1-8 3-16 11-20z" stroke="none"/>' + line('M17 16h14', 3) + '<path d="M19 30c2-3 8-3 10 0" fill="none" stroke="#000" stroke-opacity=".3" stroke-width="2.4"/>'),
   close: svg(line('M12 12l24 24M36 12L12 36', 4.5)),
   chevron: svg(line('M18 12l12 12-12 12', 5)),
 };
@@ -78,6 +96,7 @@ export const BUILDING_ICONS: Record<string, IconId> = {
   quarrier: 'hammer', farmer: 'wheat', forester: 'sapling', herder: 'sheep', carpenter: 'adze', miner: 'pick',
   smelter: 'furnace', mason: 'chisel', plowman: 'plough', charcoaler: 'charcoal', copperMiner: 'ore',
   blacksmith: 'anvil', oliveGrower: 'olive', sawyer: 'saw', marbler: 'column', bronzesmith: 'amphora', ironMiner: 'ironOre',
+  merchant: 'scales', miller: 'windmill', ranger: 'acorn', bricklayer: 'trowel', bellfounder: 'bell', armorer: 'helmet', goldMiner: 'goldOre',
 };
 export const UPGRADE_ICONS: Record<string, IconId> = {
   fire: 'fire',
@@ -114,6 +133,16 @@ export const UPGRADE_ICONS: Record<string, IconId> = {
   'iron-saw': 'saw',
   'lost-wax': 'amphora',
   aqueduct: 'aqueduct',
+  'three-field': 'fields',
+  bills: 'scroll',
+  fairs: 'pennant',
+  windmill: 'windmill',
+  buttress: 'arch',
+  'forest-law': 'acorn',
+  'bell-pit': 'bell',
+  'trip-hammer': 'tripHammer',
+  'horse-whim': 'horseshoe',
+  cathedral: 'cathedral',
 };
 /** Icono del botón de recolectar y de la meta de cada era. */
 export const ERA_ICONS: Record<number, { gather: IconId; goal: IconId; root: IconId }> = {
@@ -121,5 +150,6 @@ export const ERA_ICONS: Record<number, { gather: IconId; goal: IconId; root: Ico
   2: { gather: 'wheat', goal: 'copper', root: 'hut' },
   3: { gather: 'bread', goal: 'tablet', root: 'furnace' },
   4: { gather: 'olive', goal: 'castle', root: 'temple' },
+  5: { gather: 'sack', goal: 'book', root: 'castle' },
 };
-export const RESOURCE_ICONS: Record<string, IconId> = { food: 'berry', wood: 'log', stone: 'stone', metal: 'ingot', iron: 'ironBar' };
+export const RESOURCE_ICONS: Record<string, IconId> = { food: 'berry', wood: 'log', stone: 'stone', metal: 'ingot', iron: 'ironBar', gold: 'goldCoins' };

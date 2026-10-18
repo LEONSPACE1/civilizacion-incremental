@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { simulateEra1, simulateEra2, simulateEra3, simulateEra4 } from '../src/game/simulate';
+import { simulateEra1, simulateEra2, simulateEra3, simulateEra4, simulateEra5 } from '../src/game/simulate';
 import { BUILDING_DEFS, GOALS, UPGRADE_DEFS } from '../src/game/content';
 import { BUILDING_CAP } from '../src/game/balance';
 
@@ -151,6 +151,48 @@ describe('balance de la era 4', () => {
     });
   }
 }, 120000);
+
+// La era 5 suma el oro. Los cinco recursos antiguos sobran; el oro marca el ritmo, y al final
+// de la era los oficios de la Edad del Bronce y de la Antigüedad también se llenan.
+describe('balance de la era 5', () => {
+  const result = simulateEra5();
+
+  it('se completa en 20 a 35 minutos', () => {
+    expect(result.finished).toBe(true);
+    expect(result.seconds).toBeGreaterThanOrEqual(20 * 60);
+    expect(result.seconds).toBeLessThanOrEqual(35 * 60);
+  });
+
+  it('ninguna espera entre compras supera 3 minutos', () => {
+    expect(result.longestWait).toBeLessThanOrEqual(180);
+  });
+
+  it('comida, madera, piedra, bronce y hierro crecen a la par y por encima del oro', () => {
+    const { food, wood, stone, metal, iron, gold } = result.finalRates;
+    const old = Math.min(food, wood, stone, metal, iron);
+    expect(Math.max(food, wood, stone, metal, iron) / old).toBeLessThan(1.2);
+    expect(old / gold).toBeGreaterThan(1.2);
+    expect(old / gold).toBeLessThan(2.5);
+  });
+
+  it('se compran todas las mejoras de la era antes de la meta', () => {
+    const bought = new Set(result.events.map((e) => e.what));
+    for (const u of UPGRADE_DEFS.filter((u) => u.era === 5)) expect(bought).toContain(u.name);
+  });
+
+  it('los oficios de la Edad del Bronce y de la Antigüedad llegan a su tope', () => {
+    for (const b of BUILDING_DEFS.filter((b) => b.era === 3 || b.era === 4)) expect(result.state.buildings[b.id]).toBe(BUILDING_CAP);
+  });
+
+  for (const [label, bias] of [['comida', { food: 2.5 }], ['hierro', { iron: 2.5 }], ['oro', { gold: 2.5 }]] as const) {
+    it(`quien prefiere ${label} también termina sin esperas largas`, () => {
+      const r = simulateEra5({ bias });
+      expect(r.finished).toBe(true);
+      expect(r.seconds).toBeLessThanOrEqual(40 * 60);
+      expect(r.longestWait).toBeLessThanOrEqual(180);
+    });
+  }
+}, 240000);
 
 // Los precios piden lo mismo de cada recurso: así ninguno se acumula sin uso.
 describe('precios uniformes', () => {

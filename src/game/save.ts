@@ -47,6 +47,34 @@ export function deserialize(text: string): GameState | null {
   return state;
 }
 
+const FILE_GAME = 'civilizacion-incremental';
+
+/** Contenido del archivo de partida que se descarga al exportar. */
+export function exportFileText(state: GameState, now = Date.now()): string {
+  return JSON.stringify({ juego: FILE_GAME, era: state.era, exportada: new Date(now).toISOString(), partida: serialize(state) }, null, 2) + '\n';
+}
+
+/** Nombre del archivo de partida: lleva la era y la fecha para distinguir varias copias. */
+export function exportFileName(state: GameState, now = Date.now()): string {
+  const d = new Date(now);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `civilizacion-era${state.era}-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.civ`;
+}
+
+/** Lee un archivo de partida. También acepta el texto que se copiaba antes al exportar. */
+export function importFileText(text: string): GameState | null {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const data = JSON.parse(trimmed) as Record<string, unknown>;
+      return data.juego === FILE_GAME && typeof data.partida === 'string' ? deserialize(data.partida) : null;
+    } catch {
+      return null;
+    }
+  }
+  return deserialize(trimmed);
+}
+
 export function saveGame(state: GameState, now = Date.now()): void {
   state.lastSaved = now;
   try {

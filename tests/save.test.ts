@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { newGame } from '../src/game/state';
-import { deserialize, loadGame, saveGame, serialize } from '../src/game/save';
+import { deserialize, exportFileName, exportFileText, importFileText, loadGame, saveGame, serialize } from '../src/game/save';
 import { formatNumber } from '../src/game/format';
 
 describe('guardado', () => {
@@ -20,6 +20,30 @@ describe('guardado', () => {
     s.resources.wood = 7;
     s.goalReached = true;
     expect(deserialize(serialize(s))).toEqual(s);
+  });
+
+  it('el archivo exportado se vuelve a importar igual', () => {
+    const s = newGame(0);
+    s.era = 5;
+    s.resources.gold = 123;
+    s.buildings.merchant = 7;
+    const text = exportFileText(s, Date.UTC(2026, 9, 18));
+    expect(JSON.parse(text).juego).toBe('civilizacion-incremental');
+    expect(importFileText(text)).toEqual(s);
+  });
+
+  it('importar acepta también el texto que se copiaba antes y rechaza otros archivos', () => {
+    const s = newGame(0);
+    s.resources.food = 9;
+    expect(importFileText(serialize(s))).toEqual(s);
+    expect(importFileText('{"otro": 1}')).toBeNull();
+    expect(importFileText('hola')).toBeNull();
+  });
+
+  it('el nombre del archivo lleva la era y la fecha', () => {
+    const s = newGame(0);
+    s.era = 3;
+    expect(exportFileName(s, new Date(2026, 9, 18, 9, 5).getTime())).toBe('civilizacion-era3-2026-10-18-0905.civ');
   });
 
   it('migra partidas de la fase 1', () => {
