@@ -3,7 +3,8 @@
    del fuego; el Neolítico (body[data-era='2']) es barro, cerámica incisa y luz de día; la Edad
    del Bronce (body[data-era='3']) es bronce bruñido, pátina verde y oro, como el disco de Nebra; la
    Antigüedad (body[data-era='4']) es mármol blanco con vetas, azul del Egeo, greca y oro; la Edad
-   Media (body[data-era='5']) es pergamino iluminado, carmesí, azul real, pan de oro y heráldica. */
+   Media (body[data-era='5']) es pergamino iluminado, carmesí, azul real, pan de oro y heráldica; el
+   Renacimiento (body[data-era='6']) es estuco ocre, terracota, piedra gris, lapislázuli y oro. */
 :root {
   --bg: #140e12;
   --text: #f3e6d0;
@@ -221,6 +222,119 @@ body[data-era='2'] {
   --toast-bg: var(--grain), linear-gradient(170deg, #fbf1df, #ecd6b0);
   --float: #b4532a;
   --float-shadow: 0 2px 0 #fff3dc, 0 0 10px rgba(255, 220, 160, 0.9);
+  color-scheme: light;
+}
+
+/* ---------- Era 6: Renacimiento. Estuco ocre, terracota, piedra gris, azul lapislázuli y oro ---------- */
+body[data-era='6'] {
+  --bg: #eadcc0;
+  --text: #2a1c14;
+  --muted: #6e5a48;
+  --ochre: #a8442a;
+  --ochre-deep: #6e2a18;
+  --hi: #c9a040;
+  --good: #3a6a3a;
+  --bad: #9a2a20;
+  --focus: #2a4a8a;
+  --heading: 'Cormorant Garamond', 'Cinzel', Georgia, 'Times New Roman', serif;
+  --heading-scale: 1.02;
+  --r-stone: 4px;
+  /* Pátina del estuco: manchas suaves de cal y de ocre */
+  --stucco:
+    radial-gradient(ellipse at 25% 25%, rgba(200, 140, 70, 0.1), transparent 45%),
+    radial-gradient(ellipse at 75% 80%, rgba(168, 68, 42, 0.07), transparent 45%);
+
+  --page-bg:
+    radial-gradient(ellipse at 85% -10%, rgba(255, 226, 170, 0.6), transparent 50%),
+    radial-gradient(ellipse at 6% 105%, rgba(42, 74, 138, 0.16), transparent 55%),
+    url('./assets/renaissance.svg'),
+    var(--grain),
+    linear-gradient(180deg, #f3e6cc, #e8d5b2 65%, #dcc49a);
+  --page-size: auto, auto, 640px 640px, 220px 220px, auto;
+  --stage-bg: linear-gradient(180deg, #f0e2c6 85%, rgba(240, 226, 198, 0));
+  --scroll: #8a6a4a;
+
+  --title: linear-gradient(180deg, #c8643a, #a8442a 55%, #6e2a18);
+  --title-shadow: drop-shadow(0 2px 0 rgba(255, 246, 226, 0.95));
+  --badge-bg: rgba(255, 248, 234, 0.8);
+  --badge-border: rgba(168, 68, 42, 0.45);
+
+  --btn-bg: var(--grain), linear-gradient(170deg, #f8ecd6, #e6cfa6);
+  --btn-border: #8a6a4a;
+  --btn-shadow: #5a4632;
+  --btn-glow: rgba(201, 160, 64, 0.35);
+
+  --scene-bg: linear-gradient(#8ab0d8, #f0e0c0);
+  --scene-border: #5a4632;
+  --scene-ring: 0 0 0 5px #6a6e74, 0 0 0 7px #c9a040;
+  --scene-ring-thin: 0 0 0 3px #6a6e74, 0 0 0 4px #c9a040;
+  --scene-vignette: inset 0 0 50px rgba(70, 40, 20, 0.28);
+
+  --chip-bg: rgba(250, 242, 224, 0.9);
+  --chip-border: rgba(168, 68, 42, 0.45);
+  --chip-value: #a8442a;
+
+  --gather-bg: linear-gradient(180deg, #f8d0a8, #d0743e 45%, #9a3e1e);
+  --gather-text: #fff4e4;
+  --gather-icon: #fff0d8;
+  --gather-edge: #6e2a18;
+  --gather-glow: rgba(208, 116, 62, 0.4);
+
+  /* Paneles de estuco con marco de piedra gris, como una ventana florentina */
+  --panel-bg: var(--stucco), var(--grain), linear-gradient(165deg, #faf0dc, #f0dcb8 55%, #f5e6c8);
+  --panel-border: #6a6e74;
+  --panel-shadow: 0 10px 24px rgba(40, 20, 0, 0.35), inset 0 0 0 3px rgba(106, 110, 116, 0.28), inset 0 -3px 0 rgba(120, 80, 40, 0.18);
+  --seam: 1px solid rgba(106, 110, 116, 0.4);
+  /* Cenefa de ovas y dardos bajo los títulos */
+  --rule: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='9'%3E%3Cellipse cx='5' cy='4.5' rx='3' ry='3.6' fill='none' stroke='%23a8442a' stroke-width='1.2'/%3E%3Cpath d='M12 1v7M10.5 6.5L12 8l1.5-1.5' stroke='%232a4a8a' stroke-width='1.1' fill='none'/%3E%3C/svg%3E") repeat-x 0 100% / 16px 9px;
+
+  --card-bg: var(--stucco), var(--grain), linear-gradient(180deg, #fcf4e2, #f2e0be);
+  --card-border: #c4a67e;
+  --card-edge: #9a7e5a;
+  --icon-bg: radial-gradient(circle at 40% 35%, #faf0dc, #e6cfa6);
+  --icon-color: #8a6e4e;
+  --icon-on: #ffe8b0;
+  --icon-on-bg: radial-gradient(circle at 40% 35%, #c8643a, #7a2e1a);
+  --icon-glow: rgba(168, 68, 42, 0.35);
+  --card-hover: rgba(168, 68, 42, 0.16);
+
+  --bar-bg: #e8d6b2;
+  --bar-border: #b49a72;
+  --bar-fill: linear-gradient(90deg, #2a4a8a, #5a7ec0);
+  --goal-fill: linear-gradient(90deg, #8a6a1e, #c9a040 70%, #f0d688);
+  --goal-glow: rgba(201, 160, 64, 0.45);
+  --done: linear-gradient(90deg, #c9a040, #f0d688);
+  --green-btn: linear-gradient(180deg, #c8643a, #8a3a1e);
+  --green-edge: #5a2410;
+  --green-text: #fff4e4;
+  --green-hi: #a8442a;
+  --off-bg: #e8d8b8;
+
+  --dialog-wall:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 226, 170, 0.5), transparent 60%),
+    url('./assets/renaissance.svg'), var(--stucco), var(--grain),
+    radial-gradient(ellipse at 50% 40%, #faf0dc, #eedab4 65%, #dec49a);
+  --dialog-size: auto, 640px 640px, auto, 220px 220px, auto;
+  --dialog-border: #6a6e74;
+  --dialog-shadow: 0 24px 60px rgba(40, 20, 0, 0.45), inset 0 0 60px rgba(120, 80, 30, 0.18);
+  --paint: rgba(168, 68, 42, 0.6);
+  --node-bg: radial-gradient(circle at 40% 35%, #fcf4e2, #e8d4ac);
+  --node-border: #b49a72;
+  --node-owned-bg: radial-gradient(circle at 40% 35%, #c8643a, #7a2e1a);
+  --node-owned-color: #ffe8b0;
+  --node-owned-border: #e2b850;
+  --node-header-bg: radial-gradient(circle at 40% 35%, #4a6aaa, #2a4a8a);
+  --node-header-border: #c9a040;
+  --node-locked-bg: #ecdcbc;
+  --node-locked-border: #c8b08a;
+  --node-locked-color: #a89070;
+  --label-bg: rgba(252, 244, 226, 0.9);
+  --q-color: #6e4a2e;
+  --q-shadow: 0 2px 0 #fff6e4;
+
+  --toast-bg: var(--stucco), var(--grain), linear-gradient(170deg, #fcf4e2, #eedab4);
+  --float: #a8442a;
+  --float-shadow: 0 2px 0 #fff6e4, 0 0 10px rgba(255, 230, 180, 0.9);
   color-scheme: light;
 }
 
@@ -1073,6 +1187,21 @@ body[data-era='5'] .stone-btn.danger { background: var(--grain), linear-gradient
 body[data-era='5'] .choice[aria-checked='true'] { background: linear-gradient(180deg, #3a5a9a, #1e3a6e); border-color: #10224a; box-shadow: 0 3px 0 #10224a; color: #ffefc8; }
 body[data-era='5'] .hint { color: #6a5238; }
 
+/* Ajustes en el Renacimiento: un cuadro de estuco con marco de piedra gris y filete de oro */
+body[data-era='6'] .settings-inner {
+  border-radius: 4px;
+  background: var(--stucco), var(--grain), radial-gradient(ellipse at 30% 15%, #fcf4e2, #f2dcb6 65%, #e4c89c);
+  border: 6px solid #6a6e74;
+  box-shadow: 0 24px 60px rgba(40, 20, 0, 0.45), inset 0 0 0 2px #c9a040, inset 0 0 40px rgba(120, 80, 30, 0.18);
+}
+body[data-era='6'] .settings-inner::before { inset: 8px; border: 1.5px solid rgba(168, 68, 42, 0.45); border-radius: 2px; }
+body[data-era='6'] .settings h2, body[data-era='6'] .settings h3 { color: #a8442a; }
+body[data-era='6'] .stone-btn { color: #fff4e4; border-color: #1a2e5a; background: var(--grain), linear-gradient(180deg, #4a6aaa, #2a4a8a); box-shadow: 0 3px 0 #1a2e5a; }
+body[data-era='6'] .stone-btn.danger { background: var(--grain), linear-gradient(180deg, #c8643a, #8a3a1e); }
+body[data-era='6'] .choice[aria-checked='true'] { background: linear-gradient(180deg, #4a6aaa, #2a4a8a); border-color: #1a2e5a; box-shadow: 0 3px 0 #1a2e5a; color: #fff4e4; }
+body[data-era='6'] .hint { color: #6e5a48; }
+body[data-era='6'] .panel h2, body[data-era='6'] .tree-head h2, body[data-era='6'] .tree-detail h3, body[data-era='6'] .settings h2, body[data-era='6'] .settings h3 { font-weight: 700; }
+
 /* Avisos */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(8px); margin: 0; z-index: 10;
@@ -1162,6 +1291,23 @@ body[data-era='2'] .float { font-weight: 700; }
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='9'%3E%3Ccircle cx='4.5' cy='4.5' r='2.4' fill='%23ffe7a6'/%3E%3Ccircle cx='13.5' cy='4.5' r='2.4' fill='%237aa0e0'/%3E%3Cpath d='M0 4.5h18' stroke='%23ffe7a6' stroke-width='1'/%3E%3C/svg%3E") repeat-x center / 18px 9px;
 }
 .era-curtain[data-era='5'] .era-intro { text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+
+/* La cortina del Renacimiento: un cielo de atardecer toscano detrás de la cúpula y el compás */
+.era-curtain[data-era='6'] {
+  background:
+    url('./assets/renaissance.svg') center / 640px 640px,
+    radial-gradient(circle at 50% 40%, #fff0c8 0 12%, #e8b46a 26%, #a8442a 54%, #2a1a2e);
+}
+.era-curtain[data-era='6'] .era-card { color: #fff4e4; }
+.era-curtain[data-era='6'] .era-kicker { color: #ffe8b0; }
+.era-curtain[data-era='6'] .era-card h2 {
+  font-family: 'Cormorant Garamond', 'Cinzel', Georgia, serif; font-weight: 700; font-style: italic; font-size: clamp(2.6rem, 9vw, 4.8rem); color: #ffe8b0; line-height: 1;
+  text-shadow: 0 3px 0 #3a1408, 0 0 30px rgba(255, 210, 140, 0.6);
+}
+.era-curtain[data-era='6'] .era-card h2::after {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='9'%3E%3Cellipse cx='5' cy='4.5' rx='3' ry='3.6' fill='none' stroke='%23ffe8b0' stroke-width='1.2'/%3E%3Cpath d='M12 1v7M10.5 6.5L12 8l1.5-1.5' stroke='%23a8c0f0' stroke-width='1.1' fill='none'/%3E%3C/svg%3E") repeat-x center / 16px 9px;
+}
+.era-curtain[data-era='6'] .era-intro { text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
 
 @media (max-width: 1000px) {
   .app { grid-template-columns: minmax(0, 1fr) 340px; }

@@ -115,13 +115,14 @@ export function createUpgradeTree(options: TreeOptions) {
     delete detail.dataset.html;
   }
 
-  const ROOT_SUB: Record<number, string> = { 1: 'El origen de tu tribu', 2: 'Tu tribu se asienta', 3: 'El poder del metal', 4: 'Ciudades de mármol', 5: 'Castillos y catedrales' };
+  const ROOT_SUB: Record<number, string> = { 1: 'El origen de tu tribu', 2: 'Tu tribu se asienta', 3: 'El poder del metal', 4: 'Ciudades de mármol', 5: 'Castillos y catedrales', 6: 'Imprenta, arte y ciencia' };
   const ROOT_TEXT: Record<number, string> = {
     1: 'Desde este fuego crece todo lo demás.',
     2: 'La aldea del Neolítico: campos, rebaños y casas de barro.',
     3: 'La aldea de la Edad del Bronce: hornos de fundición, bueyes, minas de cobre y casas de piedra.',
     4: 'La ciudad de la Antigüedad: templos de mármol, olivares, forjas de hierro y casas de tejas rojas.',
     5: 'La villa de la Edad Media: un castillo en la colina, molinos de viento, una catedral y casas con entramado de madera.',
+    6: 'La ciudad del Renacimiento: la imprenta, palacios con loggia, talleres de escultores, viñedos y un astillero en el río.',
   };
   function describe(n: TreeNode, s: GameState): { state: NodeState; icon: IconId; label: string; sub: string } {
     const ref = n.ref;

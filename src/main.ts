@@ -807,6 +807,8 @@ window.setInterval(() => {
   advance();
   announceUnlocks();
   village.update(state);
+  // De noche cantan los grillos y callan los pájaros y el yunque.
+  sound.setDaylight(village.daylight());
   render();
 }, TICK_MS);
 

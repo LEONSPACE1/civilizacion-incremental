@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <!-- Motivos del Renacimiento, muy tenues: una cúpula con su linterna, un compás, un hombre en el
+       círculo y el cuadrado, un libro abierto con una pluma, una carabela, una columna, un suelo en
+       perspectiva y una cenefa de ovas y dardos -->
+  <g opacity=".13" fill="none" stroke="#7a3a1e" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Cenefa de ovas y dardos arriba y abajo -->
+    <g stroke-width="3">
+      <path d="M0 22h250M390 618h250"/>
+      <path d="M20 22a7 9 0 1 1 0 .1M60 22a7 9 0 1 1 0 .1M100 22a7 9 0 1 1 0 .1M140 22a7 9 0 1 1 0 .1M180 22a7 9 0 1 1 0 .1M220 22a7 9 0 1 1 0 .1"/>
+      <path d="M410 618a7 9 0 1 1 0 .1M450 618a7 9 0 1 1 0 .1M490 618a7 9 0 1 1 0 .1M530 618a7 9 0 1 1 0 .1M570 618a7 9 0 1 1 0 .1M610 618a7 9 0 1 1 0 .1"/>
+    </g>
+
+    <!-- Cúpula sobre el tambor, con nervios y linterna -->
+    <g transform="translate(470 190)" stroke-width="4">
+      <path d="M-90 90V40h180v50"/>
+      <path d="M-80 40c0-70 30-110 80-120 50 10 80 50 80 120"/>
+      <path d="M-40 40c0-60 14-96 40-120M40 40c0-60-14-96-40-120"/>
+      <path d="M-14-80h28v-24h-28zM0-104v-22"/>
+      <path d="M-70 60v20M-35 60v20M0 60v20M35 60v20M70 60v20"/>
+    </g>
+
+    <!-- Hombre en el círculo y el cuadrado -->
+    <g transform="translate(140 340)" stroke-width="3.5">
+      <circle r="92"/>
+      <path d="M-78-78h156v156h-156z"/>
+      <circle cy="-56" r="14"/>
+      <path d="M0-42v62M0 20l-30 58M0 20l30 58M0 20l-52 46M0 20l52 46M-78-20h156M-70-62L0-14l70-48"/>
+    </g>
+
+    <!-- Compás abierto -->
+    <g transform="translate(330 120)" stroke-width="4">
+      <circle r="9"/>
+      <path d="M-4 8l-40 96M4 8l40 96M-30 70q30 14 60 0"/>
+    </g>
+
+    <!-- Libro abierto con una pluma -->
+    <g transform="translate(470 450)" stroke-width="4">
+      <path d="M-90 30c30-14 60-14 90 0 30-14 60-14 90 0v-80c-30-14-60-14-90 0-30-14-60-14-90 0z"/>
+      <path d="M0-50v80M-70-30h50M-70-14h50M-70 2h40M20-30h50M20-14h50M20 2h40"/>
+      <path d="M60-110c30 10 44 40 30 70L40 20M60-110c-6 30-6 50 14 70"/>
+    </g>
+
+    <!-- Carabela con velas latinas -->
+    <g transform="translate(150 560)" stroke-width="4">
+      <path d="M-80 0h160l-26 34h-108zM-80 0l-14-18M80 0l12-24"/>
+      <path d="M-30 0v-90M30 0v-70M-30-88l-46 70h46M30-68l38 54H30"/>
+    </g>
+
+    <!-- Columna con capitel y basa -->
+    <g transform="translate(560 560)" stroke-width="4">
+      <path d="M-30-130h60M-24-120h48l-6 10h-36zM-18-110v150M18-110v150M-26 40h52v14h-52zM-6-100v130M6-100v130"/>
+    </g>
+
+    <!-- Suelo en perspectiva -->
+    <g transform="translate(320 330)" stroke-width="2.5" opacity=".8">
+      <path d="M-80 60h160M-60 40h120M-46 25h92M-36 14h72"/>
+      <path d="M0 0L-80 60M0 0L-40 60M0 0v60M0 0L40 60M0 0L80 60"/>
+    </g>
+  </g>
+</svg>
