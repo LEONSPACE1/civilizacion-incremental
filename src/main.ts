@@ -829,13 +829,28 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('beforeunload', save);
 
-// Mientras el árbol de mejoras o los ajustes tapan la escena, la aldea deja de dibujarse.
+// Mientras el árbol de mejoras o los ajustes tapan la escena, o el aviso de girar el móvil tapa la
+// pantalla, la aldea deja de dibujarse. La consulta es la misma que muestra el aviso en style.css.
 const dialogs = [...document.querySelectorAll('dialog')];
-new MutationObserver(() => village.setPaused(dialogs.some((d) => d.open))).observe(document.body, {
+const sideways = window.matchMedia('(orientation: landscape) and (pointer: coarse) and (max-height: 560px)');
+const updatePaused = () => village.setPaused(sideways.matches || dialogs.some((d) => d.open));
+new MutationObserver(updatePaused).observe(document.body, {
   subtree: true,
   attributes: true,
   attributeFilter: ['open'],
 });
+sideways.addEventListener('change', updatePaused);
+updatePaused();
+// Donde el navegador lo permite (Android a pantalla completa o como app instalada), además se fija
+// la orientación vertical. En los demás casos falla sin más y queda el aviso.
+if (window.matchMedia('(pointer: coarse)').matches) {
+  const lockPortrait = () => {
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    orientation?.lock?.('portrait').catch(() => {});
+  };
+  lockPortrait();
+  document.addEventListener('pointerdown', lockPortrait, { once: true });
+}
 
 showTab(panelTab);
 village.update(state);

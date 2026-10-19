@@ -68,6 +68,21 @@
       <p id="toast" class="toast" role="status"></p>
     </main>
 
+    <!-- En el móvil el juego solo se juega en vertical: en horizontal no cabe. Este aviso tapa la
+         pantalla mientras el móvil está girado (lo muestra el CSS con una consulta de orientación). -->
+    <div id="rotate-notice" class="rotate-notice" role="alert" aria-live="assertive">
+      <div class="rotate-card">
+        <svg class="rotate-phone" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="20" y="6" width="24" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="3" />
+          <circle cx="32" cy="44" r="2" fill="currentColor" />
+          <path d="M50 22a18 18 0 0 1 0 20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+          <path d="M46 40l4 3 3-4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <p class="rotate-title">Gira el móvil</p>
+        <p class="rotate-text">De la Chispa a las Estrellas se juega en vertical en el móvil. Tu tribu sigue trabajando mientras tanto.</p>
+      </div>
+    </div>
+
     <!-- Al pasar de era, esta cortina cubre la pantalla mientras cambia el estilo -->
     <div id="era-curtain" class="era-curtain" hidden>
       <div class="era-card">
