@@ -1,6 +1,7 @@
 import { BUILDINGS, LAST_ERA, newGame, RESOURCES, SAVE_VERSION, type GameState } from './state';
 import { UPGRADE_BY_ID } from './content';
 import { BUILDING_CAP } from './balance';
+import { LEGACY_IDS, maxLevel } from './legacy';
 
 const STORAGE_KEY = 'civilizacion-incremental:save';
 
@@ -43,6 +44,13 @@ export function deserialize(text: string): GameState | null {
   state.awaySince = num(data.awaySince) ?? null;
   // Las partidas de la versión 2 no guardaban la era: todas eran del Paleolítico.
   state.era = Math.min(LAST_ERA, Math.max(1, Math.floor(num(data.era) ?? 1)));
+  // El Legado llegó con la versión 4: las partidas anteriores empiezan sin Sabiduría.
+  const legacy = (data.legacy ?? {}) as Record<string, unknown>;
+  const levels = (legacy.levels ?? {}) as Record<string, unknown>;
+  state.legacy.wisdom = num(legacy.wisdom) ?? 0;
+  for (const id of LEGACY_IDS) state.legacy.levels[id] = Math.min(maxLevel(id), Math.floor(num(levels[id]) ?? 0));
+  state.legacy.rebirths = Math.floor(num(legacy.rebirths) ?? 0);
+  state.legacy.bestEra = Math.min(LAST_ERA, Math.max(1, Math.floor(num(legacy.bestEra) ?? state.era)));
   state.version = SAVE_VERSION;
   return state;
 }

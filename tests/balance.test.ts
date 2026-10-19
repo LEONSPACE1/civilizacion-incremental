@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { simulateRun } from '../src/game/simulate';
 import { simulateEra1, simulateEra2, simulateEra3, simulateEra4, simulateEra5, simulateEra6, simulateEra7, simulateEra8 } from '../src/game/simulate';
 import { BUILDING_DEFS, GOALS, UPGRADE_DEFS } from '../src/game/content';
 import { BUILDING_CAP } from '../src/game/balance';
@@ -312,6 +313,29 @@ describe('balance de la era 8', () => {
       expect(r.finished).toBe(true);
       expect(r.seconds).toBeLessThanOrEqual(40 * 60);
       expect(r.longestWait).toBeLessThanOrEqual(180);
+    });
+  }
+}, 900000);
+
+// Prestigio: las partidas tras renacer son más rápidas, pero nunca triviales. Cada fila es lo que
+// compra un jugador con la Sabiduría de las partidas anteriores (ver prestigio/propuesta-prestigio.md):
+// la 2.ª tras renacer en la era 3 (6), la 3.ª tras una partida completa (73) y la 4.ª con todo.
+describe('balance tras renacer', () => {
+  const runs = [
+    { label: '2.ª partida', levels: { memory: 1, hands: 1, patience: 1 }, min: 165, max: 200 },
+    { label: '3.ª partida', levels: { memory: 3, hands: 1, patience: 2, tradition: 1, guilds: 1, foremen: 1 }, min: 115, max: 150 },
+    { label: 'partida con todo el Legado', levels: { memory: 5, hands: 1, patience: 2, tradition: 1, guilds: 3, foremen: 1 }, min: 90, max: 120 },
+  ];
+  for (const run of runs) {
+    const result = simulateRun(run.levels);
+    it(`la ${run.label} dura entre ${run.min} y ${run.max} minutos`, () => {
+      expect(result.finished).toBe(true);
+      expect(result.seconds).toBeGreaterThanOrEqual(run.min * 60);
+      expect(result.seconds).toBeLessThanOrEqual(run.max * 60);
+    });
+    it(`en la ${run.label} ninguna era dura menos de 4 minutos ni hay esperas de más de 3`, () => {
+      for (const era of result.eras) expect(era.seconds).toBeGreaterThanOrEqual(4 * 60);
+      expect(result.longestWait).toBeLessThanOrEqual(180);
     });
   }
 }, 900000);
