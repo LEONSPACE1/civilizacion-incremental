@@ -1,6 +1,7 @@
 import { BASE_CLICK, BUILDING_CAP, MAX_OFFLINE_SECONDS, MILESTONES } from './balance';
 import { BUILDING_BY_ID, BUILDING_DEFS, COST_GROWTH, GOALS, UPGRADE_BY_ID, UPGRADE_DEFS, type GoalDef } from './content';
-import { LAST_ERA, RESOURCES, type Amounts, type BuildingId, type Cost, type GameState, type ResourceId } from './state';
+import { clickMultiplier, jobCostMultiplier, level, offlineMinutesBonus, productionMultiplier, TRADITION_PEOPLE, wisdomForRun, canRebirth } from './legacy';
+import { LAST_ERA, newGame, RESOURCES, type Amounts, type BuildingId, type Cost, type GameState, type ResourceId } from './state';
 
 function upgradeMultiplier(state: GameState, match: (e: (typeof UPGRADE_DEFS)[number]['effect']) => boolean): number {
   let m = 1;
@@ -25,7 +26,7 @@ export function unitRate(state: GameState, id: BuildingId): number {
   const def = BUILDING_BY_ID[id];
   const fromUpgrades = upgradeMultiplier(state, (e) => e.kind === 'building' && e.building === id);
   const global = upgradeMultiplier(state, (e) => e.kind === 'global');
-  return def.rate * fromUpgrades * global * 2 ** milestonesReached(state.buildings[id]);
+  return def.rate * fromUpgrades * global * productionMultiplier(state) * 2 ** milestonesReached(state.buildings[id]);
 }
 
 export function buildingRate(state: GameState, id: BuildingId): number {
@@ -44,7 +45,7 @@ export function clickAmount(state: GameState): number {
     const e = UPGRADE_BY_ID[id]?.effect;
     if (e?.kind === 'clickRate') share += e.share;
   }
-  const base = BASE_CLICK * upgradeMultiplier(state, (e) => e.kind === 'click');
+  const base = BASE_CLICK * upgradeMultiplier(state, (e) => e.kind === 'click') * clickMultiplier(state);
   return share ? base + ratePerSecond(state).food * share : base;
 }
 
@@ -68,7 +69,8 @@ export function tick(state: GameState, seconds: number): void {
 
 export function buildingCost(state: GameState, id: BuildingId): Cost {
   const def = BUILDING_BY_ID[id];
-  const factor = COST_GROWTH ** state.buildings[id];
+  // Los Gremios del Legado abaratan todos los oficios.
+  const factor = COST_GROWTH ** state.buildings[id] * jobCostMultiplier(state);
   const cost: Cost = {};
   for (const r of RESOURCES) {
     const base = def.baseCost[r];
@@ -134,6 +136,7 @@ export function advanceEra(state: GameState): boolean {
   if (!canAdvanceEra(state)) return false;
   state.era += 1;
   state.goalReached = false;
+  state.legacy.bestEra = Math.max(state.legacy.bestEra, state.era);
   return true;
 }
 
@@ -156,8 +159,14 @@ export function secondsUntil(state: GameState, cost: Cost): number {
  * suspendido) tampoco suma más que eso.
  */
 export function creditedSeconds(state: GameState, from: number, to: number): number {
-  const end = state.awaySince === null ? to : Math.min(to, state.awaySince + MAX_OFFLINE_SECONDS * 1000);
-  return Math.min(Math.max(0, end - from) / 1000, MAX_OFFLINE_SECONDS);
+  const limit = offlineLimit(state);
+  const end = state.awaySince === null ? to : Math.min(to, state.awaySince + limit * 1000);
+  return Math.min(Math.max(0, end - from) / 1000, limit);
+}
+
+/** Segundos que trabaja la tribu fuera del juego: 10 minutos, más los de la Paciencia del Legado. */
+export function offlineLimit(state: GameState): number {
+  return MAX_OFFLINE_SECONDS + offlineMinutesBonus(state) * 60;
 }
 
 /** Aplica el tiempo que el jugador estuvo fuera y devuelve los segundos aplicados. */
@@ -169,4 +178,38 @@ export function applyOfflineProgress(state: GameState, now: number): number {
   if (elapsed <= 0) return 0;
   tick(state, elapsed);
   return elapsed;
+}
+
+// ---------- Legado (prestigio) ----------
+
+/** Tradición oral: cada oficio descubierto empieza con 5 personas. Devuelve si cambió algo. */
+export function applyTradition(state: GameState): boolean {
+  if (!level(state, 'tradition')) return false;
+  let changed = false;
+  for (const def of BUILDING_DEFS) {
+    if (def.era > state.era || state.buildings[def.id] >= TRADITION_PEOPLE || !def.unlocked(state)) continue;
+    state.buildings[def.id] = TRADITION_PEOPLE;
+    changed = true;
+  }
+  return changed;
+}
+
+/** Capataces: contratan una persona en cada oficio de eras pasadas que se pueda pagar. Devuelve cuántas. */
+export function autoHire(state: GameState): number {
+  if (!level(state, 'foremen')) return 0;
+  let hired = 0;
+  for (const def of BUILDING_DEFS) if (def.era < state.era && buyBuilding(state, def.id)) hired++;
+  return hired;
+}
+
+/** Renacer: una partida nueva en el Paleolítico que conserva el Legado y suma la Sabiduría ganada. */
+export function rebirth(state: GameState, now = Date.now()): GameState | null {
+  if (!canRebirth(state)) return null;
+  const next = newGame(now);
+  next.legacy = structuredClone(state.legacy);
+  next.legacy.wisdom += wisdomForRun(state);
+  next.legacy.rebirths += 1;
+  next.legacy.bestEra = Math.max(next.legacy.bestEra, state.era);
+  applyTradition(next);
+  return next;
 }

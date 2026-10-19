@@ -3,6 +3,8 @@ import { BUILDING_DEFS, ERA_BY_N, RESOURCE_DEFS, UPGRADE_DEFS, type UpgradeDef }
 import {
   advanceEra,
   applyOfflineProgress,
+  applyTradition,
+  autoHire,
   atCap,
   buildingCost,
   buyBuilding,
@@ -16,12 +18,15 @@ import {
   gather,
   milestonesReached,
   nextMilestone,
+  offlineLimit,
   ratePerSecond,
+  rebirth,
   tick,
   unitRate,
   upgradeAvailable,
 } from './game/logic';
-import { BUILDING_CAP, MAX_OFFLINE_SECONDS, MILESTONES } from './game/balance';
+import { BUILDING_CAP, MILESTONES } from './game/balance';
+import { buyLegacy, canBuyLegacy, canRebirth, goalsDone, LEGACY_DEFS, legacyUnlocked, maxLevel, nextLegacyCost, REBIRTH_MIN_GOALS, wisdomForRun } from './game/legacy';
 import { deleteSave, exportFileName, exportFileText, importFileText, loadGame, saveGame } from './game/save';
 import { newGame, RESOURCES, type Cost, type GameState } from './game/state';
 import { formatDuration, formatNumber, getNumberFormat, NUMBER_FORMATS, setNumberFormat, type NumberFormat } from './game/format';
@@ -473,6 +478,98 @@ const tree = createUpgradeTree({ getState: () => state, costHtml, buyUpgrade: pu
 (document.querySelector('#open-tree .mini-icon') as HTMLElement).innerHTML = ICONS.tree;
 $('open-tree').addEventListener('click', () => tree.open());
 
+// ---------- Legado: renacer y mejoras permanentes ----------
+// Se descubre al «Inventar la escritura» (meta de la era 3): desde ahí la meta muestra cuánta
+// Sabiduría daría renacer, y la cabecera tiene un botón para abrir la ventana del Legado.
+const legacyDialog = $<HTMLDialogElement>('legacy');
+const legacyButton = $<HTMLButtonElement>('open-legacy');
+legacyButton.innerHTML = ICONS.scroll;
+legacyDialog.querySelector('.close')!.innerHTML = ICONS.close;
+legacyDialog.querySelector('.close')!.addEventListener('click', () => legacyDialog.close());
+legacyDialog.addEventListener('click', (e) => {
+  if (e.target === legacyDialog) legacyDialog.close();
+});
+(legacyDialog.querySelector('.wisdom-icon') as HTMLElement).innerHTML = ICONS.scroll;
+function openLegacy(): void {
+  renderLegacy();
+  legacyDialog.showModal();
+}
+legacyButton.addEventListener('click', openLegacy);
+
+const legacyBox = el('div', 'legacy-box');
+legacyBox.innerHTML = `<p class="legacy-line"></p><button type="button" class="mini-btn legacy-open"><span class="mini-icon" aria-hidden="true">${ICONS.scroll}</span>Legado y renacer</button>`;
+legacyBox.querySelector('.legacy-open')!.addEventListener('click', openLegacy);
+const legacyLine = legacyBox.querySelector('.legacy-line') as HTMLElement;
+function renderLegacyBox(): void {
+  const unlocked = legacyUnlocked(state);
+  setHidden(legacyBox, !unlocked);
+  setHidden(legacyButton, !unlocked);
+  if (!unlocked) return;
+  setText(legacyLine, canRebirth(state)
+    ? `Si renaces ahora, tu pueblo gana ${wisdomForRun(state)} de Sabiduría. Tienes ${state.legacy.wisdom}.`
+    : `Tienes ${state.legacy.wisdom} de Sabiduría. Podrás renacer de nuevo al cumplir la meta de la era ${REBIRTH_MIN_GOALS}.`);
+}
+
+const shop = $('legacy-shop');
+const shopItems = LEGACY_DEFS.map((def) => {
+  const item = el('div', 'legacy-item');
+  item.innerHTML = `<div class="li-head"><b>${def.name}</b><span class="li-level"></span></div><p class="li-desc">${def.description}</p><p class="li-effect"></p><button type="button" class="stone-btn li-buy"></button>`;
+  const buy = item.querySelector('.li-buy') as HTMLButtonElement;
+  buy.addEventListener('click', () => {
+    if (!buyLegacy(state, def.id)) return;
+    sound.goal();
+    applyTradition(state);
+    save();
+    renderLegacy();
+    render();
+  });
+  shop.append(item);
+  return { def, item, buy, level: item.querySelector('.li-level') as HTMLElement, effect: item.querySelector('.li-effect') as HTMLElement };
+});
+
+function renderLegacy(): void {
+  const { legacy } = state;
+  setText($('legacy-wisdom'), String(legacy.wisdom));
+  setText($('legacy-runs'), legacy.rebirths ? `Civilizaciones fundadas: ${legacy.rebirths + 1}` : 'Tu primera civilización');
+  const gain = wisdomForRun(state);
+  const rebirthBtn = $<HTMLButtonElement>('rebirth');
+  setText($('rebirth-text'), canRebirth(state)
+    ? `Tu pueblo vuelve a empezar junto al fuego y gana ${gain} de Sabiduría por las ${goalsDone(state)} metas de esta civilización. Se pierden los recursos, los oficios, las mejoras y la era; el Legado se conserva. Cuanto más lejos llegues antes de renacer, más Sabiduría ganas.`
+    : `Renacer se desbloquea al cumplir la meta de la era ${REBIRTH_MIN_GOALS} («Inventar la escritura»).`);
+  setText(rebirthBtn, canRebirth(state) ? `Renacer (+${gain} de Sabiduría)` : 'Renacer');
+  setDisabled(rebirthBtn, !canRebirth(state));
+  for (const s of shopItems) {
+    const lvl = legacy.levels[s.def.id], max = maxLevel(s.def.id), cost = nextLegacyCost(state, s.def.id);
+    s.item.classList.toggle('maxed', cost === undefined);
+    setText(s.level, `${lvl}/${max}`);
+    setText(s.effect, cost === undefined ? `Completa: ${s.def.effect(lvl)}.` : `Ahora: ${s.def.effect(lvl)}. Siguiente: ${s.def.effect(lvl + 1)}.`);
+    setText(s.buy, cost === undefined ? 'Completa' : `Comprar · ${cost} de Sabiduría`);
+    setDisabled(s.buy, !canBuyLegacy(state, s.def.id));
+  }
+}
+
+$('rebirth').addEventListener('click', () => {
+  if (!canRebirth(state)) return;
+  const gain = wisdomForRun(state);
+  if (!window.confirm(`¿Renacer? Tu pueblo vuelve al Paleolítico con ${state.legacy.wisdom + gain} de Sabiduría para el Legado. Los recursos, oficios, mejoras y la era se pierden.`)) return;
+  const next = rebirth(state);
+  if (!next) return;
+  state = next;
+  save();
+  legacyDialog.close();
+  // La aldea se vuelve a construir desde el Paleolítico: la cortina cubre la recarga de la página.
+  const curtain = $('era-curtain');
+  curtain.dataset.era = '1';
+  curtain.querySelector('.era-kicker')!.textContent = `Civilización ${state.legacy.rebirths + 1}`;
+  curtain.querySelector('h2')!.textContent = 'Un nuevo comienzo';
+  curtain.querySelector('.era-intro')!.textContent = `Junto al fuego, los ancianos cuentan lo que aprendieron. Tienes ${state.legacy.wisdom} de Sabiduría para el Legado.`;
+  curtain.hidden = false;
+  void curtain.offsetWidth;
+  curtain.classList.add('show');
+  sound.goal();
+  window.setTimeout(() => window.location.reload(), 1600);
+});
+
 // ---------- Meta de la era ----------
 const goalPanel = $('goal');
 function renderGoal(): void {
@@ -480,7 +577,10 @@ function renderGoal(): void {
   const era = ERA_BY_N[state.era];
   if (state.goalReached) {
     const key = `done-${state.era}`;
-    if (goalPanel.dataset.built === key) return;
+    if (goalPanel.dataset.built === key) {
+      renderLegacyBox();
+      return;
+    }
     goalPanel.dataset.built = key;
     goalPanel.classList.add('done');
     const next = ERA_BY_N[state.era + 1];
@@ -494,8 +594,10 @@ function renderGoal(): void {
       });
     } else {
       // La última era: el cohete ha despegado y la historia de la civilización está completa.
-      goalPanel.innerHTML = `<h2>¡Tu civilización ha llegado a las estrellas!</h2><p>De aquella primera chispa junto al fuego al cohete que cruza el cielo: has completado las ${era.n} eras de la historia. Pronto podrás volver a empezar con lo aprendido y avanzar más rápido; mientras tanto puedes seguir haciendo crecer tu ciudad.</p>`;
+      goalPanel.innerHTML = `<h2>¡Tu civilización ha llegado a las estrellas!</h2><p>De aquella primera chispa junto al fuego al cohete que cruza el cielo: has completado las ${era.n} eras de la historia. Ahora puedes renacer: tu pueblo vuelve a empezar junto al fuego con la Sabiduría de esta civilización, y con ella mejoras que duran para siempre.</p>`;
     }
+    goalPanel.append(legacyBox);
+    renderLegacyBox();
     return;
   }
   if (goalPanel.dataset.built !== String(state.era)) {
@@ -521,6 +623,8 @@ function renderGoal(): void {
     })
     .join(''));
   setDisabled(goalPanel.querySelector('.go') as HTMLButtonElement, !canAfford(state, goal.cost));
+  if (legacyBox.parentElement !== goalPanel) goalPanel.append(legacyBox);
+  renderLegacyBox();
 }
 
 // ---------- Pestañas de la barra inferior ----------
@@ -802,6 +906,8 @@ let last = Date.now();
 function advance(): void {
   const now = Date.now();
   tick(state, creditedSeconds(state, last, now));
+  applyTradition(state);
+  autoHire(state);
   last = now;
 }
 window.setInterval(() => {
@@ -857,8 +963,9 @@ village.update(state);
 render();
 /** Aviso al volver: cuánto trabajó la tribu y, si la ausencia fue larga, que el resto no cuenta. */
 function awayMessage(away: number): string {
-  return away > MAX_OFFLINE_SECONDS
-    ? `Estuviste fuera ${formatDuration(away)}. Tu tribu trabajó los primeros ${formatDuration(MAX_OFFLINE_SECONDS)} y luego descansó.`
+  const limit = offlineLimit(state);
+  return away > limit
+    ? `Estuviste fuera ${formatDuration(away)}. Tu tribu trabajó los primeros ${formatDuration(limit)} y luego descansó.`
     : `Mientras no estabas (${formatDuration(away)}) tu tribu siguió trabajando.`;
 }
 if (offlineSeconds > 60) showToast(awayMessage(offlineSeconds));

@@ -26,6 +26,7 @@
             <p class="era">Era 1 · Paleolítico</p>
           </div>
           <div class="header-actions">
+            <button id="open-legacy" class="icon-btn" aria-label="Legado" title="Legado" hidden></button>
             <button id="mute" class="icon-btn" aria-label="Silenciar sonido" title="Silenciar sonido"></button>
             <button id="open-settings" class="icon-btn" aria-label="Ajustes" title="Ajustes"></button>
           </div>
@@ -136,6 +137,26 @@
           <p class="hint">Exportar descarga un archivo con tu partida. Para seguir en otro dispositivo, pásale el archivo y elígelo con «Importar partida».</p>
         </section>
       </form>
+    </dialog>
+    <!-- Legado: renacer y mejoras permanentes que se compran con Sabiduría -->
+    <dialog id="legacy" class="settings legacy" aria-labelledby="legacy-title">
+      <div class="settings-inner">
+        <header class="settings-head">
+          <h2 id="legacy-title">Legado</h2>
+          <button type="button" class="icon-btn close" aria-label="Cerrar el legado" title="Cerrar"></button>
+        </header>
+        <p class="legacy-stats"><span class="wisdom"><span class="wisdom-icon" aria-hidden="true"></span><b id="legacy-wisdom"></b> de Sabiduría</span><span id="legacy-runs"></span></p>
+        <section class="settings-section">
+          <h3>Renacer</h3>
+          <p id="rebirth-text" class="legacy-text"></p>
+          <button type="button" id="rebirth" class="stone-btn rebirth-btn"></button>
+        </section>
+        <section class="settings-section">
+          <h3>Mejoras permanentes</h3>
+          <div id="legacy-shop" class="legacy-shop"></div>
+          <p class="hint">Las mejoras del Legado no se pierden al renacer. Cada meta de era cumplida da Sabiduría: cuanto más lejos llegues, más ganas.</p>
+        </section>
+      </div>
     </dialog>
     <dialog id="tree-dialog" class="tree-dialog" aria-labelledby="tree-title">
       <div class="tree-inner">

@@ -1,6 +1,7 @@
 import { BUILDING_DEFS, UPGRADE_DEFS } from './content';
 import {
   advanceEra,
+  applyTradition,
   atCap,
   buildingCost,
   buyBuilding,
@@ -15,6 +16,7 @@ import {
   unitRate,
   upgradeAvailable,
 } from './logic';
+import type { LegacyId } from './legacy';
 import { newGame, RESOURCES, type Cost, type GameState, type ResourceId } from './state';
 
 export interface SimEvent {
@@ -139,6 +141,7 @@ export function simulateEra(s: GameState, options: SimOptions = {}): SimResult {
       blockedBy[worst]++;
     }
     tick(s, 1);
+    applyTradition(s);
     options.onSecond?.(t, s);
     for (let guard = 0; guard < 20; guard++) {
       const target = nextTarget(s);
@@ -153,4 +156,31 @@ export function simulateEra(s: GameState, options: SimOptions = {}): SimResult {
     }
   }
   return { finished: false, seconds: maxSeconds, longestWait, longestWaitBefore, events, blockedBy, finalRates: ratePerSecond(s), state: s };
+}
+
+export interface RunResult {
+  /** Cada era jugada, en orden. */
+  eras: SimResult[];
+  finished: boolean;
+  seconds: number;
+  longestWait: number;
+}
+
+/** Juega una partida completa (eras 1 a 8) tras renacer con estos niveles del Legado. */
+export function simulateRun(levels: Partial<Record<LegacyId, number>>, options: SimOptions = {}): RunResult {
+  const s = newGame(0);
+  Object.assign(s.legacy.levels, levels);
+  applyTradition(s);
+  const eras: SimResult[] = [];
+  for (;;) {
+    const r = simulateEra(s, eras.length === 0 ? options : { earlyClickSeconds: 0, ...options });
+    eras.push(r);
+    if (!r.finished || !advanceEra(s)) break;
+  }
+  return {
+    eras,
+    finished: eras.every((r) => r.finished),
+    seconds: eras.reduce((sum, r) => sum + r.seconds, 0),
+    longestWait: Math.max(...eras.map((r) => r.longestWait)),
+  };
 }

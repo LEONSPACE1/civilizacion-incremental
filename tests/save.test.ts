@@ -49,7 +49,7 @@ describe('guardado', () => {
   it('migra partidas de la fase 1', () => {
     const v1 = btoa(JSON.stringify({ version: 1, food: 55, totalFood: 300, gatherers: 4, lastSaved: 5 }));
     const s = deserialize(v1)!;
-    expect(s.version).toBe(3);
+    expect(s.version).toBe(4);
     expect(s.resources.food).toBe(55);
     expect(s.totals.food).toBe(300);
     expect(s.buildings.gatherer).toBe(4);
