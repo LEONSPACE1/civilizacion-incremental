@@ -5,7 +5,8 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   base: './',
   // three.js ocupa unos 600 kB; es esperado.
-  build: { chunkSizeWarningLimit: 900 },
+  // es2022: main.ts espera (top-level await) a cargar el idioma, las letras y la aldea antes de quitar la pantalla de carga.
+  build: { chunkSizeWarningLimit: 900, target: 'es2022' },
   test: {
     environment: 'jsdom',
   },
