@@ -9,13 +9,9 @@ export type LegacyId = (typeof LEGACY_IDS)[number];
 
 export interface LegacyDef {
   id: LegacyId;
-  name: string;
-  /** Qué hace cada nivel, en una frase. */
-  description: string;
-  /** Coste en Sabiduría de cada nivel, en orden; su longitud es el tope de niveles. */
+  /** Coste en Sabiduría de cada nivel, en orden; su longitud es el tope de niveles. Los textos de cada
+   *  mejora (nombre, descripción y efecto) están en i18n/es.ts como legacy.<id>.*. */
   costs: number[];
-  /** Efecto con `level` niveles comprados, para mostrar «ahora → siguiente». */
-  effect: (level: number) => string;
 }
 
 /** Sabiduría que da la meta de cada era (índice = era). Crece para que llegar lejos compense más
@@ -31,51 +27,19 @@ export const HANDS_MULTIPLIER = 3;
 /** Minutos extra que trabaja la tribu fuera del juego por cada nivel de Paciencia. */
 export const PATIENCE_MINUTES = 10;
 
-const pct = (x: number) => `${Math.round(x * 100)} %`;
-
 export const LEGACY_DEFS: LegacyDef[] = [
-  {
-    id: 'memory',
-    name: 'Memoria de los antepasados',
-    description: 'Lo que aprendieron tus antepasados guía cada oficio: +10 % de toda la producción por nivel.',
-    costs: [2, 4, 7, 11, 16],
-    effect: (l) => `+${pct(l * MEMORY_BONUS)} de producción`,
-  },
-  {
-    id: 'guilds',
-    name: 'Gremios',
-    description: 'Los maestros enseñan a los aprendices: cada nivel abarata un 5 % todos los oficios.',
-    costs: [8, 12, 16],
-    effect: (l) => `oficios un ${pct(1 - GUILD_DISCOUNT ** l)} más baratos`,
-  },
-  {
-    id: 'tradition',
-    name: 'Tradición oral',
-    description: 'Las familias pasan el oficio de padres a hijos: cada oficio empieza con 5 personas en cuanto se descubre.',
-    costs: [20],
-    effect: (l) => (l ? `cada oficio empieza con ${TRADITION_PEOPLE}` : 'los oficios empiezan vacíos'),
-  },
-  {
-    id: 'hands',
-    name: 'Manos hábiles',
-    description: 'Recolectar a mano rinde el triple.',
-    costs: [1],
-    effect: (l) => `recolectar ×${HANDS_MULTIPLIER ** l}`,
-  },
-  {
-    id: 'patience',
-    name: 'Paciencia de la tribu',
-    description: 'Tu tribu trabaja 10 minutos más mientras no juegas, por cada nivel.',
-    costs: [3, 6],
-    effect: (l) => `trabaja ${10 + l * PATIENCE_MINUTES} min fuera del juego`,
-  },
-  {
-    id: 'foremen',
-    name: 'Capataces',
-    description: 'Los capataces contratan solos a la gente de los oficios de eras pasadas, hasta llenarlos.',
-    costs: [25],
-    effect: (l) => (l ? 'los oficios de eras pasadas se llenan solos' : 'contratas a mano'),
-  },
+  // Memoria de los antepasados: +10 % de toda la producción por nivel.
+  { id: 'memory', costs: [2, 4, 7, 11, 16] },
+  // Gremios: cada nivel abarata un 5 % todos los oficios.
+  { id: 'guilds', costs: [8, 12, 16] },
+  // Tradición oral: cada oficio empieza con 5 personas en cuanto se descubre.
+  { id: 'tradition', costs: [20] },
+  // Manos hábiles: recolectar a mano rinde el triple.
+  { id: 'hands', costs: [1] },
+  // Paciencia de la tribu: 10 minutos más de trabajo fuera del juego por nivel.
+  { id: 'patience', costs: [3, 6] },
+  // Capataces: llenan solos los oficios de eras pasadas.
+  { id: 'foremen', costs: [25] },
 ];
 
 export const LEGACY_BY_ID = Object.fromEntries(LEGACY_DEFS.map((d) => [d.id, d])) as Record<LegacyId, LegacyDef>;

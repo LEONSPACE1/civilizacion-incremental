@@ -8,8 +8,43 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Amatic+SC:wght@700&family=Caveat+Brush&family=Cinzel:wght@700&family=Cormorant+Garamond:ital,wght@0,700;1,700&family=Exo+2:wght@700;800&family=Marcellus&family=Nunito:wght@500;700;800&family=MedievalSharp&display=swap" rel="stylesheet" />
+    <style>
+      /* Pantalla de carga: va aquí para verse antes de que cargue el resto de estilos */
+      .loader { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 60%, #3a2216, #120a08 70%); color: #f3e2c4; font-family: 'Nunito', system-ui, sans-serif; transition: opacity 0.6s ease; }
+      .loader.done { opacity: 0; pointer-events: none; }
+      .loader-card { display: grid; justify-items: center; gap: 14px; padding: 24px; text-align: center; }
+      .loader-title { margin: 0; font-size: clamp(1.5rem, 6vw, 2.4rem); font-weight: 800; letter-spacing: 0.02em; }
+      .loader-bar { width: min(280px, 70vw); height: 8px; border-radius: 99px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+      .loader-bar span { display: block; height: 100%; width: 4%; border-radius: inherit; background: linear-gradient(90deg, #ffb347, #ff6b2e); transition: width 0.3s ease; }
+      .loader-step { margin: 0; min-height: 1.3em; font-size: 0.95rem; opacity: 0.8; }
+      .loader-spark { position: relative; width: 64px; height: 64px; }
+      .loader-spark span { position: absolute; left: 50%; bottom: 6px; width: 26px; height: 40px; margin-left: -13px; border-radius: 50% 50% 45% 45% / 65% 65% 35% 35%; background: radial-gradient(ellipse at 50% 75%, #fff4c2, #ffb02e 45%, #e2531f 80%); transform-origin: 50% 100%; animation: flicker 0.9s ease-in-out infinite alternate; }
+      .loader-spark span:nth-child(2) { width: 18px; height: 28px; margin-left: -22px; animation-delay: -0.3s; opacity: 0.8; }
+      .loader-spark span:nth-child(3) { width: 18px; height: 30px; margin-left: 4px; animation-delay: -0.6s; opacity: 0.8; }
+      @keyframes flicker { from { transform: scale(1, 1) rotate(-3deg); } to { transform: scale(0.9, 1.12) rotate(3deg); } }
+      @media (prefers-reduced-motion: reduce) { .loader-spark span { animation: none; } }
+    </style>
   </head>
   <body>
+    <!-- Pantalla de carga: se ve desde el primer instante (sus estilos van aquí mismo) y se quita
+         cuando la aldea, las letras y los textos están listos (main.ts). -->
+    <div id="loader" class="loader" role="status" aria-live="polite">
+      <div class="loader-card">
+        <div class="loader-spark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <p class="loader-title">De la Chispa a las Estrellas</p>
+        <div class="loader-bar"><span id="loader-fill"></span></div>
+        <p id="loader-step" class="loader-step">Cargando…</p>
+      </div>
+    </div>
+    <script>
+      // Texto de carga en el idioma guardado, antes de que llegue el resto del juego.
+      try {
+        var lang = (JSON.parse(localStorage.getItem('civilizacion-incremental:settings') || '{}').lang) || (navigator.language || 'es').slice(0, 2);
+        var words = { en: 'Loading…', zh: '加载中…', fr: 'Chargement…', pt: 'Carregando…' };
+        if (words[lang]) document.getElementById('loader-step').textContent = words[lang];
+        document.documentElement.lang = words[lang] ? lang : 'es';
+      } catch (e) {}
+    </script>
     <!-- Filtro que da a los iconos bordes de pigmento soplado, como en las cuevas -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <filter id="pintura">
@@ -22,20 +57,21 @@
       <div class="stage">
         <header class="header">
           <div class="title">
-            <h1>De la Chispa a las Estrellas</h1>
+            <h1 data-i18n="game.title">De la Chispa a las Estrellas</h1>
             <p class="era">Era 1 · Paleolítico</p>
           </div>
           <div class="header-actions">
-            <button id="open-legacy" class="icon-btn" aria-label="Legado" title="Legado" hidden></button>
+            <button id="open-achievements" class="icon-btn" aria-label="Logros" title="Logros" data-i18n-label="ach.title"></button>
+            <button id="open-legacy" class="icon-btn" aria-label="Legado" title="Legado" data-i18n-label="legacy.title" hidden></button>
             <button id="mute" class="icon-btn" aria-label="Silenciar sonido" title="Silenciar sonido"></button>
-            <button id="open-settings" class="icon-btn" aria-label="Ajustes" title="Ajustes"></button>
+            <button id="open-settings" class="icon-btn" aria-label="Ajustes" title="Ajustes" data-i18n-label="settings.title"></button>
           </div>
         </header>
 
         <section class="scene" id="scene">
           <div class="hud" id="hud"></div>
-          <button id="gather" class="gather"><span class="gather-icon" aria-hidden="true"></span><span id="gather-label">Recolectar bayas</span> <span id="gather-amount">+1</span></button>
-          <p class="no-3d-msg">Tu navegador no puede mostrar la aldea en 3D, pero el juego funciona igual.</p>
+          <button id="gather" class="gather"><span class="gather-icon" aria-hidden="true"></span><span id="gather-label"></span> <span id="gather-amount">+1</span></button>
+          <p class="no-3d-msg" data-i18n="scene.no3d">Tu navegador no puede mostrar la aldea en 3D, pero el juego funciona igual.</p>
         </section>
       </div>
 
@@ -43,16 +79,19 @@
         <!-- Un panel a la vez: se elige con la barra de pestañas de abajo -->
         <div class="panels" id="panels">
           <section class="panel" id="tab-jobs" role="tabpanel" aria-labelledby="tabbtn-jobs">
-            <h2>Tu tribu</h2>
+            <div class="panel-head">
+              <h2 data-i18n="jobs.title">Tu tribu</h2>
+              <div id="buy-amount" class="buy-amount" role="radiogroup" aria-label="Cantidad a contratar" data-i18n-label="jobs.buyAmount"></div>
+            </div>
             <p id="cap-note" class="panel-note"></p>
             <div id="buildings" class="list"></div>
           </section>
           <section class="panel" id="tab-upgrades" role="tabpanel" aria-labelledby="tabbtn-upgrades" hidden>
             <div class="panel-head">
-              <h2>Mejoras</h2>
-              <button id="open-tree" class="mini-btn" title="Ver todas las mejoras en forma de árbol"><span class="mini-icon" aria-hidden="true"></span>Ver árbol</button>
+              <h2 data-i18n="upgrades.title">Mejoras</h2>
+              <button id="open-tree" class="mini-btn" title="Ver todas las mejoras en forma de árbol" data-i18n-title="upgrades.treeHint"><span class="mini-icon" aria-hidden="true"></span><span data-i18n="upgrades.tree">Ver árbol</span></button>
             </div>
-            <p id="no-upgrades" class="empty">Sigue haciendo crecer tu tribu para descubrir mejoras.</p>
+            <p id="no-upgrades" class="empty" data-i18n="upgrades.none">Sigue haciendo crecer tu tribu para descubrir mejoras.</p>
             <div id="upgrades" class="list"></div>
           </section>
           <section class="panel goal" id="goal" role="tabpanel" aria-labelledby="tabbtn-goal" hidden></section>
@@ -60,10 +99,10 @@
         </div>
         <!-- En escritorio, la meta resumida queda siempre a la vista -->
         <button id="goal-mini" class="goal-mini" type="button"></button>
-        <nav class="tabbar" role="tablist" aria-label="Paneles">
-          <button id="tabbtn-jobs" class="tab" role="tab" data-tab="jobs" aria-controls="tab-jobs"><span class="tab-icon" aria-hidden="true"></span><span class="tab-name">Oficios</span><span class="tab-badge" hidden></span></button>
-          <button id="tabbtn-upgrades" class="tab" role="tab" data-tab="upgrades" aria-controls="tab-upgrades"><span class="tab-icon" aria-hidden="true"></span><span class="tab-name">Mejoras</span><span class="tab-badge" hidden></span></button>
-          <button id="tabbtn-goal" class="tab" role="tab" data-tab="goal" aria-controls="goal"><span class="tab-icon" aria-hidden="true"></span><span class="tab-name">Meta</span><span class="tab-badge" hidden></span></button>
+        <nav class="tabbar" role="tablist" aria-label="Paneles" data-i18n-label="tabs.label">
+          <button id="tabbtn-jobs" class="tab" role="tab" data-tab="jobs" aria-controls="tab-jobs"><span class="tab-icon" aria-hidden="true"></span><span class="tab-name" data-i18n="tabs.jobs">Oficios</span><span class="tab-badge" hidden></span></button>
+          <button id="tabbtn-upgrades" class="tab" role="tab" data-tab="upgrades" aria-controls="tab-upgrades"><span class="tab-icon" aria-hidden="true"></span><span class="tab-name" data-i18n="tabs.upgrades">Mejoras</span><span class="tab-badge" hidden></span></button>
+          <button id="tabbtn-goal" class="tab" role="tab" data-tab="goal" aria-controls="goal"><span class="tab-icon" aria-hidden="true"></span><span class="tab-name" data-i18n="tabs.goal">Meta</span><span class="tab-badge" hidden></span></button>
         </nav>
       </aside>
       <p id="toast" class="toast" role="status"></p>
@@ -79,8 +118,8 @@
           <path d="M50 22a18 18 0 0 1 0 20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
           <path d="M46 40l4 3 3-4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <p class="rotate-title">Gira el móvil</p>
-        <p class="rotate-text">De la Chispa a las Estrellas se juega en vertical en el móvil. Tu tribu sigue trabajando mientras tanto.</p>
+        <p class="rotate-title" data-i18n="rotate.title">Gira el móvil</p>
+        <p class="rotate-text" data-i18n="rotate.text">De la Chispa a las Estrellas se juega en vertical en el móvil. Tu tribu sigue trabajando mientras tanto.</p>
       </div>
     </div>
 
@@ -96,45 +135,50 @@
     <dialog id="settings" class="settings" aria-labelledby="settings-title">
       <form method="dialog" class="settings-inner">
         <header class="settings-head">
-          <h2 id="settings-title">Ajustes</h2>
-          <button class="icon-btn close" value="close" aria-label="Cerrar ajustes" title="Cerrar"></button>
+          <h2 id="settings-title" data-i18n="settings.title">Ajustes</h2>
+          <button class="icon-btn close" value="close" aria-label="Cerrar ajustes" title="Cerrar" data-i18n-label="common.close"></button>
         </header>
 
         <section class="settings-section">
-          <h3>Sonido</h3>
-          <label class="check"><input id="set-muted" type="checkbox" /> Silenciar todo</label>
-          <label class="slider">Volumen general <input id="set-volume" type="range" min="0" max="1" step="0.05" /><output id="out-volume"></output></label>
-          <label class="slider">Efectos <input id="set-effects" type="range" min="0" max="1" step="0.05" /><output id="out-effects"></output></label>
-          <label class="slider">Ambiente <input id="set-ambience" type="range" min="0" max="1" step="0.05" /><output id="out-ambience"></output></label>
-          <label class="slider">Música <input id="set-music" type="range" min="0" max="1" step="0.05" /><output id="out-music"></output></label>
+          <h3 data-i18n="settings.language">Idioma</h3>
+          <div id="lang-options" class="choices langs" role="radiogroup" aria-label="Idioma" data-i18n-label="settings.language"></div>
         </section>
 
         <section class="settings-section">
-          <h3>Gráficos</h3>
+          <h3 data-i18n="settings.sound">Sonido</h3>
+          <label class="check"><input id="set-muted" type="checkbox" /> <span data-i18n="settings.muteAll">Silenciar todo</span></label>
+          <label class="slider"><span data-i18n="settings.volume">Volumen general</span> <input id="set-volume" type="range" min="0" max="1" step="0.05" /><output id="out-volume"></output></label>
+          <label class="slider"><span data-i18n="settings.effects">Efectos</span> <input id="set-effects" type="range" min="0" max="1" step="0.05" /><output id="out-effects"></output></label>
+          <label class="slider"><span data-i18n="settings.ambience">Ambiente</span> <input id="set-ambience" type="range" min="0" max="1" step="0.05" /><output id="out-ambience"></output></label>
+          <label class="slider"><span data-i18n="settings.music">Música</span> <input id="set-music" type="range" min="0" max="1" step="0.05" /><output id="out-music"></output></label>
+        </section>
+
+        <section class="settings-section">
+          <h3 data-i18n="settings.graphics">Gráficos</h3>
           <div class="quality">
-            <div class="quality-ends" aria-hidden="true"><span>Más rendimiento</span><span>Más calidad</span></div>
-            <input id="set-quality" type="range" min="1" max="5" step="1" aria-label="Calidad gráfica" />
+            <div class="quality-ends" aria-hidden="true"><span data-i18n="settings.morePerf">Más rendimiento</span><span data-i18n="settings.moreQuality">Más calidad</span></div>
+            <input id="set-quality" type="range" min="1" max="5" step="1" aria-label="Calidad gráfica" data-i18n-label="settings.quality" />
             <p class="quality-info"><b id="quality-name"></b> <span id="quality-hint"></span></p>
           </div>
-          <p class="sub-title">Fotogramas por segundo</p>
-          <div id="fps-options" class="choices fps" role="radiogroup" aria-label="Fotogramas por segundo"></div>
-          <p class="hint">Menos calidad y menos fotogramas por segundo gastan menos batería.</p>
+          <p class="sub-title" data-i18n="settings.fps">Fotogramas por segundo</p>
+          <div id="fps-options" class="choices fps" role="radiogroup" aria-label="Fotogramas por segundo" data-i18n-label="settings.fps"></div>
+          <p class="hint" data-i18n="settings.fpsHint">Menos calidad y menos fotogramas por segundo gastan menos batería.</p>
         </section>
 
         <section class="settings-section">
-          <h3>Cantidades grandes</h3>
-          <div id="number-formats" class="choices" role="radiogroup" aria-label="Formato de números"></div>
+          <h3 data-i18n="settings.numbers">Cantidades grandes</h3>
+          <div id="number-formats" class="choices" role="radiogroup" aria-label="Formato de números" data-i18n-label="settings.numbers"></div>
         </section>
 
         <section class="settings-section">
-          <h3>Partida</h3>
+          <h3 data-i18n="settings.save">Partida</h3>
           <div class="save-actions">
-            <button type="button" id="export" class="stone-btn">Exportar partida</button>
-            <button type="button" id="import" class="stone-btn">Importar partida</button>
-            <button type="button" id="reset" class="stone-btn danger">Reiniciar</button>
+            <button type="button" id="export" class="stone-btn" data-i18n="settings.export">Exportar partida</button>
+            <button type="button" id="import" class="stone-btn" data-i18n="settings.import">Importar partida</button>
+            <button type="button" id="reset" class="stone-btn danger" data-i18n="settings.reset">Reiniciar</button>
           </div>
           <input id="import-file" type="file" accept=".civ,.json,.txt,application/json,text/plain" hidden />
-          <p class="hint">Exportar descarga un archivo con tu partida. Para seguir en otro dispositivo, pásale el archivo y elígelo con «Importar partida».</p>
+          <p class="hint" data-i18n="settings.saveHint">Exportar descarga un archivo con tu partida. Para seguir en otro dispositivo, pásale el archivo y elígelo con «Importar partida».</p>
         </section>
       </form>
     </dialog>
@@ -142,38 +186,65 @@
     <dialog id="legacy" class="settings legacy" aria-labelledby="legacy-title">
       <div class="settings-inner">
         <header class="settings-head">
-          <h2 id="legacy-title">Legado</h2>
-          <button type="button" class="icon-btn close" aria-label="Cerrar el legado" title="Cerrar"></button>
+          <h2 id="legacy-title" data-i18n="legacy.title">Legado</h2>
+          <button type="button" class="icon-btn close" aria-label="Cerrar el legado" title="Cerrar" data-i18n-label="common.close"></button>
         </header>
-        <p class="legacy-stats"><span class="wisdom"><span class="wisdom-icon" aria-hidden="true"></span><b id="legacy-wisdom"></b> de Sabiduría</span><span id="legacy-runs"></span></p>
+        <p class="legacy-stats"><span class="wisdom"><span class="wisdom-icon" aria-hidden="true"></span><b id="legacy-wisdom"></b> <span data-i18n="legacy.ofWisdom">de Sabiduría</span></span><span id="legacy-runs"></span></p>
         <section class="settings-section">
-          <h3>Renacer</h3>
+          <h3 data-i18n="legacy.rebirth">Renacer</h3>
           <p id="rebirth-text" class="legacy-text"></p>
           <button type="button" id="rebirth" class="stone-btn rebirth-btn"></button>
         </section>
         <section class="settings-section">
-          <h3>Mejoras permanentes</h3>
+          <h3 data-i18n="legacy.shop">Mejoras permanentes</h3>
           <div id="legacy-shop" class="legacy-shop"></div>
-          <p class="hint">Las mejoras del Legado no se pierden al renacer. Cada meta de era cumplida da Sabiduría: cuanto más lejos llegues, más ganas.</p>
+          <p class="hint" data-i18n="legacy.hint">Las mejoras del Legado no se pierden al renacer. Cada meta de era cumplida da Sabiduría: cuanto más lejos llegues, más ganas.</p>
         </section>
+      </div>
+    </dialog>
+    <!-- Logros: el avance del juego hasta el 100 % -->
+    <dialog id="achievements" class="settings achievements" aria-labelledby="ach-title">
+      <div class="settings-inner">
+        <header class="settings-head">
+          <h2 id="ach-title" data-i18n="ach.title">Logros</h2>
+          <button type="button" class="icon-btn close" aria-label="Cerrar" title="Cerrar" data-i18n-label="common.close"></button>
+        </header>
+        <div class="ach-summary">
+          <p><span data-i18n="ach.progress">Avance del juego</span> <b class="ach-pct"></b></p>
+          <div class="ach-bar"><span></span></div>
+          <p class="ach-count"></p>
+        </div>
+        <p class="hint" data-i18n="ach.hint">Consigue todos los logros y lanza el cohete para descubrir el final verdadero.</p>
+        <div class="ach-list"></div>
       </div>
     </dialog>
     <dialog id="tree-dialog" class="tree-dialog" aria-labelledby="tree-title">
       <div class="tree-inner">
         <header class="tree-head">
-          <h2 id="tree-title">Árbol de mejoras</h2>
-          <button type="button" class="icon-btn close" aria-label="Cerrar el árbol" title="Cerrar"></button>
+          <h2 id="tree-title" data-i18n="tree.title">Árbol de mejoras</h2>
+          <button type="button" class="icon-btn close" aria-label="Cerrar el árbol" title="Cerrar" data-i18n-label="common.close"></button>
         </header>
         <ul class="legend">
-          <li><span class="dot owned"></span>Obtenida</li>
-          <li><span class="dot available"></span>Disponible</li>
-          <li><span class="dot locked">?</span>Por descubrir</li>
+          <li><span class="dot owned"></span><span data-i18n="tree.owned">Obtenida</span></li>
+          <li><span class="dot available"></span><span data-i18n="tree.available">Disponible</span></li>
+          <li><span class="dot locked">?</span><span data-i18n="tree.locked">Por descubrir</span></li>
         </ul>
-        <div id="tree-tabs" class="tree-tabs" role="tablist" aria-label="Eras"></div>
+        <div id="tree-tabs" class="tree-tabs" role="tablist" aria-label="Eras" data-i18n-label="tree.eras"></div>
         <div class="tree-scroll"><div id="tree-grid" class="tree"></div></div>
         <div id="tree-detail" class="tree-detail" aria-live="polite"></div>
       </div>
     </dialog>
+    <!-- Pantalla de inicio: solo la primera vez que se entra al juego -->
+    <div id="start" class="start" hidden>
+      <div class="start-card">
+        <div class="start-mark" aria-hidden="true"></div>
+        <h1 data-i18n="game.title">De la Chispa a las Estrellas</h1>
+        <p class="start-sub" data-i18n="start.sub">Guía a tu pueblo desde la primera chispa junto al fuego hasta las estrellas.</p>
+        <div id="start-langs" class="start-langs" role="radiogroup" aria-label="Idioma" data-i18n-label="settings.language"></div>
+        <button type="button" id="start-play" class="start-play" data-i18n="start.play">Empezar la aventura</button>
+        <p class="start-note" data-i18n="start.note">Tu partida se guarda sola en este dispositivo.</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

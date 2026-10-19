@@ -4,6 +4,8 @@ import { formatNumber } from '../game/format';
 import { BUILDING_CAP } from '../game/balance';
 import { RESOURCES, type BuildingId, type Cost, type GameState } from '../game/state';
 import { BUILDING_ICONS, ERA_ICONS, ICONS, UPGRADE_ICONS, type IconId } from './icons';
+import { t } from '../i18n/i18n';
+import type ES from '../i18n/es';
 
 // Vista ampliada de las mejoras: un árbol pintado en la pared de la cueva. Cada rama es un
 // oficio con sus mejoras debajo; lo que aún no se ha descubierto aparece en sombra con "?".
@@ -32,10 +34,10 @@ function requirementText(s: GameState, def: UpgradeDef): string {
   const { have, need } = requirementProgress(s, r);
   if ('building' in r) {
     const b = BUILDING_BY_ID[r.building];
-    if (!b.unlocked(s)) return 'Descubre primero un nuevo oficio.';
-    return `Ten ${need} ${b.plural} (llevas ${have}).`;
+    if (!b.unlocked(s)) return t('tree.reqJob');
+    return t('tree.reqBuilding', { need, plural: b.plural, have });
   }
-  return `Reúne ${formatNumber(need)} de ${resourceName(r.total)} en total (llevas ${formatNumber(Math.floor(have))}).`;
+  return t('tree.reqTotal', { need: formatNumber(need), res: resourceName(r.total), have: formatNumber(Math.floor(have)) });
 }
 
 export function createUpgradeTree(options: TreeOptions) {
@@ -115,40 +117,31 @@ export function createUpgradeTree(options: TreeOptions) {
     delete detail.dataset.html;
   }
 
-  const ROOT_SUB: Record<number, string> = { 1: 'El origen de tu tribu', 2: 'Tu tribu se asienta', 3: 'El poder del metal', 4: 'Ciudades de mármol', 5: 'Castillos y catedrales', 6: 'Imprenta, arte y ciencia', 7: 'Vapor, carbón y hierro', 8: 'Rumbo a las estrellas' };
-  const ROOT_TEXT: Record<number, string> = {
-    1: 'Desde este fuego crece todo lo demás.',
-    2: 'La aldea del Neolítico: campos, rebaños y casas de barro.',
-    3: 'La aldea de la Edad del Bronce: hornos de fundición, bueyes, minas de cobre y casas de piedra.',
-    4: 'La ciudad de la Antigüedad: templos de mármol, olivares, forjas de hierro y casas de tejas rojas.',
-    5: 'La villa de la Edad Media: un castillo en la colina, molinos de viento, una catedral y casas con entramado de madera.',
-    6: 'La ciudad del Renacimiento: la imprenta, palacios con loggia, talleres de escultores, viñedos y un astillero en el río.',
-    7: 'La ciudad industrial: pozos de carbón, fábricas de ladrillo con chimeneas, el ferrocarril, la bolsa y casas obreras en hilera.',
-    8: 'La ciudad moderna: rascacielos de cristal, la central eléctrica, campos solares, laboratorios y la rampa del cohete.',
-  };
+  const rootSub = (n: number) => t(`tree.rootSub${n}` as keyof typeof ES);
+  const rootText = (n: number) => t(`tree.rootText${n}` as keyof typeof ES);
   function describe(n: TreeNode, s: GameState): { state: NodeState; icon: IconId; label: string; sub: string } {
     const ref = n.ref;
     switch (ref.kind) {
       case 'root':
-        return { state: 'owned', icon: ERA_ICONS[era].root, label: `Era ${era} · ${ERA_BY_N[era].name}`, sub: ROOT_SUB[era] ?? '' };
+        return { state: 'owned', icon: ERA_ICONS[era].root, label: t('era.label', { n: era, name: ERA_BY_N[era].name }), sub: rootSub(era) };
       case 'tribe':
-        return { state: 'owned', icon: 'person', label: 'Toda la tribu', sub: 'Mejoras generales' };
+        return { state: 'owned', icon: 'person', label: t('tree.tribe'), sub: t('tree.tribeSub') };
       case 'building': {
         const def = BUILDING_BY_ID[ref.id];
-        if (!def.unlocked(s)) return { state: 'locked', icon: BUILDING_ICONS[ref.id], label: '???', sub: 'Oficio por descubrir' };
-        return { state: 'owned', icon: BUILDING_ICONS[ref.id], label: def.name, sub: `${s.buildings[ref.id]} de ${BUILDING_CAP} en la tribu` };
+        if (!def.unlocked(s)) return { state: 'locked', icon: BUILDING_ICONS[ref.id], label: '???', sub: t('tree.jobLocked') };
+        return { state: 'owned', icon: BUILDING_ICONS[ref.id], label: def.name, sub: t('tree.jobCount', { n: s.buildings[ref.id], cap: BUILDING_CAP }) };
       }
       case 'upgrade': {
         const icon = UPGRADE_ICONS[ref.def.id] ?? 'fire';
-        if (s.upgrades.includes(ref.def.id)) return { state: 'owned', icon, label: ref.def.name, sub: 'Obtenida' };
-        if (upgradeAvailable(s, ref.def.id)) return { state: 'available', icon, label: ref.def.name, sub: canAfford(s, ref.def.cost) ? '¡Puedes comprarla!' : 'Disponible' };
+        if (s.upgrades.includes(ref.def.id)) return { state: 'owned', icon, label: ref.def.name, sub: t('tree.owned') };
+        if (upgradeAvailable(s, ref.def.id)) return { state: 'available', icon, label: ref.def.name, sub: canAfford(s, ref.def.cost) ? t('tree.canBuy') : t('tree.available') };
         return { state: 'locked', icon, label: '???', sub: '' };
       }
       case 'goal': {
         const goal = GOALS[era], icon = ERA_ICONS[era].goal;
-        if (s.era > era || s.goalReached) return { state: 'owned', icon, label: goal.name, sub: 'Era completada' };
+        if (s.era > era || s.goalReached) return { state: 'owned', icon, label: goal.name, sub: t('tree.eraDone') };
         const pct = Math.min(...RESOURCES.filter((r) => goal.cost[r]).map((r) => s.resources[r] / goal.cost[r]!));
-        return { state: 'available', icon, label: goal.name, sub: `Meta de la era · ${Math.floor(Math.min(1, pct) * 100)} %` };
+        return { state: 'available', icon, label: goal.name, sub: t('tree.goalSub', { pct: Math.floor(Math.min(1, pct) * 100) }) };
       }
     }
   }
@@ -158,29 +151,29 @@ export function createUpgradeTree(options: TreeOptions) {
     const ref = n.ref;
     let title = d.label, text = '', extra = '', button = '';
     if (ref.kind === 'root') {
-      text = `${ROOT_TEXT[era] ?? ''} Cada rama es un oficio y debajo están sus mejoras.`;
+      text = `${rootText(era)} ${t('tree.rootHint')}`;
     }
-    else if (ref.kind === 'tribe') text = 'Mejoras que ayudan a toda la tribu a la vez, no a un solo oficio.';
+    else if (ref.kind === 'tribe') text = t('tree.tribeText');
     else if (ref.kind === 'building') {
       const def = BUILDING_BY_ID[ref.id];
       if (d.state === 'locked') {
-        title = 'Oficio por descubrir';
-        text = `Se desbloquea: ${def.unlockHint.toLowerCase()}.`;
-      } else text = `${def.description} Produce ${resourceName(def.produces)}. Admite hasta ${BUILDING_CAP} personas.`;
+        title = t('tree.jobLocked');
+        text = `${t('jobs.unlock', { hint: def.unlockHint.toLowerCase() })}.`;
+      } else text = `${def.description} ${t('tree.jobText', { res: resourceName(def.produces), cap: BUILDING_CAP })}`;
     } else if (ref.kind === 'upgrade') {
       if (d.state === 'locked') {
-        title = 'Mejora por descubrir';
+        title = t('tree.upLocked');
         text = requirementText(s, ref.def);
       } else {
         text = ref.def.description;
         if (d.state === 'available') {
-          extra = `<p class="detail-cost">Coste: ${options.costHtml(ref.def.cost)}</p>`;
-          button = `<button type="button" class="stone-btn buy" ${canAfford(s, ref.def.cost) ? '' : 'disabled'}>Comprar mejora</button>`;
+          extra = `<p class="detail-cost">${t('common.cost', { cost: options.costHtml(ref.def.cost) })}</p>`;
+          button = `<button type="button" class="stone-btn buy" ${canAfford(s, ref.def.cost) ? '' : 'disabled'}>${t('tree.buy')}</button>`;
         }
       }
     } else {
       text = GOALS[era].description;
-      if (d.state !== 'owned') extra = `<p class="detail-cost">Coste: ${options.costHtml(GOALS[era].cost)}</p>`;
+      if (d.state !== 'owned') extra = `<p class="detail-cost">${t('common.cost', { cost: options.costHtml(GOALS[era].cost) })}</p>`;
     }
     const html = `<span class="disc ${d.state}">${ICONS[d.icon]}${d.state === 'locked' ? '<span class="q">?</span>' : ''}</span>` +
       `<div class="detail-text"><h3>${title}</h3><p>${text}</p>${extra}</div>${button}`;
@@ -196,12 +189,12 @@ export function createUpgradeTree(options: TreeOptions) {
   function update(): void {
     if (!dialog.open) return;
     const s = options.getState();
-    for (const t of tabs) {
-      const open = t.n <= s.era;
-      const label = open ? `Era ${t.n} · ${ERA_BY_N[t.n].name}` : `Era ${t.n} · ???`;
-      if (t.tab.textContent !== label) t.tab.textContent = label;
-      t.tab.disabled = !open;
-      t.tab.setAttribute('aria-selected', String(t.n === era));
+    for (const tab of tabs) {
+      const open = tab.n <= s.era;
+      const label = t('era.label', { n: tab.n, name: open ? ERA_BY_N[tab.n].name : '???' });
+      if (tab.tab.textContent !== label) tab.tab.textContent = label;
+      tab.tab.disabled = !open;
+      tab.tab.setAttribute('aria-selected', String(tab.n === era));
     }
     for (const n of nodes) {
       const d = describe(n, s);

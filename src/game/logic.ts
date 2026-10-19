@@ -1,6 +1,7 @@
 import { BASE_CLICK, BUILDING_CAP, MAX_OFFLINE_SECONDS, MILESTONES } from './balance';
 import { BUILDING_BY_ID, BUILDING_DEFS, COST_GROWTH, GOALS, UPGRADE_BY_ID, UPGRADE_DEFS, type GoalDef } from './content';
 import { clickMultiplier, jobCostMultiplier, level, offlineMinutesBonus, productionMultiplier, TRADITION_PEOPLE, wisdomForRun, canRebirth } from './legacy';
+import { newRun, type CivRecord } from './profile';
 import { LAST_ERA, newGame, RESOURCES, type Amounts, type BuildingId, type Cost, type GameState, type ResourceId } from './state';
 
 function upgradeMultiplier(state: GameState, match: (e: (typeof UPGRADE_DEFS)[number]['effect']) => boolean): number {
@@ -56,6 +57,8 @@ export function gain(state: GameState, resource: ResourceId, amount: number): vo
 
 export function gather(state: GameState): number {
   const amount = clickAmount(state);
+  state.profile.clicks++;
+  state.profile.run.clicks++;
   gain(state, 'food', amount);
   return amount;
 }
@@ -64,7 +67,24 @@ export function gather(state: GameState): number {
 export function tick(state: GameState, seconds: number): void {
   if (seconds <= 0) return;
   const rates = ratePerSecond(state);
-  for (const r of RESOURCES) if (rates[r] > 0) gain(state, r, rates[r] * seconds);
+  const { profile } = state;
+  for (const r of RESOURCES) {
+    if (rates[r] <= 0) continue;
+    gain(state, r, rates[r] * seconds);
+    // Récords de producción, para los logros y el resumen del final verdadero.
+    if (rates[r] > profile.run.maxRate[r]) profile.run.maxRate[r] = rates[r];
+    if (rates[r] > profile.maxRate[r]) profile.maxRate[r] = rates[r];
+  }
+  profile.run.seconds += seconds;
+  profile.playSeconds += seconds;
+  profile.maxPopulation = Math.max(profile.maxPopulation, population(state));
+}
+
+/** La tribu: el fundador más cada persona que trabaja en un oficio. */
+export function population(state: GameState): number {
+  let n = 1;
+  for (const id in state.buildings) n += state.buildings[id as BuildingId];
+  return n;
 }
 
 export function buildingCost(state: GameState, id: BuildingId): Cost {
@@ -101,6 +121,68 @@ export function buyBuilding(state: GameState, id: BuildingId): boolean {
   return true;
 }
 
+/** Cuántas personas faltan para llenar el oficio. */
+export function slotsLeft(state: GameState, id: BuildingId): number {
+  return Math.max(0, BUILDING_CAP - state.buildings[id]);
+}
+
+/** Coste de contratar `n` personas seguidas en un oficio (cada una encarece la siguiente). */
+export function bulkCost(state: GameState, id: BuildingId, n: number): Cost {
+  const total: Cost = {};
+  const have = state.buildings[id];
+  try {
+    for (let i = 0; i < n; i++) {
+      state.buildings[id] = have + i;
+      const c = buildingCost(state, id);
+      for (const r of RESOURCES) if (c[r]) total[r] = (total[r] ?? 0) + c[r]!;
+    }
+  } finally {
+    state.buildings[id] = have;
+  }
+  return total;
+}
+
+/** Cuántas personas se pueden contratar ya en un oficio con lo que hay, sin pasar del tope. */
+export function maxAffordable(state: GameState, id: BuildingId): number {
+  const left = slotsLeft(state, id);
+  const spent = Object.fromEntries(RESOURCES.map((r) => [r, 0])) as Amounts;
+  const have = state.buildings[id];
+  let n = 0;
+  try {
+    for (; n < left; n++) {
+      state.buildings[id] = have + n;
+      const c = buildingCost(state, id);
+      if (!RESOURCES.every((r) => state.resources[r] - spent[r] >= (c[r] ?? 0))) break;
+      for (const r of RESOURCES) spent[r] += c[r] ?? 0;
+    }
+  } finally {
+    state.buildings[id] = have;
+  }
+  return n;
+}
+
+/** Cantidad elegida para comprar oficios: x1, x5, x10 o el máximo que se pueda pagar. */
+export type BuyAmount = 1 | 5 | 10 | 'max';
+export const BUY_AMOUNTS: BuyAmount[] = [1, 5, 10, 'max'];
+
+/** Cuántas personas contrataría ahora un toque con la cantidad elegida (al menos 1 para enseñar el precio). */
+export function buyCount(state: GameState, id: BuildingId, amount: BuyAmount): number {
+  const left = slotsLeft(state, id);
+  if (amount === 'max') return Math.min(left, Math.max(1, maxAffordable(state, id)));
+  return Math.min(left, amount);
+}
+
+/** Contrata hasta `n` personas: todas o ninguna. Devuelve cuántas contrató. */
+export function buyBuildings(state: GameState, id: BuildingId, n: number): number {
+  const def = BUILDING_BY_ID[id];
+  if (n <= 0 || !def.unlocked(state) || slotsLeft(state, id) < n) return 0;
+  const cost = bulkCost(state, id, n);
+  if (!canAfford(state, cost)) return 0;
+  pay(state, cost);
+  state.buildings[id] += n;
+  return n;
+}
+
 export function upgradeAvailable(state: GameState, id: string): boolean {
   const def = UPGRADE_BY_ID[id];
   return !!def && !state.upgrades.includes(id) && def.unlocked(state);
@@ -124,6 +206,8 @@ export function buyGoal(state: GameState): boolean {
   if (state.goalReached || !canAfford(state, goal.cost)) return false;
   pay(state, goal.cost);
   state.goalReached = true;
+  state.profile.run.goalTimes[state.era - 1] = state.profile.run.seconds;
+  if (state.era === LAST_ERA) state.profile.rockets++;
   return true;
 }
 
@@ -210,6 +294,22 @@ export function rebirth(state: GameState, now = Date.now()): GameState | null {
   next.legacy.wisdom += wisdomForRun(state);
   next.legacy.rebirths += 1;
   next.legacy.bestEra = Math.max(next.legacy.bestEra, state.era);
+  next.profile = structuredClone(state.profile);
+  next.profile.civs.push(civRecord(state));
+  next.profile.run = newRun();
   applyTradition(next);
   return next;
+}
+
+/** Resumen de la civilización en curso, para la lista de civilizaciones del final verdadero. */
+export function civRecord(state: GameState): CivRecord {
+  return {
+    n: state.legacy.rebirths + 1,
+    era: state.era,
+    rocket: state.era === LAST_ERA && state.goalReached,
+    seconds: state.profile.run.seconds,
+    population: population(state),
+    wisdom: wisdomForRun(state),
+    maxRate: { ...state.profile.run.maxRate },
+  };
 }

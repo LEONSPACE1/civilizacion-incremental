@@ -1,5 +1,6 @@
 // Estado completo de una partida. Todo lo que se guarda vive aquí.
 import { newLegacy, type Legacy } from './legacy';
+import { newProfile, zeroAmounts, type Profile } from './profile';
 
 export const RESOURCES = ['food', 'wood', 'stone', 'metal', 'iron', 'gold', 'books', 'coal', 'energy'] as const;
 export type ResourceId = (typeof RESOURCES)[number];
@@ -35,12 +36,13 @@ export interface GameState {
   awaySince: number | null;
   /** Lo que sobrevive al renacer: la Sabiduría y las mejoras permanentes del Legado. */
   legacy: Legacy;
+  /** Logros, tutoriales vistos, finales y estadísticas de todas las civilizaciones. */
+  profile: Profile;
 }
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const LAST_ERA = 8;
 
-const zeroAmounts = (): Amounts => ({ food: 0, wood: 0, stone: 0, metal: 0, iron: 0, gold: 0, books: 0, coal: 0, energy: 0 });
 
 export function newGame(now = Date.now()): GameState {
   return {
@@ -54,5 +56,6 @@ export function newGame(now = Date.now()): GameState {
     lastSaved: now,
     awaySince: null,
     legacy: newLegacy(),
+    profile: newProfile(),
   };
 }
